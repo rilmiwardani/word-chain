@@ -391,6 +391,7 @@ export default function App() {
   // Fitur Baru: Action Cards Modifier
   const [actionCardsEnabled, setActionCardsEnabled] = useState(false);
   const [isReversed, setIsReversed] = useState(false);
+  const [overlapLength, setOverlapLength] = useState(1); // Setting Khusus Huruf
 
   // Stats & Dynamic Mode
   const [showStats, setShowStats] = useState(false);
@@ -421,6 +422,7 @@ export default function App() {
   const [manualInput, setManualInput] = useState("");
   const [showVirtualKeyboard, setShowVirtualKeyboard] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("rules"); // Fitur Baru: Tab Settings
   const [dictLoadedInfo, setDictLoadedInfo] = useState("Default (EN)");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -464,6 +466,7 @@ export default function App() {
   const targetScoreRef = useRef(targetScore);
   const actionCardsEnabledRef = useRef(actionCardsEnabled);
   const isReversedRef = useRef(isReversed);
+  const overlapLengthRef = useRef(overlapLength);
 
   // === EFFECTS ===
   
@@ -479,10 +482,11 @@ export default function App() {
     targetRoundsRef.current = targetRounds; targetScoreRef.current = targetScore;
     actionCardsEnabledRef.current = actionCardsEnabled;
     isReversedRef.current = isReversed;
+    overlapLengthRef.current = overlapLength;
   }, [
     players, currentTurnIndex, turnDuration, usedWords, syllableMap, isMuted,
     cityMetadata, challengeQueue, language, gameMode, currentWord, targetRhyme,
-    gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, isReversed
+    gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, isReversed, overlapLength
   ]);
 
   // Populasi Target Rima
@@ -641,7 +645,7 @@ export default function App() {
   const isHostJoined = players.some((p) => p.uniqueId === "host_player");
   const playSound = (effect) => { if (!isMutedRef.current) SoundManager.play(effect); };
   const t = (key) => TRANSLATIONS[language === "MIX" ? "ID" : language]?.[key] || TRANSLATIONS["EN"][key] || key;
-  const isScoreMode = () => ["POINT_RUSH", "POINT_RUSH_2", "CITIES", "PHRASE_CHAIN", "RHYME", "MIRROR", "MIRROR_2", "ACTION_CHAIN", "ACTION_CHAIN_2"].includes(gameModeRef.current);
+  const isScoreMode = () => ["POINT_RUSH", "CITIES", "PHRASE_CHAIN", "RHYME", "MIRROR"].includes(gameModeRef.current);
 
   const addLog = (user, message, uniqueId = null) => {
     const logId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -692,24 +696,21 @@ export default function App() {
   };
 
   function getSuffixOrRule(word) {
-    if (gameMode === "CITIES" || gameMode === "LAST_LETTER" || gameMode === "POINT_RUSH" || gameMode === "DYNAMIC" || gameMode === "ACTION_CHAIN") return word.slice(-1);
+    const overlap = overlapLengthRef.current;
+    if (gameMode === "CITIES" || gameMode === "LAST_LETTER" || gameMode === "POINT_RUSH" || gameMode === "DYNAMIC") return word.slice(-overlap);
     if (gameMode === "RHYME") return targetRhymeRef.current || word.slice(-2);
     if (gameMode === "PHRASE_CHAIN") return word;
-    if (gameMode === "MIRROR") return word.charAt(0);
-    if (gameMode === "MIRROR_2") return word.slice(0, 2);
-    if (gameMode === "WRAP_AROUND") return `${word.slice(-1)}...${word.charAt(0)}`;
-    if (gameMode === "STEP_UP") return word.slice(-1);
-    if (gameMode === "STEP_UP_2" || gameMode === "LAST_2_LETTERS" || gameMode === "POINT_RUSH_2" || gameMode === "DYNAMIC_2" || gameMode === "ACTION_CHAIN_2") return word.slice(-2);
+    if (gameMode === "MIRROR") return word.slice(0, overlap);
+    if (gameMode === "WRAP_AROUND") return `${word.slice(-overlap)}...${word.slice(0, overlap)}`;
+    if (gameMode === "STEP_UP") return word.slice(-overlap);
     if (gameMode === "SECOND_LETTER") return word.length >= 2 ? word[1] : "";
-    if (gameMode === "LAST_3_LETTERS") return word.slice(-3);
-    if (gameMode === "LONGER_WORD") return word.slice(-1);
-    if (gameMode === "LONGER_2_LETTERS") return word.slice(-2);
+    if (gameMode === "LONGER_WORD") return word.slice(-overlap);
     
     if ((language === "ID" || language === "MIX") && gameMode === "SYLLABLE") {
       const data = syllableMapRef.current[word.toLowerCase()];
       if (data && data.nama) return data.nama.split(".").pop();
-      const overlap = getIndonesianOverlapSuffix(word);
-      return overlap.length > 0 ? overlap : word.slice(-2);
+      const overlapData = getIndonesianOverlapSuffix(word);
+      return overlapData.length > 0 ? overlapData : word.slice(-2);
     }
     return getEnglishSyllableSuffix(word);
   }
@@ -731,30 +732,25 @@ export default function App() {
     const target = getSuffixOrRule(word).toUpperCase();
     const action = t("rule_start");
     const labelID = (challenge) => (language === "ID" && challenge?.labelID) ? challenge.labelID : challenge?.label;
+    const overlap = overlapLength;
 
     if (gameMode === "CITIES") return { label: "City Chain", target, desc: `${t("rule_end")} '${target}'`, action };
-    if (gameMode === "WRAP_AROUND") return { label: "Wrap Around", target: `${word.slice(-1).toUpperCase()}...${word.charAt(0).toUpperCase()}`, desc: `${t("rule_start")} '${word.slice(-1).toUpperCase()}' & ${t("rule_end")} '${word.charAt(0).toUpperCase()}'`, action: "" };
+    if (gameMode === "WRAP_AROUND") return { label: "Wrap Around", target: `${word.slice(-overlap).toUpperCase()}...${word.slice(0, overlap).toUpperCase()}`, desc: `${t("rule_start")} '${word.slice(-overlap).toUpperCase()}' & ${t("rule_end")} '${word.slice(0, overlap).toUpperCase()}'`, action: "" };
     if (gameMode === "PHRASE_CHAIN") return { label: "Phrase Chain", target, desc: `${t("rule_phrase")}: ${target} ...`, action: "Add next word" };
-    if (gameMode === "POINT_RUSH") return { label: "Point Rush", target, desc: `1 Letter = 1 ${t("log_pts")}`, action };
-    if (gameMode === "POINT_RUSH_2") return { label: "Point Rush (2 Let)", target, desc: `${t("rule_start")} '${target}' (1 Let=1 ${t("log_pts")})`, action };
-    if (gameMode === "DYNAMIC") return { label: "Dynamic Chaos", target, desc: activeChallenge ? `${labelID(activeChallenge)} + ${t("rule_start")} '${target}'` : `${t("rule_start")} '${target}'`, action };
-    if (gameMode === "DYNAMIC_2") return { label: "Dynamic Chaos (2)", target, desc: activeChallenge ? `${labelID(activeChallenge)} + ${t("rule_start")} '${target}'` : `${t("rule_start")} '${target}'`, action };
+    if (gameMode === "POINT_RUSH") return { label: `Point Rush (${overlap})`, target, desc: overlap > 1 ? `${t("rule_start")} '${target}' (1 Let=1 ${t("log_pts")})` : `1 Letter = 1 ${t("log_pts")}`, action };
+    if (gameMode === "DYNAMIC") return { label: `Dynamic Chaos (${overlap})`, target, desc: activeChallenge ? `${labelID(activeChallenge)} + ${t("rule_start")} '${target}'` : `${t("rule_start")} '${target}'`, action };
     if (gameMode === "RHYME") return { label: "Rhyme Rush", target: targetRhyme.toUpperCase(), desc: `${t("rule_end")} ...${targetRhyme.toUpperCase()}`, action: "Target" };
-    if (gameMode === "MIRROR") return { label: "Mirror Chain", target, desc: `${t("rule_mirror")} '${target}'`, action: "End with" };
-    if (gameMode === "MIRROR_2") return { label: "Mirror Chain (2)", target, desc: `${t("rule_mirror")} (2) '${target}'`, action: "End with" };
-    if (gameMode === "STEP_UP") return { label: word.length >= 10 ? "Step Up (Reset)" : "Step Up", target, desc: `${t("rule_start")} '${target}' (${word.length >= 10 ? t("rule_ladder_reset") + " -> 3/4" : t("rule_ladder") + " -> " + (word.length + 1)})`, action };
-    if (gameMode === "STEP_UP_2") return { label: word.length >= 10 ? "Step Up 2 (Reset)" : "Step Up (2 Letters)", target, desc: `${t("rule_start")} '${target}' (${word.length >= 10 ? t("rule_ladder_reset") + " -> 3/4" : t("rule_ladder") + " -> " + (word.length + 1)})`, action };
-    if (gameMode === "LAST_LETTER") return { label: "Last Letter", target, desc: `${t("rule_end")} '${target}'`, action };
+    if (gameMode === "MIRROR") return { label: `Mirror Chain (${overlap})`, target, desc: `${t("rule_mirror")} '${target}'`, action: "End with" };
+    if (gameMode === "STEP_UP") return { label: word.length >= 10 ? "Step Up (Reset)" : `Step Up (${overlap})`, target, desc: `${t("rule_start")} '${target}' (${word.length >= 10 ? t("rule_ladder_reset") + " -> 3/4" : t("rule_ladder") + " -> " + (word.length + 1)})`, action };
+    if (gameMode === "LAST_LETTER") return { label: `Last Letter(s) [${overlap}]`, target, desc: `${t("rule_end")} '${target}'`, action };
     if (gameMode === "SECOND_LETTER") return { label: "2nd Letter", target, desc: `2nd Letter is '${target}'`, action };
-    if (gameMode === "LAST_2_LETTERS") return { label: "Last 2 Letters", target, desc: `${t("rule_end")} '${target}'`, action };
-    if (gameMode === "LAST_3_LETTERS") return { label: "Last 3 Letters", target, desc: `${t("rule_end")} '${target}'`, action };
-    if (gameMode === "LONGER_WORD") return { label: word.length >= 10 ? "Longer Word (Reset)" : "Longer Word", target: `> ${word.length >= 10 ? '3 chars' : word.length}`, desc: `${t("rule_start")} '${target}' (> ${word.length >= 10 ? '3 letters - RESET!' : word.length + ' letters'})`, action };
-    if (gameMode === "LONGER_2_LETTERS") return { label: word.length >= 10 ? "Longer (2 Let) [Reset]" : "Longer (2 Let)", target: `> ${word.length >= 10 ? '3 chars' : word.length}`, desc: `${t("rule_start")} '${target}' (> ${word.length >= 10 ? '3 letters - RESET!' : word.length + ' letters'})`, action };
+    if (gameMode === "LONGER_WORD") return { label: word.length >= 10 ? "Longer Word (Reset)" : `Longer (${overlap})`, target: `> ${word.length >= 10 ? '3 chars' : word.length}`, desc: `${t("rule_start")} '${target}' (> ${word.length >= 10 ? '3 letters - RESET!' : word.length + ' letters'})`, action };
     return { label: "Last Syllable", target, desc: `${t("rule_syllable")} '${target}'`, action };
   }
 
   function getDisplayParts(word) {
     if (!word) return { pre: "", high: "", post: "" };
+    const overlap = overlapLengthRef.current;
     if (gameMode === "PHRASE_CHAIN") return { pre: "", high: word, post: "..." };
     if (gameMode === "RHYME") {
       const tr = targetRhymeRef.current;
@@ -763,10 +759,9 @@ export default function App() {
         return { pre: word.slice(0, splitIdx), high: word.slice(splitIdx), post: "" };
       }
     }
-    if (gameMode === "MIRROR") return { pre: "", high: word.slice(0, 1), post: word.slice(1) };
-    if (gameMode === "MIRROR_2") return word.length < 2 ? { pre: "", high: word, post: "" } : { pre: "", high: word.slice(0, 2), post: word.slice(2) };
+    if (gameMode === "MIRROR") return word.length < overlap ? { pre: "", high: word, post: "" } : { pre: "", high: word.slice(0, overlap), post: word.slice(overlap) };
     if (gameMode === "SECOND_LETTER") return word.length < 2 ? { pre: word, high: "", post: "" } : { pre: word.slice(0, 1), high: word.slice(1, 2), post: word.slice(2) };
-    if (gameMode === "WRAP_AROUND") return { pre: word.slice(0, -1), high: word.slice(-1), post: "" };
+    if (gameMode === "WRAP_AROUND") return { pre: word.slice(0, -overlap), high: word.slice(-overlap), post: "" };
 
     const suffix = getSuffixOrRule(word);
     const prefixLen = Math.max(0, word.length - suffix.length);
@@ -778,11 +773,12 @@ export default function App() {
     const p = prev ? prev.toLowerCase() : "";
     const n = next.toLowerCase();
     const currentMode = gameModeRef.current || gameMode;
+    const overlap = overlapLengthRef.current;
 
     if (currentMode === "PHRASE_CHAIN") return phraseDictionary.current.has(`${p} ${n}`);
-    if (currentMode === "WRAP_AROUND") return n !== p && n.length >= 2 && n.startsWith(p.slice(-1)) && n.endsWith(p.charAt(0));
-    if (currentMode === "DYNAMIC" || currentMode === "DYNAMIC_2") {
-      const suffix = currentMode === "DYNAMIC_2" ? p.slice(-2) : p.slice(-1);
+    if (currentMode === "WRAP_AROUND") return n !== p && n.length >= overlap * 2 && n.startsWith(p.slice(-overlap)) && n.endsWith(p.slice(0, overlap));
+    if (currentMode === "DYNAMIC") {
+      const suffix = p.slice(-overlap);
       if (n === suffix || !n.startsWith(suffix)) return false;
       if (activeChallenge?.check && !activeChallenge.check(n)) {
         addLog("Game", `⚠️ Gagal: ${languageRef.current === "ID" && activeChallenge.labelID ? activeChallenge.labelID : activeChallenge.label}`);
@@ -792,35 +788,25 @@ export default function App() {
     }
 
     let requiredSuffix = "";
-    if (currentMode === "MIRROR") { requiredSuffix = p.charAt(0); return n !== requiredSuffix && n.endsWith(requiredSuffix); }
-    if (currentMode === "MIRROR_2") { if (p.length < 2) return false; requiredSuffix = p.slice(0, 2); return n !== requiredSuffix && n.endsWith(requiredSuffix); }
-    if (currentMode === "STEP_UP") {
-      requiredSuffix = p.slice(-1);
-      if (n === requiredSuffix || !n.startsWith(requiredSuffix)) return false;
-      return p.length >= 10 ? (n.length === 3 || n.length === 4) : n.length === p.length + 1;
+    if (currentMode === "MIRROR") { 
+      if (p.length < overlap) return false;
+      requiredSuffix = p.slice(0, overlap); 
+      return n !== requiredSuffix && n.endsWith(requiredSuffix); 
     }
-    if (currentMode === "STEP_UP_2") {
-      requiredSuffix = p.slice(-2);
+    if (currentMode === "STEP_UP") {
+      requiredSuffix = p.slice(-overlap);
       if (n === requiredSuffix || !n.startsWith(requiredSuffix)) return false;
       return p.length >= 10 ? (n.length === 3 || n.length === 4) : n.length === p.length + 1;
     }
     if (currentMode === "RHYME") return n !== targetRhymeRef.current && n.endsWith(targetRhymeRef.current);
     if (["CITIES", "LAST_LETTER", "POINT_RUSH"].includes(currentMode)) {
-      requiredSuffix = p.slice(-1); return n !== requiredSuffix && n.startsWith(requiredSuffix);
+      requiredSuffix = p.slice(-overlap); return n !== requiredSuffix && n.startsWith(requiredSuffix);
     }
     if (currentMode === "SECOND_LETTER") {
       if (p.length < 2) return false; const targetChar = p[1]; return n !== targetChar && n.startsWith(targetChar);
     }
-    if (["LAST_2_LETTERS", "POINT_RUSH_2"].includes(currentMode)) {
-      requiredSuffix = p.slice(-2); return n !== requiredSuffix && n.startsWith(requiredSuffix);
-    }
-    if (currentMode === "LAST_3_LETTERS") { requiredSuffix = p.slice(-3); return n !== requiredSuffix && n.startsWith(requiredSuffix); }
     if (currentMode === "LONGER_WORD") {
-      if (p.slice(-1) !== n[0]) return false;
-      return p.length >= 10 ? n.length >= 4 : n.length > p.length;
-    }
-    if (currentMode === "LONGER_2_LETTERS") {
-      if (!n.startsWith(p.slice(-2))) return false;
+      if (!n.startsWith(p.slice(-overlap))) return false;
       return p.length >= 10 ? n.length >= 4 : n.length > p.length;
     }
     if (currentMode === "SYLLABLE") {
@@ -1107,12 +1093,11 @@ export default function App() {
             }
           }
         } else if (gameModeRef.current === "RHYME") addLog("Game", `✅ ${word.toUpperCase()} (...${targetRhymeRef.current.toUpperCase()}) +${word.length}`);
-        else if (gameModeRef.current === "WRAP_AROUND") addLog("Game", `✅ ${word.toUpperCase()} (${word.charAt(0).toUpperCase()}...${word.slice(-1).toUpperCase()}) +${word.length}`);
-        else if (gameModeRef.current === "MIRROR") addLog("Game", `✅ ${word.toUpperCase()} (End: ${word.slice(-1).toUpperCase()}) +${word.length}`);
-        else if (gameModeRef.current === "MIRROR_2") addLog("Game", `✅ ${word.toUpperCase()} (End: ${word.slice(-2).toUpperCase()}) +${word.length}`);
+        else if (gameModeRef.current === "WRAP_AROUND") addLog("Game", `✅ ${word.toUpperCase()} (${word.slice(0, overlapLengthRef.current).toUpperCase()}...${word.slice(-overlapLengthRef.current).toUpperCase()}) +${word.length}`);
+        else if (gameModeRef.current === "MIRROR") addLog("Game", `✅ ${word.toUpperCase()} (End: ${word.slice(-overlapLengthRef.current).toUpperCase()}) +${word.length}`);
         else addLog("Game", `✅ +${word.length} ${t("log_pts")}!`);
       } else {
-        if (gameModeRef.current === "STEP_UP" || gameModeRef.current === "STEP_UP_2") {
+        if (gameModeRef.current === "STEP_UP") {
           addLog("Game", `✅ ${word.toUpperCase()} (Len: ${word.length}) ➡️ Next: ${word.length >= 10 ? "Reset" : word.length + 1}`);
         } else {
           addLog("Game", `✅ ${cityMetadataRef.current[word] ? `${word.toUpperCase()} (${cityMetadataRef.current[word]})` : `${t("log_correct")} "${word}"`}`);
@@ -1127,10 +1112,10 @@ export default function App() {
         else setTurnCount(turnCount + 1);
       }
 
-      if ((gameModeRef.current === "DYNAMIC" || gameModeRef.current === "DYNAMIC_2") && gameStateRef.current !== "ENDED") {
+      if ((gameModeRef.current === "DYNAMIC") && gameStateRef.current !== "ENDED") {
         setTurnCount((prev) => {
           if (prev + 1 >= Math.max(1, playersRef.current.filter((p) => !p.isEliminated).length)) {
-            const suffix = gameModeRef.current === "DYNAMIC_2" ? word.slice(-2).toLowerCase() : word.slice(-1).toLowerCase();
+            const suffix = word.slice(-overlapLengthRef.current).toLowerCase();
             const { selected, newQueue } = getNextChallenge(challengeQueueRef.current, suffix);
             setActiveChallenge(selected); setChallengeQueue(newQueue);
             addLog("System", `🚨 ${t("log_rule_change")}: ${languageRef.current === "ID" && selected.labelID ? selected.labelID : selected.label} 🚨`);
@@ -1259,10 +1244,9 @@ export default function App() {
   function cycleGameMode() {
     if (gameState === "PLAYING") { resetGame(); addLog("System", "Game Reset due to Mode Change"); }
     const modes = [
-      "LAST_LETTER", "WRAP_AROUND", "STEP_UP", "STEP_UP_2",
-      "RHYME", "MIRROR", "MIRROR_2", "PHRASE_CHAIN", "DYNAMIC", "DYNAMIC_2", "SECOND_LETTER",
-      "POINT_RUSH", "POINT_RUSH_2", "LAST_2_LETTERS", "LAST_3_LETTERS", "SYLLABLE", "LONGER_WORD",
-      "LONGER_2_LETTERS", "CITIES"
+      "LAST_LETTER", "WRAP_AROUND", "STEP_UP",
+      "RHYME", "MIRROR", "PHRASE_CHAIN", "DYNAMIC", "SECOND_LETTER",
+      "POINT_RUSH", "SYLLABLE", "LONGER_WORD", "CITIES"
     ];
     setGameMode(modes[(modes.indexOf(gameMode) + 1) % modes.length]);
   }
@@ -1341,13 +1325,13 @@ export default function App() {
 
   function getModeLabel() {
     const labels = {
-      LAST_LETTER: "LETTER", WRAP_AROUND: "WRAP AROUND",
-      SECOND_LETTER: "2ND LETTER", RHYME: "RHYME RUSH", MIRROR: "MIRROR CHAIN", MIRROR_2: "MIRROR (2)",
-      STEP_UP: "STEP UP", STEP_UP_2: "STEP UP (2)", POINT_RUSH: "POINT RUSH", POINT_RUSH_2: "POINT RUSH (2)",
-      LAST_2_LETTERS: "2 LETTERS", LAST_3_LETTERS: "3 LETTERS", SYLLABLE: "SYLLABLE", LONGER_WORD: "LONGER",
-      LONGER_2_LETTERS: "LONGER (2)", CITIES: "CITIES", DYNAMIC: "DYNAMIC", DYNAMIC_2: "DYNAMIC (2)", PHRASE_CHAIN: "PHRASE"
+      LAST_LETTER: `LETTERS (${overlapLength})`, WRAP_AROUND: `WRAP AROUND (${overlapLength})`,
+      SECOND_LETTER: "2ND LETTER", RHYME: "RHYME RUSH", MIRROR: `MIRROR (${overlapLength})`,
+      STEP_UP: `STEP UP (${overlapLength})`, POINT_RUSH: `POINT RUSH (${overlapLength})`,
+      SYLLABLE: "SYLLABLE", LONGER_WORD: `LONGER (${overlapLength})`,
+      CITIES: `CITIES (${overlapLength})`, DYNAMIC: `DYNAMIC (${overlapLength})`, PHRASE_CHAIN: "PHRASE"
     };
-    return labels[gameMode] || "LETTER";
+    return labels[gameMode] || `LETTERS (${overlapLength})`;
   }
 
   function toggleFullscreen() {
@@ -1477,7 +1461,7 @@ export default function App() {
     <div ref={containerRef} className="min-h-screen bg-slate-900 text-white font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative">
       {/* HEADER */}
       <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 pointer-events-none">
-        <h1 className="text-xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600 drop-shadow-lg">WORD CHAIN</h1>
+        <h1 className="text-xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600 drop-shadow-lg">MAD CHAIN</h1>
         <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 mt-1">
           <span className={`w-2 h-2 rounded-full ${wsRef.current?.readyState === 1 ? "bg-green-500" : "bg-red-500"}`}></span>
           <div className="flex gap-2">
@@ -1502,108 +1486,151 @@ export default function App() {
         </div>
 
         {/* SETTINGS PANEL */}
-        <div className={`mt-3 flex flex-col gap-3 transition-all duration-300 origin-top-right ${showSettings ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 -translate-y-4 pointer-events-none absolute top-10 right-0 w-0 h-0 overflow-hidden"}`}>
-          <div className="bg-slate-800/90 backdrop-blur-md p-3 rounded-lg border border-slate-600 shadow-2xl flex flex-col gap-3 min-w-[200px]">
-            {/* Toggles */}
-            <button onClick={() => setIsMuted(!isMuted)} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
-              <div className="flex items-center gap-2">{isMuted ? <VolumeX className="w-3 h-3 text-red-400" /> : <Volume2 className="w-3 h-3 text-green-400" />}<span className="text-slate-300">{t("sound")}</span></div>
-              <span className="text-white">{isMuted ? "Off" : "On"}</span>
-            </button>
-            <div className="h-px bg-slate-600/50"></div>
+        <div className={`mt-3 flex flex-col gap-2 transition-all duration-300 origin-top-right ${showSettings ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 -translate-y-4 pointer-events-none absolute top-10 right-0 w-0 h-0 overflow-hidden"}`}>
+          <div className="bg-slate-800/95 backdrop-blur-md p-2.5 rounded-xl border border-slate-600 shadow-2xl flex flex-col gap-2 w-64">
             
-            <button onClick={() => toggleLanguage()} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
-              <div className="flex items-center gap-2"><Globe className="w-3 h-3 text-blue-400" /><span className="text-slate-300">{t("language")}</span></div>
-              <span className="text-white group-hover:text-yellow-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix (EN+ID)"}</span>
-            </button>
-            <button onClick={() => setActionCardsEnabled(!actionCardsEnabled)} className={`w-full ${actionCardsEnabled ? 'bg-amber-900 hover:bg-amber-800 border-amber-500' : 'bg-slate-700 hover:bg-slate-600 border-slate-600'} px-3 py-2 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
-              <div className="flex items-center gap-2"><Zap className={`w-3 h-3 ${actionCardsEnabled ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} /><span className="text-slate-300">Action Cards (S,B,A)</span></div>
-              <span className={actionCardsEnabled ? "text-amber-400" : "text-slate-400"}>{actionCardsEnabled ? "ON" : "OFF"}</span>
-            </button>
-            <div className="h-px bg-slate-600/50"></div>
+            {/* TABS HEADER */}
+            <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700">
+              <button onClick={() => setSettingsTab('rules')} title="Aturan Game" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'rules' ? 'bg-blue-600 text-white shadow-inner scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Gamepad2 className="w-4 h-4"/></button>
+              <button onClick={() => setSettingsTab('lobby')} title="Lobi & Pemain" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'lobby' ? 'bg-pink-600 text-white shadow-inner scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Users className="w-4 h-4"/></button>
+              <button onClick={() => setSettingsTab('general')} title="Sistem & Kamus" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'general' ? 'bg-slate-600 text-white shadow-inner scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Settings className="w-4 h-4"/></button>
+              <button onClick={() => setSettingsTab('dev')} title="Simulasi/Dev" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'dev' ? 'bg-amber-600 text-white shadow-inner scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Bot className="w-4 h-4"/></button>
+            </div>
 
-            {/* Game Options */}
-            <div className="w-full bg-slate-700 p-2 rounded border border-slate-600 flex flex-col gap-2">
-              <div className="flex items-center justify-between text-xs text-slate-300 font-bold">
-                <span>{t("end_condition")}:</span>
-                <button onClick={cycleWinCondition} className="text-blue-400 hover:text-white transition-colors uppercase">{winCondition}</button>
-              </div>
-              {winCondition === "TIME" ? (
-                <div className="flex items-center gap-1 bg-slate-900 rounded p-1">
-                  <Clock className="w-3 h-3 text-blue-400" />
-                  <input type="range" min="30" max="300" step="10" value={gameDuration} onChange={(e) => setGameDuration(Number(e.target.value))} className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                  <span className="text-[10px] font-mono w-8 text-right text-yellow-400">{gameDuration}s</span>
+            {/* TAB CONTENTS (Fixed Minimum Height to prevent jitter) */}
+            <div className="flex flex-col gap-2 min-h-[190px]">
+              
+              {/* TAB 1: RULES */}
+              {settingsTab === 'rules' && (
+                <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
+                  <button onClick={cycleGameMode} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
+                    <span className="text-slate-300">{t("mode")}:</span><span className="text-yellow-400 group-hover:text-yellow-300">{getModeLabel()}</span>
+                  </button>
+                  <button onClick={() => setActionCardsEnabled(!actionCardsEnabled)} className={`w-full ${actionCardsEnabled ? 'bg-amber-900 hover:bg-amber-800 border-amber-500' : 'bg-slate-700 hover:bg-slate-600 border-slate-600'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
+                    <div className="flex items-center gap-2"><Zap className={`w-3 h-3 ${actionCardsEnabled ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} /><span className="text-slate-300">Action Cards</span></div>
+                    <span className={actionCardsEnabled ? "text-amber-400" : "text-slate-400"}>{actionCardsEnabled ? "ON" : "OFF"}</span>
+                  </button>
+
+                  <div className="w-full bg-slate-700 p-2 rounded border border-slate-600 flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold mb-0.5">
+                      <span>{t("end_condition")}:</span>
+                      <button onClick={cycleWinCondition} className="text-blue-400 hover:text-white transition-colors uppercase">{winCondition}</button>
+                    </div>
+                    {winCondition === "TIME" ? (
+                      <div className="flex items-center gap-1 bg-slate-900 rounded p-1">
+                        <Clock className="w-3 h-3 text-blue-400" />
+                        <input type="range" min="30" max="300" step="10" value={gameDuration} onChange={(e) => setGameDuration(Number(e.target.value))} className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500" />
+                        <span className="text-[10px] font-mono w-8 text-right text-yellow-400">{gameDuration}s</span>
+                      </div>
+                    ) : winCondition === "SCORE" ? (
+                      <div className="flex items-center gap-1 bg-slate-900 rounded p-1">
+                        <Target className="w-3 h-3 text-red-400" />
+                        <input type="range" min="20" max="200" step="10" value={targetScore} onChange={(e) => setTargetScore(Number(e.target.value))} className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-red-500" />
+                        <span className="text-[10px] font-mono w-8 text-right text-yellow-400">{targetScore}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1 bg-slate-900 rounded p-1">
+                        <RefreshCw className="w-3 h-3 text-purple-400" />
+                        <input type="range" min="1" max="10" step="1" value={targetRounds} onChange={(e) => setTargetRounds(Number(e.target.value))} className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                        <span className="text-[10px] font-mono w-8 text-right text-yellow-400">{targetRounds}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-300"><Clock className="w-3 h-3 text-green-400" /><span className="font-bold">{t("turn_time")}</span></div>
+                    <div className="flex items-center gap-1 bg-slate-900 rounded p-0.5 border border-slate-700">
+                      <button onClick={() => setTurnDuration((d) => Math.max(5, d - 5))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Minus className="w-3 h-3" /></button>
+                      <span className="w-7 text-center font-mono font-bold text-yellow-400 text-xs">{turnDuration}s</span>
+                      <button onClick={() => setTurnDuration((d) => Math.min(60, d + 5))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Plus className="w-3 h-3" /></button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-300"><Link className="w-3 h-3 text-indigo-400" /><span className="font-bold">Overlap Letters</span></div>
+                    <div className="flex items-center gap-1 bg-slate-900 rounded p-0.5 border border-slate-700">
+                      <button onClick={() => setOverlapLength((n) => Math.max(1, n - 1))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Minus className="w-3 h-3" /></button>
+                      <span className="w-7 text-center font-mono font-bold text-yellow-400 text-xs">{overlapLength}</span>
+                      <button onClick={() => setOverlapLength((n) => Math.min(4, n + 1))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Plus className="w-3 h-3" /></button>
+                    </div>
+                  </div>
                 </div>
-              ) : winCondition === "SCORE" ? (
-                <div className="flex items-center gap-1 bg-slate-900 rounded p-1">
-                  <Target className="w-3 h-3 text-red-400" />
-                  <input type="range" min="20" max="200" step="10" value={targetScore} onChange={(e) => setTargetScore(Number(e.target.value))} className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-red-500" />
-                  <span className="text-[10px] font-mono w-8 text-right text-yellow-400">{targetScore}</span>
+              )}
+
+              {/* TAB 2: LOBBY */}
+              {settingsTab === 'lobby' && (
+                <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-3 text-xs bg-slate-700 p-2 rounded border border-slate-600">
+                    <div className="flex items-center gap-1.5 text-slate-300"><Users className="w-3.5 h-3.5 text-pink-400" /><span className="font-bold">{t("players")} Max</span></div>
+                    <div className="flex items-center gap-1 bg-slate-900 rounded p-0.5 border border-slate-700">
+                      <button onClick={() => setMaxPlayers((n) => Math.max(2, n - 1))} className="w-6 h-6 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Minus className="w-3 h-3" /></button>
+                      <span className="w-8 text-center font-mono font-bold text-yellow-400 text-sm">{maxPlayers}</span>
+                      <button onClick={() => setMaxPlayers((n) => Math.min(100, n + 1))} className="w-6 h-6 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Plus className="w-3 h-3" /></button>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button onClick={addHost} className="flex-1 bg-slate-700 hover:bg-slate-600 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-center gap-1.5 group">
+                      <User className="w-3.5 h-3.5 text-blue-400" /><span className="text-slate-300 group-hover:text-white">{t("add_host")}</span>
+                    </button>
+                    <button onClick={addBot} className="flex-1 bg-slate-700 hover:bg-slate-600 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-center gap-1.5 group">
+                      <Bot className="w-3.5 h-3.5 text-purple-400" /><span className="text-slate-300 group-hover:text-white">{t("add_bot")}</span>
+                    </button>
+                  </div>
+
+                  <div className="h-px bg-slate-600/50 my-1"></div>
+
+                  <button onClick={clearLobby} className="w-full bg-slate-900 hover:bg-red-950 px-3 py-2 rounded text-xs font-bold border border-slate-700 hover:border-red-800 text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center gap-2 group">
+                    <Delete className="w-3.5 h-3.5" /> {t("clear_lobby")}
+                  </button>
                 </div>
-              ) : (
-                <div className="flex items-center gap-1 bg-slate-900 rounded p-1">
-                  <RefreshCw className="w-3 h-3 text-purple-400" />
-                  <input type="range" min="1" max="10" step="1" value={targetRounds} onChange={(e) => setTargetRounds(Number(e.target.value))} className="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                  <span className="text-[10px] font-mono w-8 text-right text-yellow-400">{targetRounds}</span>
+              )}
+
+              {/* TAB 3: GENERAL/SYSTEM */}
+              {settingsTab === 'general' && (
+                <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
+                  <button onClick={() => setIsMuted(!isMuted)} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
+                    <div className="flex items-center gap-2">{isMuted ? <VolumeX className="w-3 h-3 text-red-400" /> : <Volume2 className="w-3 h-3 text-green-400" />}<span className="text-slate-300">{t("sound")}</span></div>
+                    <span className="text-white">{isMuted ? "Off" : "On"}</span>
+                  </button>
+                  
+                  <button onClick={() => toggleLanguage()} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
+                    <div className="flex items-center gap-2"><Globe className="w-3 h-3 text-blue-400" /><span className="text-slate-300">{t("language")}</span></div>
+                    <span className="text-white group-hover:text-yellow-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix"}</span>
+                  </button>
+
+                  <div className="w-full bg-slate-700 p-2.5 rounded border border-slate-600 flex flex-col gap-2 mt-2">
+                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Kamus (Dictionary)</div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-yellow-400 font-mono" title={dictLoadedInfo}>{dictLoadedInfo}</span>
+                      <button onClick={() => fileInputRef.current?.click()} className="bg-slate-600 hover:bg-slate-500 px-2.5 py-1.5 rounded flex items-center gap-1.5 transition-colors text-white border border-slate-500">
+                        <FileJson className="w-3.5 h-3.5" /> {t("load_json")}
+                      </button>
+                      <input type="file" accept=".json" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: SIMULATION/DEV */}
+              {settingsTab === 'dev' && (
+                <div className="animate-in fade-in zoom-in-95 duration-200 bg-black/40 p-3 rounded-lg border border-slate-700 flex flex-col justify-center h-full min-h-[190px]">
+                  <div className="text-xs uppercase font-bold text-slate-500 text-center tracking-wider mb-4">{t("simulation")} Tools</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button onClick={simulateJoin} className="bg-blue-900/60 hover:bg-blue-800 py-3 rounded text-blue-200 border border-blue-800/50 flex flex-col items-center justify-center gap-1.5 transition-colors"><Users className="w-4 h-4" /> <span className="text-[10px] font-bold">Join</span></button>
+                    <button onClick={simulateCorrectAnswer} className="bg-green-900/60 hover:bg-green-800 py-3 rounded text-green-200 border border-green-800/50 flex flex-col items-center justify-center gap-1.5 transition-colors"><Gamepad2 className="w-4 h-4" /> <span className="text-[10px] font-bold">Ans</span></button>
+                    <button onClick={handleTimeout} className="bg-red-900/60 hover:bg-red-800 py-3 rounded text-red-200 border border-red-800/50 flex flex-col items-center justify-center gap-1.5 transition-colors"><Clock className="w-4 h-4" /> <span className="text-[10px] font-bold">T.O.</span></button>
+                  </div>
                 </div>
               )}
             </div>
-
-            <div className="flex items-center justify-between gap-3 text-xs mt-1">
-              <div className="flex items-center gap-1.5 text-slate-300"><Clock className="w-3.5 h-3.5 text-green-400" /><span className="font-bold">{t("turn_time")}</span></div>
-              <div className="flex items-center gap-1 bg-slate-900 rounded p-0.5 border border-slate-700">
-                <button onClick={() => setTurnDuration((d) => Math.max(5, d - 5))} className="w-6 h-6 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Minus className="w-3 h-3" /></button>
-                <span className="w-8 text-center font-mono font-bold text-yellow-400 text-sm">{turnDuration}s</span>
-                <button onClick={() => setTurnDuration((d) => Math.min(60, d + 5))} className="w-6 h-6 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Plus className="w-3 h-3" /></button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-1.5 text-slate-300"><Users className="w-3.5 h-3.5 text-pink-400" /><span className="font-bold">{t("players")}</span></div>
-              <div className="flex items-center gap-1 bg-slate-900 rounded p-0.5 border border-slate-700">
-                <button onClick={() => setMaxPlayers((n) => Math.max(2, n - 1))} className="w-6 h-6 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Minus className="w-3 h-3" /></button>
-                <span className="w-8 text-center font-mono font-bold text-yellow-400 text-sm">{maxPlayers}</span>
-                <button onClick={() => setMaxPlayers((n) => Math.min(100, n + 1))} className="w-6 h-6 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Plus className="w-3 h-3" /></button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 text-[10px] text-slate-400 mt-2">
-              <span className="truncate max-w-[80px]" title={dictLoadedInfo}>{dictLoadedInfo}</span>
-              <button onClick={() => fileInputRef.current?.click()} className="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded flex items-center gap-1 transition-colors text-xs text-white">
-                <FileJson className="w-3 h-3" /> {t("load_json")}
-              </button>
-              <input type="file" accept=".json" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-            </div>
             
-            <div className="h-px bg-slate-600/50"></div>
+            <div className="h-px bg-slate-600/50 my-1"></div>
             
-            <div className="flex gap-2">
-              <button onClick={addHost} className="flex-1 bg-slate-700 hover:bg-slate-600 px-2 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-center gap-1 group">
-                <User className="w-3 h-3 text-blue-400" /><span className="text-slate-300 group-hover:text-white">{t("add_host")}</span>
-              </button>
-              <button onClick={addBot} className="flex-1 bg-slate-700 hover:bg-slate-600 px-2 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-center gap-1 group">
-                <Bot className="w-3 h-3 text-purple-400" /><span className="text-slate-300 group-hover:text-white">{t("add_bot")}</span>
-              </button>
-            </div>
-
-            <button onClick={cycleGameMode} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
-              <span className="text-slate-300">{t("mode")}:</span><span className="text-yellow-400 group-hover:text-yellow-300">{getModeLabel()}</span>
-            </button>
-            
-            <button onClick={gameState === "WAITING" ? startGame : resetGame} className={`w-full px-3 py-2 rounded text-xs font-bold shadow-lg transition-transform active:scale-95 border border-transparent ${gameState === "WAITING" ? "bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 text-white" : "bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 text-white"}`}>
+            {/* START / RESET BUTTON (ALWAYS VISIBLE) */}
+            <button onClick={gameState === "WAITING" ? startGame : resetGame} className={`w-full px-3 py-2.5 rounded-lg text-sm font-black tracking-widest uppercase shadow-lg transition-transform active:scale-95 border border-transparent ${gameState === "WAITING" ? "bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 text-white" : "bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 text-white"}`}>
               {gameState === "WAITING" ? t("start_game") : t("reset_game")}
             </button>
-            <button onClick={clearLobby} className="w-full mt-2 bg-slate-900 hover:bg-red-950 px-3 py-2 rounded text-xs font-bold border border-slate-700 hover:border-red-800 text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center gap-2 group">
-              <Delete className="w-3 h-3" /> {t("clear_lobby")}
-            </button>
-          </div>
-
-          <div className="bg-black/60 backdrop-blur-md p-2 rounded-lg border border-slate-700 flex flex-col gap-2">
-            <div className="text-[10px] uppercase font-bold text-slate-500 text-center tracking-wider">{t("simulation")}</div>
-            <div className="grid grid-cols-3 gap-1">
-              <button onClick={simulateJoin} className="bg-blue-900/60 hover:bg-blue-800 text-[10px] py-1.5 rounded text-blue-200 border border-blue-800/50 flex flex-col items-center justify-center gap-0.5"><Users className="w-3 h-3" /> Join</button>
-              <button onClick={simulateCorrectAnswer} className="bg-green-900/60 hover:bg-green-800 text-[10px] py-1.5 rounded text-green-200 border border-green-800/50 flex flex-col items-center justify-center gap-0.5"><Gamepad2 className="w-3 h-3" /> Ans</button>
-              <button onClick={handleTimeout} className="bg-red-900/60 hover:bg-red-800 text-[10px] py-1.5 rounded text-red-200 border border-red-800/50 flex flex-col items-center justify-center gap-0.5"><Clock className="w-3 h-3" /> TO</button>
-            </div>
           </div>
         </div>
       </div>
@@ -1728,12 +1755,10 @@ export default function App() {
                   {gameMode === "WRAP_AROUND" && <div className="text-[10px] font-bold bg-rose-900/50 px-2 py-0.5 rounded text-rose-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-pulse"><Repeat2 className="w-3 h-3" /> WRAP AROUND</div>}
                   {gameMode === "RHYME" && <div className="text-[10px] font-bold bg-purple-900/50 px-2 py-0.5 rounded text-purple-300 mb-1 flex items-center justify-center gap-1 inline-flex"><Hash className="w-3 h-3" /> RHYME RUSH</div>}
                   {gameMode === "MIRROR" && <div className="text-[10px] font-bold bg-pink-900/50 px-2 py-0.5 rounded text-pink-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-pulse"><FlipHorizontal className="w-3 h-3" /> MIRROR CHAIN</div>}
-                  {gameMode === "MIRROR_2" && <div className="text-[10px] font-bold bg-pink-950/50 px-2 py-0.5 rounded text-pink-200 mb-1 flex items-center justify-center gap-1 inline-flex animate-pulse border border-pink-700/50"><FlipHorizontal className="w-3 h-3" /> MIRROR (2)</div>}
                   {gameMode === "STEP_UP" && <div className="text-[10px] font-bold bg-cyan-900/50 px-2 py-0.5 rounded text-cyan-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-bounce"><MoveUpRight className="w-3 h-3" /> STEP UP</div>}
-                  {gameMode === "STEP_UP_2" && <div className="text-[10px] font-bold bg-cyan-950/50 px-2 py-0.5 rounded text-cyan-200 mb-1 flex items-center justify-center gap-1 inline-flex animate-bounce border border-cyan-700/50"><TrendingUpIcon className="w-3 h-3" /> STEP UP (2)</div>}
                   {gameMode === "PHRASE_CHAIN" && <div className="text-[10px] font-bold bg-indigo-900/50 px-2 py-0.5 rounded text-indigo-300 mb-1 flex items-center justify-center gap-1 inline-flex">{tableStatus === "info" ? <Unlink className="w-3 h-3 animate-bounce" /> : <Link className="w-3 h-3" />} PHRASE CHAIN</div>}
-                  {(gameMode === "POINT_RUSH" || gameMode === "POINT_RUSH_2") && <div className="text-[10px] font-bold bg-green-900/50 px-2 py-0.5 rounded text-green-300 mb-1 flex items-center justify-center gap-1 inline-flex"><Zap className="w-3 h-3" /> POINT RUSH {gameMode === "POINT_RUSH_2" ? "(2)" : ""}</div>}
-                  {(gameMode === "DYNAMIC" || gameMode === "DYNAMIC_2") && <div className="text-[10px] font-bold bg-orange-900/50 px-2 py-0.5 rounded text-orange-300 mb-1 flex items-center justify-center gap-1 inline-flex"><AlertTriangle className="w-3 h-3" /> DYNAMIC CHAOS {gameMode === "DYNAMIC_2" ? "(2)" : ""}</div>}
+                  {gameMode === "POINT_RUSH" && <div className="text-[10px] font-bold bg-green-900/50 px-2 py-0.5 rounded text-green-300 mb-1 flex items-center justify-center gap-1 inline-flex"><Zap className="w-3 h-3" /> POINT RUSH</div>}
+                  {gameMode === "DYNAMIC" && <div className="text-[10px] font-bold bg-orange-900/50 px-2 py-0.5 rounded text-orange-300 mb-1 flex items-center justify-center gap-1 inline-flex"><AlertTriangle className="w-3 h-3" /> DYNAMIC CHAOS</div>}
 
                   <p className="text-slate-500 text-xs uppercase tracking-widest mb-1 mt-1 flex items-center justify-center gap-2">
                     {gameMode === "RHYME" ? t("rhyme_target") : t("current_word")}
@@ -1755,21 +1780,30 @@ export default function App() {
                   })()}
                 </h2>
 
-                <div className="flex flex-col items-center">
-                  <div className="mt-2 flex gap-2">
+                <div className="flex flex-col items-center w-full">
+                  <div className="mt-2 flex flex-col items-center gap-2 w-full max-w-[260px] sm:max-w-[380px]">
                     {isReversed && (
-                      <div className="text-xs sm:text-sm font-bold text-black bg-yellow-500 px-3 py-1 rounded-full border border-yellow-300 shadow-[0_0_10px_rgba(234,179,8,0.5)] flex items-center gap-1 animate-pulse">
+                      <div className="text-[10px] sm:text-xs font-bold text-black bg-yellow-500 px-3 py-1 rounded-full border border-yellow-300 shadow-[0_0_10px_rgba(234,179,8,0.5)] flex items-center gap-1 animate-pulse shrink-0">
                         <Repeat2 className="w-3 h-3 sm:w-4 sm:h-4" /> ARAH BALIK
                       </div>
                     )}
-                    <div className="text-sm font-mono text-purple-300 bg-purple-900/30 px-3 py-1 rounded-full border border-purple-500/30 inline-block">
+                    <div className="w-full font-mono text-purple-300 bg-purple-900/40 px-3 py-1.5 rounded-xl border border-purple-500/30 flex justify-center items-center text-center">
                       {(() => {
                         const rule = getRuleDisplay(currentWord);
+                        const totalLen = (rule.desc?.length || 0) + (rule.action?.length || 0) + (rule.target?.length || 0);
+                        const dynamicTextSize = totalLen > 35 ? "text-[9px] sm:text-xs" : totalLen > 25 ? "text-[10px] sm:text-sm" : "text-xs sm:text-base";
+                        
                         return (
-                          <>
-                            {rule.desc}
-                            {gameMode !== "RHYME" && <><span className="mx-2">→</span>{rule.action} <span className="font-bold text-yellow-400">{rule.target}</span></>}
-                          </>
+                          <div className={`${dynamicTextSize} flex flex-wrap justify-center items-center gap-y-1 leading-snug`}>
+                            <span>{rule.desc}</span>
+                            {gameMode !== "RHYME" && (
+                              <>
+                                <span className="mx-1.5 opacity-60">→</span>
+                                <span>{rule.action}</span>
+                                <span className="font-bold text-yellow-400 ml-1.5 bg-black/40 px-2 py-0.5 rounded-md shadow-inner">{rule.target}</span>
+                              </>
+                            )}
+                          </div>
                         );
                       })()}
                     </div>
@@ -1990,4 +2024,3 @@ export default function App() {
     </div>
   );
 }
-
