@@ -37,13 +37,13 @@ import {
   Unlink,
   Hash,
   FlipHorizontal,
-  MoveUpRight, // Ikon untuk Step Up
-  TrendingUp as TrendingUpIcon, // Ikon Step Up 2
-  Repeat2, // Ikon untuk Wrap Around / Mirror
-  LogOut, // Ikon untuk Unjoin
-  Flag, // Ikon untuk Surrender
-  FastForward, // Ikon untuk Action Chain (Skip)
-  Bomb // Ikon untuk Bom
+  MoveUpRight, 
+  TrendingUp as TrendingUpIcon, 
+  Repeat2, 
+  LogOut, 
+  Flag, 
+  FastForward, 
+  Bomb 
 } from "lucide-react";
 
 // --- TRANSLATIONS ---
@@ -107,7 +107,9 @@ const TRANSLATIONS = {
     hall_of_fame: "HALL OF FAME",
     stats_wins: "Wins",
     stats_games: "Games",
+    stats_kills: "Kills",
     stats_rate: "Win Rate",
+    most_killer: "MOST KILLER",
     badge_legend: "Badge Legend",
     no_data: "No player data found yet.",
     close: "Close",
@@ -133,7 +135,7 @@ const TRANSLATIONS = {
     score: "Skor",
     sound: "Suara",
     language: "Bahasa",
-    end_condition: "Akhir Game",
+    end_condition: "End Condition",
     turn_time: "Waktu Giliran",
     players: "Pemain",
     load_json: "Muat JSON",
@@ -180,7 +182,9 @@ const TRANSLATIONS = {
     hall_of_fame: "AULA KETENARAN",
     stats_wins: "Menang",
     stats_games: "Main",
+    stats_kills: "Kill",
     stats_rate: "Rasio Menang",
+    most_killer: "MOST KILLER",
     badge_legend: "Legenda Lencana",
     no_data: "Belum ada data pemain.",
     close: "Tutup",
@@ -398,10 +402,10 @@ const StatsManager = {
     try {
       const data = localStorage.getItem("word_chain_stats");
       const stats = data ? JSON.parse(data) : {};
-      return stats[uniqueId] || { wins: 0, games: 0, badges: [] };
+      return stats[uniqueId] || { wins: 0, games: 0, kills: 0, badges: [] };
     } catch (e) {
       console.error("Stats Load Error", e);
-      return { wins: 0, games: 0, badges: [] };
+      return { wins: 0, games: 0, kills: 0, badges: [] };
     }
   },
   loadAll: () => {
@@ -417,8 +421,9 @@ const StatsManager = {
     try {
       const data = localStorage.getItem("word_chain_stats");
       const allStats = data ? JSON.parse(data) : {};
-      const playerStats = allStats[uniqueId] || { wins: 0, games: 0, badges: [], nickname: nickname };
+      const playerStats = allStats[uniqueId] || { wins: 0, games: 0, kills: 0, badges: [], nickname: nickname };
 
+      if (playerStats.kills === undefined) playerStats.kills = 0;
       if (nickname) playerStats.nickname = nickname;
 
       if (incrementGame) playerStats.games += 1;
@@ -435,6 +440,9 @@ const StatsManager = {
       if (playerStats.wins >= 3) newBadges.add("🔥");
       if (playerStats.games >= 5) newBadges.add("💀");
       if (playerStats.wins >= 10) newBadges.add("👑");
+      if (playerStats.kills >= 5) newBadges.add("🔪");
+      if (playerStats.kills >= 20) newBadges.add("🥷");
+      if (playerStats.kills >= 50) newBadges.add("🩸");
 
       playerStats.badges = Array.from(newBadges);
       allStats[uniqueId] = playerStats;
@@ -443,7 +451,24 @@ const StatsManager = {
       return playerStats;
     } catch (e) {
       console.error("Stats Save Error", e);
-      return { wins: 0, games: 0, badges: [] };
+      return { wins: 0, games: 0, kills: 0, badges: [] };
+    }
+  },
+  addKill: (uniqueId) => {
+    try {
+      const data = localStorage.getItem("word_chain_stats");
+      const allStats = data ? JSON.parse(data) : {};
+      if (allStats[uniqueId]) {
+        allStats[uniqueId].kills = (allStats[uniqueId].kills || 0) + 1;
+        const newBadges = new Set(allStats[uniqueId].badges);
+        if (allStats[uniqueId].kills >= 5) newBadges.add("🔪");
+        if (allStats[uniqueId].kills >= 20) newBadges.add("🥷");
+        if (allStats[uniqueId].kills >= 50) newBadges.add("🩸");
+        allStats[uniqueId].badges = Array.from(newBadges);
+        localStorage.setItem("word_chain_stats", JSON.stringify(allStats));
+      }
+    } catch (e) {
+      console.error("Stats Add Kill Error", e);
     }
   }
 };
@@ -528,7 +553,7 @@ export default function App() {
   const [usedWords, setUsedWords] = useState(new Set());
   const [gameMode, setGameMode] = useState("LAST_LETTER");
   const [language, setLanguage] = useState("EN");
-  const [quitHistory, setQuitHistory] = useState({}); 
+  const quitHistoryRef = useRef({}); 
 
   // ACTION CHAIN (UNO MODE) STATE
   const bombNextRef = useRef(false);
@@ -557,6 +582,10 @@ export default function App() {
   const [targetRounds, setTargetRounds] = useState(3);
   const [winCondition, setWinCondition] = useState("TIME");
   const [globalTimer, setGlobalTimer] = useState(null);
+  const [roundStarterId, setRoundStarterId] = useState(null);
+
+  // KILLER TRACKING
+  const lastSuccessfulPlayerIdRef = useRef(null);
 
   // Dictionaries
   const [dictionary, setDictionary] = useState(FALLBACK_DICTIONARY_EN);
@@ -595,7 +624,7 @@ export default function App() {
 
   const phraseDictionary = useRef(new Set(FALLBACK_PHRASES_EN));
   
-  // Refs for State Access
+  // State Refs untuk mencegah Stale Closures secara total
   const playersRef = useRef(players);
   const turnIndexRef = useRef(currentTurnIndex);
   const turnDurationRef = useRef(turnDuration);
@@ -607,44 +636,29 @@ export default function App() {
   const challengeQueueRef = useRef(challengeQueue);
   const languageRef = useRef(language);
   const gameModeRef = useRef(gameMode);
-  
   const currentWordRef = useRef(currentWord);
   const targetRhymeRef = useRef(targetRhyme);
+  const gameStateRef = useRef(gameState);
+  const winConditionRef = useRef(winCondition);
+  const targetRoundsRef = useRef(targetRounds);
+  const targetScoreRef = useRef(targetScore);
 
   // Sync refs
-  useEffect(() => {
-    playersRef.current = players;
-  }, [players]);
-  useEffect(() => {
-    turnIndexRef.current = currentTurnIndex;
-  }, [currentTurnIndex]);
-  useEffect(() => {
-    turnDurationRef.current = turnDuration;
-  }, [turnDuration]);
-  useEffect(() => {
-    syllableMapRef.current = syllableMap;
-  }, [syllableMap]);
-  useEffect(() => {
-    isMutedRef.current = isMuted;
-  }, [isMuted]);
-  useEffect(() => {
-    cityMetadataRef.current = cityMetadata;
-  }, [cityMetadata]);
-  useEffect(() => {
-    challengeQueueRef.current = challengeQueue;
-  }, [challengeQueue]);
-  useEffect(() => {
-    languageRef.current = language;
-  }, [language]);
-  useEffect(() => {
-    gameModeRef.current = gameMode;
-  }, [gameMode]);
-  useEffect(() => {
-    currentWordRef.current = currentWord;
-  }, [currentWord]);
-  useEffect(() => {
-    targetRhymeRef.current = targetRhyme;
-  }, [targetRhyme]);
+  useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => { turnIndexRef.current = currentTurnIndex; }, [currentTurnIndex]);
+  useEffect(() => { turnDurationRef.current = turnDuration; }, [turnDuration]);
+  useEffect(() => { syllableMapRef.current = syllableMap; }, [syllableMap]);
+  useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+  useEffect(() => { cityMetadataRef.current = cityMetadata; }, [cityMetadata]);
+  useEffect(() => { challengeQueueRef.current = challengeQueue; }, [challengeQueue]);
+  useEffect(() => { languageRef.current = language; }, [language]);
+  useEffect(() => { gameModeRef.current = gameMode; }, [gameMode]);
+  useEffect(() => { currentWordRef.current = currentWord; }, [currentWord]);
+  useEffect(() => { targetRhymeRef.current = targetRhyme; }, [targetRhyme]);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+  useEffect(() => { winConditionRef.current = winCondition; }, [winCondition]);
+  useEffect(() => { targetRoundsRef.current = targetRounds; }, [targetRounds]);
+  useEffect(() => { targetScoreRef.current = targetScore; }, [targetScore]);
 
   // --- POPULATE RHYME TARGETS ---
   useEffect(() => {
@@ -1151,8 +1165,8 @@ export default function App() {
   const handleWin = (winners) => {
     const winnersArray = Array.isArray(winners) ? winners : [winners];
     
-    // FIX: Lakukan side effect (simpan ke localStorage) DI LUAR state updater
-    // Ini mencegah penambahan 2x lipat (Double Update) akibat React Strict Mode
+    // Pindahkan pembaruan penyimpanan lokal ke luar dari fungsi setPlayers
+    // agar tidak tereksekusi ganda oleh React Strict Mode
     const updatedStatsMap = {};
     winnersArray.forEach(w => {
         updatedStatsMap[w.uniqueId] = StatsManager.update(w.uniqueId, true, false, w.nickname);
@@ -1172,7 +1186,8 @@ export default function App() {
   };
 
   const isScoreMode = () => {
-    return gameMode === "POINT_RUSH" || gameMode === "POINT_RUSH_2" || gameMode === "CITIES" || gameMode === "PHRASE_CHAIN" || gameMode === "RHYME" || gameMode === "MIRROR" || gameMode === "MIRROR_2" || gameMode === "ACTION_CHAIN" || gameMode === "ACTION_CHAIN_2";
+    const gm = gameModeRef.current;
+    return gm === "POINT_RUSH" || gm === "POINT_RUSH_2" || gm === "CITIES" || gm === "PHRASE_CHAIN" || gm === "RHYME" || gm === "MIRROR" || gm === "MIRROR_2" || gm === "ACTION_CHAIN" || gm === "ACTION_CHAIN_2";
   };
 
   useEffect(() => {
@@ -1234,32 +1249,48 @@ export default function App() {
 
     if (!playerToEliminate || playerToEliminate.isEliminated) return;
 
-    const newPlayers = currentPlayers.map((p, idx) => (idx === currentIndex ? { ...p, isEliminated: true } : p));
+    // CHECK KILL
+    let killerId = null;
+    if (lastSuccessfulPlayerIdRef.current && lastSuccessfulPlayerIdRef.current !== playerToEliminate.uniqueId) {
+        killerId = lastSuccessfulPlayerIdRef.current;
+        StatsManager.addKill(killerId);
+    }
+
+    const newPlayers = currentPlayers.map((p, idx) => {
+        let pData = { ...p };
+        if (idx === currentIndex) pData.isEliminated = true;
+        if (killerId && p.uniqueId === killerId) pData.sessionKills = (pData.sessionKills || 0) + 1;
+        return pData;
+    });
 
     setPlayers(newPlayers);
     addLog("System", `${playerToEliminate.nickname} ${t("log_eliminated")}`);
 
-    if (gameMode === "RHYME" && gameState !== "ENDED") {
+    if (gameModeRef.current === "RHYME" && gameStateRef.current !== "ENDED") {
         setTimeout(() => {
              changeRhymeTarget();
         }, 500);
         setTurnCount(0); 
     }
 
-    if (isScoreMode() && winCondition === "ROUNDS") {
+    if (isScoreMode() && winConditionRef.current === "ROUNDS") {
       const activePlayers = newPlayers.filter((p) => !p.isEliminated);
-      if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRounds)) {
-        setGameState("ENDED");
-        playSound("win");
-        const winner = [...activePlayers].sort((a, b) => (b.score || 0) - (a.score || 0))[0];
-        if (winner) handleWin(winner);
+      if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRoundsRef.current)) {
+        const sorted = [...activePlayers].sort((a, b) => (b.score || 0) - (a.score || 0));
+        const maxScore = sorted[0].score || 0;
+        const winners = sorted.filter(p => (p.score || 0) === maxScore);
+        if (winners.length > 0) handleWin(winners);
+        else {
+          setGameState("ENDED");
+          playSound("win");
+        }
         return;
       }
     }
 
     const activePlayers = newPlayers.filter((p) => !p.isEliminated);
     if (activePlayers.length <= 1) {
-      if (activePlayers.length === 1) handleWin(activePlayers[0]);
+      if (activePlayers.length === 1) handleWin([activePlayers[0]]);
       else {
         setGameState("ENDED");
         playSound("win");
@@ -1283,7 +1314,7 @@ export default function App() {
   };
 
   const getNewRandomWord = () => {
-    if (gameMode === "PHRASE_CHAIN") {
+    if (gameModeRef.current === "PHRASE_CHAIN") {
         const phrases = Array.from(phraseDictionary.current);
         if (phrases.length === 0) return "word";
         const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
@@ -1306,49 +1337,71 @@ export default function App() {
     return candidates[Math.floor(Math.random() * candidates.length)];
   };
 
-  function handleSurrender(player) {
-    if (gameState !== "PLAYING") return;
+  function handleSurrender(playerToSurrender) {
+    if (gameStateRef.current !== "PLAYING") return;
     
     const currentPlayers = playersRef.current;
-    if (currentPlayers[currentTurnIndex].uniqueId !== player.uniqueId) return; 
+    const pIndex = currentPlayers.findIndex(p => p.uniqueId === playerToSurrender.uniqueId);
+
+    if (pIndex === -1 || currentPlayers[pIndex].isEliminated) return; 
 
     playSound("eliminate");
-    const currentIndex = currentTurnIndex;
 
-    const newPlayers = currentPlayers.map((p, idx) => 
-        idx === currentIndex ? { ...p, isEliminated: true } : p
-    );
+    const isActivePlayer = pIndex === turnIndexRef.current;
+    
+    // CHECK KILL
+    let killerId = null;
+    if (isActivePlayer && lastSuccessfulPlayerIdRef.current && lastSuccessfulPlayerIdRef.current !== playerToSurrender.uniqueId) {
+        killerId = lastSuccessfulPlayerIdRef.current;
+        StatsManager.addKill(killerId);
+    }
 
+    const newPlayers = currentPlayers.map((p, idx) => {
+        let pData = { ...p };
+        if (idx === pIndex) pData.isEliminated = true;
+        if (killerId && p.uniqueId === killerId) pData.sessionKills = (pData.sessionKills || 0) + 1;
+        return pData;
+    });
+
+    playersRef.current = newPlayers;
     setPlayers(newPlayers);
-    addLog("Game", `${player.nickname} ${t("log_surrender")}`);
+    addLog("Game", `${playerToSurrender.nickname} ${t("log_surrender")}`);
 
     const activePlayers = newPlayers.filter((p) => !p.isEliminated);
 
-    if (gameMode === "RHYME" && gameState !== "ENDED") {
-        setTimeout(() => {
-             changeRhymeTarget();
-        }, 500);
-        setTurnCount(0); 
+    if (gameModeRef.current === "RHYME" && gameStateRef.current !== "ENDED") {
+        if (isActivePlayer) {
+            setTimeout(() => {
+                 changeRhymeTarget();
+            }, 500);
+            setTurnCount(0); 
+        }
     }
 
-    if (isScoreMode() && winCondition === "ROUNDS") {
-      if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRounds)) {
-        setGameState("ENDED");
-        playSound("win");
-        const winner = [...activePlayers].sort((a, b) => (b.score || 0) - (a.score || 0))[0];
-        if (winner) handleWin(winner);
+    if (isScoreMode() && winConditionRef.current === "ROUNDS") {
+      if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRoundsRef.current)) {
+        const sorted = [...activePlayers].sort((a, b) => (b.score || 0) - (a.score || 0));
+        const maxScore = sorted[0].score || 0;
+        const winners = sorted.filter(p => (p.score || 0) === maxScore);
+        if (winners.length > 0) handleWin(winners);
+        else {
+          setGameState("ENDED");
+          playSound("win");
+        }
         return;
       }
     }
 
     if (activePlayers.length <= 1) {
-      if (activePlayers.length === 1) handleWin(activePlayers[0]);
+      if (activePlayers.length === 1) handleWin([activePlayers[0]]);
       else {
         setGameState("ENDED");
         playSound("win");
       }
     } else {
-      advanceTurn(newPlayers, currentIndex, 1);
+      if (isActivePlayer) {
+          advanceTurn(newPlayers, pIndex, 1);
+      }
     }
   }
 
@@ -1399,13 +1452,13 @@ export default function App() {
   }
 
   function submitAnswer(word, forcedUniqueId = null) {
-    let playerIndex = currentTurnIndex;
+    let playerIndex = turnIndexRef.current;
     if (forcedUniqueId) {
-      const idx = players.findIndex(p => p.uniqueId === forcedUniqueId);
+      const idx = playersRef.current.findIndex(p => p.uniqueId === forcedUniqueId);
       if (idx !== -1) playerIndex = idx;
     }
 
-    if (gameMode !== "PHRASE_CHAIN" && !dictionary.has(word)) {
+    if (gameModeRef.current !== "PHRASE_CHAIN" && !dictionary.has(word)) {
       addLog("Game", `❌ "${word}" ${t("log_invalid")}.`);
       playSound("wrong");
       triggerTableEffect("error");
@@ -1421,7 +1474,7 @@ export default function App() {
       return;
     }
 
-    const isValid = validateConnection(currentWord, word);
+    const isValid = validateConnection(currentWordRef.current, word);
 
     if (isValid) {
       playSound("correct");
@@ -1429,17 +1482,17 @@ export default function App() {
       usedWordsRef.current.add(word);
       setUsedWords(new Set(usedWordsRef.current));
       
-      const prevWord = currentWord;
+      const prevWord = currentWordRef.current;
       let nextWord = word;
       let stepsToAdvance = 1;
       let applyBomb = false;
       
       let pointsAwarded = word.length;
-      if (gameMode === "STEP_UP" || gameMode === "STEP_UP_2") {
+      if (gameModeRef.current === "STEP_UP" || gameModeRef.current === "STEP_UP_2") {
           pointsAwarded = 10; 
       }
 
-      const newPlayersList = players.map((p, index) => {
+      const newPlayersList = playersRef.current.map((p, index) => {
         if (index === playerIndex) {
           const newScore = (p.score || 0) + pointsAwarded;
           const newTurnCount = (p.turnCount || 0) + 1;
@@ -1450,7 +1503,7 @@ export default function App() {
 
       setPlayers(newPlayersList);
 
-      if (gameMode === "ACTION_CHAIN" || gameMode === "ACTION_CHAIN_2") {
+      if (gameModeRef.current === "ACTION_CHAIN" || gameModeRef.current === "ACTION_CHAIN_2") {
           const lastChar = word.slice(-1).toLowerCase();
           
           if (lastChar === 's') {
@@ -1475,31 +1528,41 @@ export default function App() {
 
       if (isScoreMode()) {
         let gameEnded = false;
-        if (winCondition === "SCORE" && newPlayersList[playerIndex].score >= targetScore) {
+        
+        if (winConditionRef.current === "SCORE" && newPlayersList[playerIndex].score >= targetScoreRef.current) {
           gameEnded = true;
         }
-        if (winCondition === "ROUNDS") {
+        
+        if (winConditionRef.current === "ROUNDS") {
           const activePlayers = newPlayersList.filter((p) => !p.isEliminated);
-          if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRounds)) {
+          if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRoundsRef.current)) {
             gameEnded = true;
           }
         }
+        
         if (gameEnded) {
-          const winner = [...newPlayersList].filter((p) => !p.isEliminated).sort((a, b) => (b.score || 0) - (a.score || 0))[0];
-          handleWin(winner);
+          const activePlayers = newPlayersList.filter((p) => !p.isEliminated);
+          const sorted = [...activePlayers].sort((a, b) => (b.score || 0) - (a.score || 0));
+          const maxScore = sorted[0].score || 0;
+          const winners = sorted.filter(p => (p.score || 0) === maxScore);
+          
+          // SET KILLER BEFORE ENDING GAME
+          lastSuccessfulPlayerIdRef.current = playersRef.current[playerIndex].uniqueId;
+          
+          handleWin(winners);
           return;
         }
       }
 
       if (isScoreMode()) {
-         if (gameMode === "CITIES") {
+         if (gameModeRef.current === "CITIES") {
             const region = cityMetadataRef.current[word];
             if (region) {
                 addLog("Game", `✅ ${word.toUpperCase()} (${region}) +${word.length}`);
             } else {
                 addLog("Game", `✅ ${word.toUpperCase()} +${word.length}`);
             }
-        } else if (gameMode === "PHRASE_CHAIN") {
+        } else if (gameModeRef.current === "PHRASE_CHAIN") {
            addLog("Game", `✅ ${prevWord.toUpperCase()} -> ${word.toUpperCase()} (+${word.length})`);
            if (!wordStartsPhrase(word)) {
                const recovery = findRecoveryWord(word);
@@ -1514,21 +1577,21 @@ export default function App() {
                    nextWord = recovery.word;
                }
            }
-        } else if (gameMode === "RHYME") {
+        } else if (gameModeRef.current === "RHYME") {
              addLog("Game", `✅ ${word.toUpperCase()} (...${targetRhymeRef.current.toUpperCase()}) +${word.length}`);
-        } else if (gameMode === "WRAP_AROUND") {
+        } else if (gameModeRef.current === "WRAP_AROUND") {
              addLog("Game", `✅ ${word.toUpperCase()} (${word.charAt(0).toUpperCase()}...${word.slice(-1).toUpperCase()}) +${word.length}`);
-        } else if (gameMode === "MIRROR") {
+        } else if (gameModeRef.current === "MIRROR") {
              addLog("Game", `✅ ${word.toUpperCase()} (End: ${word.slice(-1).toUpperCase()}) +${word.length}`);
-        } else if (gameMode === "MIRROR_2") {
+        } else if (gameModeRef.current === "MIRROR_2") {
              addLog("Game", `✅ ${word.toUpperCase()} (End: ${word.slice(-2).toUpperCase()}) +${word.length}`);
-        } else if (gameMode === "ACTION_CHAIN" || gameMode === "ACTION_CHAIN_2") {
+        } else if (gameModeRef.current === "ACTION_CHAIN" || gameModeRef.current === "ACTION_CHAIN_2") {
              addLog("Game", `✅ ${word.toUpperCase()} +${word.length}`);
         } else {
           addLog("Game", `✅ +${word.length} ${t("log_pts")}!`);
         }
       } else {
-        if (gameMode === "STEP_UP" || gameMode === "STEP_UP_2") {
+        if (gameModeRef.current === "STEP_UP" || gameModeRef.current === "STEP_UP_2") {
              const nextLen = word.length >= 10 ? "Reset" : word.length + 1;
              addLog("Game", `✅ ${word.toUpperCase()} (Len: ${word.length}) ➡️ Next: ${nextLen}`);
         } else {
@@ -1543,7 +1606,7 @@ export default function App() {
 
       setCurrentWord(nextWord);
 
-      if (gameMode === "RHYME") {
+      if (gameModeRef.current === "RHYME") {
           const activePlayers = playersRef.current.filter(p => !p.isEliminated).length;
           const nextTurn = turnCount + 1;
           
@@ -1557,13 +1620,13 @@ export default function App() {
           }
       }
 
-      if ((gameMode === "DYNAMIC" || gameMode === "DYNAMIC_2") && gameState !== "ENDED") {
+      if ((gameModeRef.current === "DYNAMIC" || gameModeRef.current === "DYNAMIC_2") && gameStateRef.current !== "ENDED") {
         setTurnCount((prev) => {
           const nextTurn = prev + 1;
           const activePlayersCount = playersRef.current.filter((p) => !p.isEliminated).length;
 
           if (nextTurn >= Math.max(1, activePlayersCount)) {
-            const suffix = gameMode === "DYNAMIC_2" ? word.slice(-2).toLowerCase() : word.slice(-1).toLowerCase();
+            const suffix = gameModeRef.current === "DYNAMIC_2" ? word.slice(-2).toLowerCase() : word.slice(-1).toLowerCase();
             const { selected, newQueue } = getNextChallenge(challengeQueueRef.current, suffix);
 
             setActiveChallenge(selected);
@@ -1579,11 +1642,14 @@ export default function App() {
         });
       }
 
-      if (gameState !== "ENDED") {
-        advanceTurn(newPlayersList, currentTurnIndex, stepsToAdvance);
+      // SET LAST SUCCESSFUL PLAYER FOR KILL TRACKING
+      lastSuccessfulPlayerIdRef.current = playersRef.current[playerIndex].uniqueId;
+
+      if (gameStateRef.current !== "ENDED") {
+        advanceTurn(newPlayersList, playerIndex, stepsToAdvance);
       }
     } else {
-      const msg = gameMode === "PHRASE_CHAIN" ? "Invalid Phrase Pair" : (gameMode === "RHYME" ? "Salah Rima" : t("log_bad_link"));
+      const msg = gameModeRef.current === "PHRASE_CHAIN" ? "Invalid Phrase Pair" : (gameModeRef.current === "RHYME" ? "Salah Rima" : t("log_bad_link"));
       addLog("Game", `❌ "${word}" ${msg}.`);
       playSound("wrong");
       triggerTableEffect("error");
@@ -1592,68 +1658,61 @@ export default function App() {
   }
 
   function unjoinGame(uniqueId, nickname) {
-      if (gameState !== "WAITING") {
+      if (gameStateRef.current !== "WAITING") {
           addLog("System", `${nickname}: ${t("log_cant_unjoin")}`);
           return;
       }
-      setPlayers(prev => {
-          if (!prev.some(p => p.uniqueId === uniqueId)) return prev;
-          
-          setQuitHistory(h => ({...h, [uniqueId]: (h[uniqueId] || 0) + 1}));
-          
-          addLog("System", `${nickname} ${t("log_unjoin")}`);
-          playSound("eliminate"); 
-          
-          return prev.filter(p => p.uniqueId !== uniqueId);
-      });
+      
+      if (!playersRef.current.some(p => p.uniqueId === uniqueId)) return;
+      
+      quitHistoryRef.current[uniqueId] = (quitHistoryRef.current[uniqueId] || 0) + 1;
+      
+      addLog("System", `${nickname} ${t("log_unjoin")}`);
+      playSound("eliminate"); 
+      
+      playersRef.current = playersRef.current.filter(p => p.uniqueId !== uniqueId);
+      setPlayers([...playersRef.current]);
   }
 
   function joinGame(uniqueId, nickname, profilePictureUrl, isBot = false) {
-    if (gameState !== "WAITING") return;
+    if (gameStateRef.current !== "WAITING") return;
     
-    if ((quitHistory[uniqueId] || 0) >= 2) {
+    if ((quitHistoryRef.current[uniqueId] || 0) >= 2) {
         return;
     }
 
-    // FIX: Mencegah penambahan "Games" 2x lipat akibat Strict Mode
-    // Lakukan cek duplikasi awal menggunakan useRef sebelum mengupdate LocalStorage
     if (playersRef.current.some((p) => p.uniqueId === uniqueId)) return;
     if (playersRef.current.length >= maxPlayers) return;
 
     playSound("join");
     addLog("System", `${nickname} ${t("log_joined")}`, uniqueId);
 
-    let stats = { wins: 0, games: 0, badges: [] };
+    let stats = { wins: 0, games: 0, kills: 0, badges: [] };
     if (!isBot) {
-      stats = StatsManager.update(uniqueId, false, true, nickname);
+      stats = StatsManager.load(uniqueId);
     }
 
-    setPlayers((prev) => {
-      // Pengecekan ganda di dalam state updater untuk keamanan ekstra
-      if (prev.some((p) => p.uniqueId === uniqueId)) return prev;
-      if (prev.length >= maxPlayers) return prev;
+    const newPlayer = {
+      id: uniqueId,
+      uniqueId,
+      nickname,
+      avatarUrl: profilePictureUrl || getAvatarUrl(uniqueId),
+      isEliminated: false,
+      color: getRandomColor(),
+      isBot: isBot,
+      stats: stats,
+      score: 0,
+      turnCount: 0,
+      sessionKills: 0
+    };
 
-      return [
-        ...prev,
-        {
-          id: uniqueId,
-          uniqueId,
-          nickname,
-          avatarUrl: profilePictureUrl || getAvatarUrl(uniqueId),
-          isEliminated: false,
-          color: getRandomColor(),
-          isBot: isBot,
-          stats: stats,
-          score: 0,
-          turnCount: 0
-        }
-      ];
-    });
+    playersRef.current = [...playersRef.current, newPlayer];
+    setPlayers([...playersRef.current]);
   }
 
   function addBot() {
     const botNames = ["Bot Alpha", "Bot Beta", "Bot Gamma", "Bot Delta", "Bot Omega", "Bot Zeta"];
-    const existingNames = new Set(players.map((p) => p.nickname));
+    const existingNames = new Set(playersRef.current.map((p) => p.nickname));
     const availableNames = botNames.filter((n) => !existingNames.has(n));
     const name = availableNames.length > 0 ? availableNames[0] : `Bot ${Math.floor(Math.random() * 1000)}`;
     const id = `bot_${Date.now()}_${Math.random()}`;
@@ -1687,16 +1746,17 @@ export default function App() {
   };
 
   function startGame() {
-    if (players.length < 2) {
+    if (playersRef.current.length < 2) {
       addLog("System", t("log_need_players"));
       return;
     }
     playSound("start");
     
     bombNextRef.current = false;
+    lastSuccessfulPlayerIdRef.current = null;
 
     let randomStart;
-    if (gameMode === "RHYME") {
+    if (gameModeRef.current === "RHYME") {
         const targets = rhymeTargetsRef.current;
         const initTarget = targets.length > 0 ? targets[Math.floor(Math.random() * targets.length)] : "ing";
         setTargetRhyme(initTarget);
@@ -1709,40 +1769,53 @@ export default function App() {
     setUsedWords(initialUsed);
     usedWordsRef.current = initialUsed;
 
-    setPlayers((prev) => prev.map((p) => ({ ...p, score: 0, turnCount: 0, isEliminated: false })));
+    // Pindahkan pembaruan penyimpanan lokal ke luar dari fungsi setPlayers
+    // agar tidak tereksekusi ganda oleh React Strict Mode
+    const updatedStatsMap = {};
+    playersRef.current.forEach((p) => {
+        if (!p.isBot) {
+            updatedStatsMap[p.uniqueId] = StatsManager.update(p.uniqueId, false, true, p.nickname);
+        }
+    });
 
-    if (isScoreMode() && winCondition === "TIME") {
+    setPlayers((prev) => prev.map((p) => {
+        const updatedStats = updatedStatsMap[p.uniqueId] || p.stats;
+        return { ...p, stats: updatedStats, score: 0, turnCount: 0, sessionKills: 0, isEliminated: false };
+    }));
+
+    if (isScoreMode() && winConditionRef.current === "TIME") {
       setGlobalTimer(gameDuration);
     }
 
-    if (gameMode === "DYNAMIC" || gameMode === "DYNAMIC_2") {
+    if (gameModeRef.current === "DYNAMIC" || gameModeRef.current === "DYNAMIC_2") {
       const queue = generateChallengeQueue();
       const { selected, newQueue } = getNextChallenge(queue, "");
       setActiveChallenge(selected);
       setChallengeQueue(newQueue);
       setTurnCount(0);
 
-      const ruleLabel = language === "ID" && selected.labelID ? selected.labelID : selected.label;
+      const ruleLabel = languageRef.current === "ID" && selected.labelID ? selected.labelID : selected.label;
       addLog("System", `Mode: DYNAMIC CHAOS!`);
       addLog("System", `Rule: ${ruleLabel}`);
     }
     
-    if (gameMode === "RHYME") {
+    if (gameModeRef.current === "RHYME") {
         setTurnCount(0);
         addLog("System", `Mode: RHYME RUSH! Target: ...${targetRhymeRef.current || ""}`);
     }
 
     setCurrentWord(randomStart);
 
-    const randomFirstPlayerIndex = Math.floor(Math.random() * players.length);
+    const randomFirstPlayerIndex = Math.floor(Math.random() * playersRef.current.length);
     setCurrentTurnIndex(randomFirstPlayerIndex);
+    setRoundStarterId(playersRef.current[randomFirstPlayerIndex].uniqueId);
 
     setTimer(turnDuration);
     setGameState("PLAYING");
     setShowSettings(false);
 
     const region = cityMetadataRef.current[randomStart];
-    const starterName = players[randomFirstPlayerIndex].nickname;
+    const starterName = playersRef.current[randomFirstPlayerIndex].nickname;
     addLog("System", `Start: ${starterName} ${t("log_goes_first")}`);
 
     if (randomStart) {
@@ -1756,11 +1829,13 @@ export default function App() {
 
   function resetGame() {
     setGameState("WAITING");
-    setPlayers((prev) => prev.map((p) => ({ ...p, isEliminated: false, score: 0, turnCount: 0 })));
+    setPlayers((prev) => prev.map((p) => ({ ...p, isEliminated: false, score: 0, turnCount: 0, sessionKills: 0 })));
     setUsedWords(new Set());
     setCurrentWord("");
     setTargetRhyme("");
     setGlobalTimer(null);
+    setRoundStarterId(null);
+    lastSuccessfulPlayerIdRef.current = null;
     setTimer(turnDuration);
     bombNextRef.current = false;
     addLog("System", t("log_reset"));
@@ -1769,15 +1844,19 @@ export default function App() {
   function clearLobby() {
     setGameState("WAITING");
     setPlayers([]);
+    playersRef.current = []; 
     setUsedWords(new Set());
+    usedWordsRef.current = new Set(); 
     setCurrentWord("");
     setTargetRhyme("");
     setGlobalTimer(null);
+    setRoundStarterId(null);
+    lastSuccessfulPlayerIdRef.current = null;
     setTimer(turnDuration);
     setTurnCount(0);
     setActiveChallenge(null);
     setChallengeQueue([]);
-    setQuitHistory({}); 
+    quitHistoryRef.current = {}; 
     bombNextRef.current = false;
     addLog("System", t("log_lobby_cleared"));
     playSound("eliminate");
@@ -1912,24 +1991,27 @@ export default function App() {
                   const resEn = await fetch("/dictionary.json");
                   if (resEn.ok) {
                       const data = await resEn.json();
-                      rawEn = new Set((Array.isArray(data) ? data : Object.keys(data)).filter(w => !w.includes(" ")).map(normalizeWord).filter(w => w.length > 0));
+                      let rawWords = Array.isArray(data) ? data : Object.keys(data);
+                      const cleanedWords = rawWords.map(normalizeWord).filter(w => w.length > 0);
+                      rawEn = new Set(cleanedWords);
                   }
-              } catch(e) {}
-              
+              } catch (e) {}
+
               try {
                   const resId = await fetch("/kamus.json");
                   if (resId.ok) {
                       const data = await resId.json();
-                      rawId = new Set(Object.keys(data).filter(w => !w.includes(" ")).map(normalizeWord).filter(w => w.length > 0));
+                      const cleanedWords = Object.keys(data).map(normalizeWord).filter(w => w.length > 0);
+                      rawId = new Set(cleanedWords);
                   }
-              } catch(e) {}
+              } catch (e) {}
 
-              const mixedDict = new Set([...rawEn, ...rawId]);
-              setDictionary(mixedDict);
+              const mixDict = new Set([...rawEn, ...rawId]);
+              setDictionary(mixDict);
               setSyllableMap({});
               phraseDictionary.current = pSet;
-              setDictLoadedInfo(`Mix EN+ID (${mixedDict.size})`);
-              dictionaryCache.current.MIX = { dict: mixedDict, syl: {}, phrases: pSet, info: `Mix EN+ID (${mixedDict.size})` };
+              setDictLoadedInfo(`Mix (${mixDict.size})`);
+              dictionaryCache.current.MIX = { dict: mixDict, syl: {}, phrases: pSet, info: `Mix (${mixDict.size})` };
           };
           loadMix();
         } else {
@@ -1969,11 +2051,13 @@ export default function App() {
 
     if (!forceReload) {
       setGameState("WAITING");
-      setPlayers((prev) => prev.map((p) => ({ ...p, isEliminated: false, score: 0, turnCount: 0 })));
+      setPlayers((prev) => prev.map((p) => ({ ...p, isEliminated: false, score: 0, turnCount: 0, sessionKills: 0 })));
       setUsedWords(new Set());
       setCurrentWord("");
       setTargetRhyme("");
       setGlobalTimer(null);
+      setRoundStarterId(null);
+      lastSuccessfulPlayerIdRef.current = null;
       setTurnCount(0);
       setActiveChallenge(null);
       setChallengeQueue([]);
@@ -2041,16 +2125,19 @@ export default function App() {
         return;
     }
     
-    if (gameState === "PLAYING") {
-      const currentPlayer = players[currentTurnIndex];
+    if (lowerComment === "!surrender" || lowerComment === "!surrend" || lowerComment === "surrend" || lowerComment === "surrender" || lowerComment === "ff" || lowerComment === "menyerah" || lowerComment === "!ff") {
+        const surrenderingPlayer = playersRef.current.find(p => p.uniqueId === uniqueId);
+        if (surrenderingPlayer && !surrenderingPlayer.isEliminated) {
+            handleSurrender(surrenderingPlayer);
+        }
+        return;
+    }
+
+    if (gameStateRef.current === "PLAYING") {
+      const currentIndex = turnIndexRef.current;
+      const currentPlayer = playersRef.current[currentIndex];
 
       if (currentPlayer && currentPlayer.uniqueId === uniqueId && !currentPlayer.isEliminated) {
-        
-        if (lowerComment === "!surrender" || lowerComment === "surrend" || lowerComment === "surrender" || lowerComment === "ff" || lowerComment === "menyerah" || lowerComment === "!ff") {
-            handleSurrender(currentPlayer);
-            return;
-        }
-
         const cleanGameWord = normalizeWord(trimmedComment);
         if (cleanGameWord.length > 0) {
           submitAnswer(cleanGameWord);
@@ -2062,9 +2149,25 @@ export default function App() {
   const handleManualSubmit = (e) => {
     e.preventDefault();
     if (!manualInput.trim()) return;
+    
+    const trimmed = manualInput.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (lower === "!surrender" || lower === "!surrend" || lower === "surrend" || lower === "surrender" || lower === "ff" || lower === "menyerah" || lower === "!ff") {
+      if (gameStateRef.current === "PLAYING") {
+          const currentIndex = turnIndexRef.current;
+          const currentPlayer = playersRef.current[currentIndex];
+          if (currentPlayer && !currentPlayer.isEliminated) {
+              handleSurrender(currentPlayer);
+              setManualInput("");
+              return;
+          }
+      }
+    }
+
     const cleanWord = normalizeWord(manualInput);
     if (cleanWord.length > 0) {
-      if (gameState === "PLAYING") {
+      if (gameStateRef.current === "PLAYING") {
         submitAnswer(cleanWord);
         setManualInput("");
       }
@@ -2179,7 +2282,7 @@ export default function App() {
     connectWebSocket();
     return () => {
       if (wsRef.current) {
-        wsRef.current.onclose = null; // FIX: Mencegah memory leak dan reconnect loop
+        wsRef.current.onclose = null; 
         wsRef.current.close();
       }
       clearInterval(timerRef.current);
@@ -2265,8 +2368,7 @@ export default function App() {
           chatHandlerRef.current(data);
         }
         if (eventName === "gift") {
-          setLastEvent({ type: "gift", ...data });
-          setTimeout(() => setLastEvent(null), 3000);
+          setLastEvent({ type: "gift", timestamp: Date.now(), ...data });
         }
       } catch (err) {
         console.error("WS Error", err);
@@ -2364,7 +2466,7 @@ export default function App() {
       </div>
 
       {/* CONTROLS */}
-      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-50 flex flex-col items-end">
+      <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[70] flex flex-col items-end">
         {/* SETTINGS GROUP */}
         <div className="flex gap-2">
           {/* STATS TOGGLE */}
@@ -2617,21 +2719,30 @@ export default function App() {
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
                   <Info className="w-3 h-3" /> {t("badge_legend")}
                 </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <div className="flex items-center gap-2 text-xs text-slate-300">
-                    <span className="text-lg">👶</span> <span>Rookie</span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <span className="text-sm">👶</span> Rookie
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-300">
-                    <span className="text-lg">🥇</span> <span>Winner (1+ Win)</span>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <span className="text-sm">🥇</span> 1+ Wins
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-300">
-                    <span className="text-lg">🔥</span> <span>On Fire (3+ Wins)</span>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <span className="text-sm">🔥</span> 3+ Wins
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-300">
-                    <span className="text-lg">💀</span> <span>Veteran (5+ Games)</span>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <span className="text-sm">👑</span> 10+ Wins
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-300">
-                    <span className="text-lg">👑</span> <span>Legend (10+ Wins)</span>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <span className="text-sm">💀</span> 5+ Games
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <span className="text-sm">🔪</span> 5+ Kills
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <span className="text-sm">🥷</span> 20+ Kills
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px] text-slate-300">
+                    <span className="text-sm">🩸</span> 50+ Kills
                   </div>
                 </div>
               </div>
@@ -2673,7 +2784,7 @@ export default function App() {
                         <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 ml-2">
                           <div className="flex flex-col justify-center">
                             <span className="font-bold text-white text-lg truncate">{stat.nickname || "Unknown"}</span>
-                            <div className="flex gap-1 mt-1">
+                            <div className="flex gap-1 mt-1 flex-wrap">
                               {stat.badges &&
                                 stat.badges.map((b, i) => (
                                   <span key={i} className="text-sm bg-black/30 rounded px-1">
@@ -2684,13 +2795,10 @@ export default function App() {
                           </div>
 
                           <div className="flex flex-col justify-center gap-1.5 text-xs">
-                            <div className="flex justify-between text-slate-400">
-                              <span>
-                                {t("stats_wins")}: <span className="text-yellow-400 font-bold">{stat.wins}</span>
-                              </span>
-                              <span>
-                                {t("stats_games")}: <span className="text-blue-400 font-bold">{stat.games}</span>
-                              </span>
+                            <div className="flex justify-between text-slate-400 mb-1">
+                              <span title={t("stats_wins")}>🏆 <span className="text-yellow-400 font-bold">{stat.wins || 0}</span></span>
+                              <span title={t("stats_games")}>🎮 <span className="text-blue-400 font-bold">{stat.games || 0}</span></span>
+                              <span title={t("stats_kills")}>🔪 <span className="text-red-400 font-bold">{stat.kills || 0}</span></span>
                             </div>
 
                             <div className="w-full h-2 bg-slate-700 rounded-full overflow-hidden relative group/bar">
@@ -2910,6 +3018,7 @@ export default function App() {
 
             const maxWins = Math.max(...players.map((p) => p.stats?.wins || 0));
             const isKing = maxWins > 0 && (player.stats?.wins || 0) === maxWins && !player.isEliminated;
+            const isStarter = player.uniqueId === roundStarterId;
 
             return (
               <div
@@ -2933,6 +3042,13 @@ export default function App() {
                   </div>
 
                   {player.isBot && <div className="absolute -top-1 -right-1 bg-purple-600 text-[8px] px-1 rounded-full text-white font-bold border border-purple-400 z-30">BOT</div>}
+
+                  {/* TANDA ESTETIK: ROUND STARTER */}
+                  {isStarter && !player.isEliminated && (
+                    <div className="absolute -top-1 -left-2 bg-gradient-to-br from-cyan-500 to-blue-600 border border-cyan-200 text-white p-1.5 rounded-full shadow-[0_0_12px_rgba(6,182,212,0.9)] z-40 animate-pulse" title="First Player (Round Starter)">
+                      <Flag className="w-3 h-3 fill-white" />
+                    </div>
+                  )}
 
                   {isTurn && (
                     <div className={`absolute -top-6 left-1/2 -translate-x-1/2 font-bold text-xs px-2 py-0.5 rounded-full shadow-lg z-50 whitespace-nowrap
@@ -2965,6 +3081,13 @@ export default function App() {
                       <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-yellow-700/30" : "border-white/20"}`}>
                         <Zap className={`w-3 h-3 drop-shadow-sm ${isTurn ? "text-yellow-700" : "text-green-400"}`} />
                         <span className={`text-[10px] font-bold font-mono ${isTurn ? "text-yellow-800" : "text-green-200"}`}>{player.score || 0}</span>
+                      </div>
+                    )}
+
+                    {player.sessionKills > 0 && (
+                      <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-yellow-700/30" : "border-white/20"}`} title="Kills this match">
+                        <Skull className={`w-3 h-3 drop-shadow-sm ${isTurn ? "text-red-700" : "text-red-400"}`} />
+                        <span className={`text-[10px] font-bold font-mono ${isTurn ? "text-red-800" : "text-red-200"}`}>{player.sessionKills}</span>
                       </div>
                     )}
 
@@ -3035,7 +3158,8 @@ export default function App() {
 
       {/* WINNER OVERLAY */}
       {gameState === "ENDED" && getWinners().length > 0 && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-700">
+        <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-500 p-4">
+          {/* Particle Effects */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             {[...Array(20)].map((_, i) => (
               <div
@@ -3047,51 +3171,84 @@ export default function App() {
                   animationDuration: `${1 + Math.random()}s`,
                   animationDelay: `${Math.random()}s`,
                   backgroundColor: ["#FFD700", "#FF69B4", "#00BFFF", "#32CD32"][Math.floor(Math.random() * 4)],
-                  width: "8px",
-                  height: "8px",
+                  width: "6px",
+                  height: "6px",
                   borderRadius: "50%"
                 }}></div>
             ))}
           </div>
-          <div className="text-center transform transition-all animate-in zoom-in-50 duration-500 flex flex-col items-center max-w-4xl w-full">
-            <div className="relative mb-6">
-              <Trophy className="w-24 h-24 sm:w-32 sm:h-32 text-yellow-400 drop-shadow-[0_0_20px_rgba(250,204,21,0.6)] animate-bounce" />
-              <Star className="absolute -top-2 -right-2 w-12 h-12 text-white animate-spin-slow text-yellow-200" />
-            </div>
+          
+          {/* Compact Modal Box */}
+          <div className="relative bg-slate-900/95 border border-yellow-500/30 shadow-[0_0_40px_rgba(250,204,21,0.2)] rounded-3xl p-6 sm:p-8 max-w-3xl w-full flex flex-col items-center transform transition-all animate-in zoom-in-90 duration-300">
             
-            <h2 className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-700 drop-shadow-lg mb-6">
-                {getWinners().length > 1 ? t("draw") : t("winner")}
-            </h2>
+            {/* Header */}
+            <div className="flex items-center justify-center gap-3 sm:gap-4 mb-6">
+              <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)] animate-bounce" />
+              <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-700 drop-shadow-md">
+                  {getWinners().length > 1 ? t("draw") : t("winner")}
+              </h2>
+              <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)] animate-bounce" />
+            </div>
 
             {/* Winners Grid */}
-            <div className="flex flex-wrap justify-center gap-6 my-4 w-full">
+            <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 w-full max-h-[35vh] overflow-y-auto custom-scrollbar">
                 {getWinners().map((winner, idx) => (
-                    <div key={idx} className="flex flex-col items-center animate-in zoom-in slide-in-from-bottom duration-500" style={{animationDelay: `${idx * 100}ms`}}>
-                        <div className="relative group">
-                            <div className="absolute -inset-2 bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 rounded-full opacity-75 blur-lg group-hover:opacity-100 transition duration-1000 group-hover:duration-200 animate-tilt"></div>
-                            <img src={winner.avatarUrl} alt="Winner" className="relative w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-yellow-400 shadow-2xl object-cover" />
+                    <div key={idx} className="flex flex-col items-center bg-slate-800/60 p-3 rounded-2xl border border-yellow-500/20 min-w-[110px] sm:min-w-[130px] animate-in zoom-in duration-300" style={{animationDelay: `${idx * 100}ms`}}>
+                        <div className="relative mb-2 group">
+                            <div className="absolute -inset-2 bg-gradient-to-r from-pink-600 via-purple-600 to-blue-600 rounded-full opacity-50 blur group-hover:opacity-100 transition duration-500"></div>
+                            <img src={winner.avatarUrl} alt="Winner" className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full border-2 border-yellow-400 shadow-xl object-cover bg-slate-900" />
                             {getWinners().length > 1 && (
-                                <div className="absolute -bottom-2 -right-2 bg-yellow-500 text-black font-bold px-2 py-0.5 rounded-full text-xs shadow-lg">#{idx + 1}</div>
+                                <div className="absolute -bottom-1 -right-1 bg-yellow-500 text-black font-bold px-1.5 py-0.5 rounded-full text-[10px] shadow-lg">#{idx + 1}</div>
                             )}
                         </div>
-                        <div className="bg-slate-800/80 px-6 py-2 rounded-xl border border-yellow-500/50 backdrop-blur-md mt-4 min-w-[150px]">
-                            <p className="text-xl sm:text-2xl font-bold text-white tracking-wider truncate max-w-[200px]">{winner.nickname}</p>
-                            {isScoreMode() && (
-                                <p className="text-base sm:text-lg font-mono text-green-300 mt-1">
-                                {t("score")}: {winner.score}
-                                </p>
-                            )}
-                        </div>
+                        <p className="text-sm sm:text-base font-bold text-white truncate max-w-[100px]">{winner.nickname}</p>
+                        {isScoreMode() && (
+                            <p className="text-xs sm:text-sm font-mono text-green-300 font-bold mt-0.5">
+                              {winner.score} {t("log_pts")}
+                            </p>
+                        )}
                     </div>
                 ))}
             </div>
+
+            {/* Most Killer Compact Section */}
+            {(() => {
+                const killers = players.filter(p => (p.sessionKills || 0) > 0).sort((a,b) => b.sessionKills - a.sessionKills);
+                const maxKills = killers.length > 0 ? killers[0].sessionKills : 0;
+                const mostKillers = killers.filter(p => p.sessionKills === maxKills);
+
+                if (mostKillers.length > 0) {
+                    return (
+                        <div className="w-full bg-red-950/30 border border-red-900/50 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 mb-6">
+                            <div className="flex items-center gap-1.5 text-red-500 text-xs sm:text-sm font-black tracking-widest drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]">
+                                <Skull className="w-4 h-4 animate-pulse" /> {t("most_killer")}
+                            </div>
+                            <div className="flex flex-wrap justify-center gap-2">
+                                {mostKillers.map((killer, idx) => (
+                                    <div key={idx} className="bg-slate-900/80 px-2.5 py-1.5 rounded-lg border border-red-800/40 flex items-center gap-2 shadow-sm hover:scale-105 transition-transform">
+                                        <div className="relative">
+                                            <img src={killer.avatarUrl} alt="killer" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-red-600 object-cover bg-slate-800"/>
+                                            <div className="absolute -bottom-1 -right-1 text-[8px] bg-red-600 text-white rounded-full px-1 shadow-md">🔪</div>
+                                        </div>
+                                        <div className="text-left leading-tight">
+                                            <p className="text-[10px] sm:text-xs font-bold text-white truncate max-w-[80px]">{killer.nickname}</p>
+                                            <p className="text-[9px] sm:text-[10px] font-mono text-red-400 font-bold">{killer.sessionKills} {t("stats_kills")}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                }
+                return null;
+            })()}
 
             <button
               onClick={() => {
                 setPlayers([]);
                 setGameState("WAITING");
               }}
-              className="mt-8 px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-700 text-white font-bold rounded-full shadow-lg hover:shadow-green-500/50 transform hover:scale-105 transition-all">
+              className="px-8 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-full shadow-lg hover:shadow-green-500/50 active:scale-95 transition-all text-sm sm:text-base border border-green-400/50">
               {t("play_again")}
             </button>
           </div>
@@ -3122,25 +3279,37 @@ export default function App() {
 
       {/* GIFT POPUP */}
       {lastEvent && lastEvent.type === "gift" && (
-        <div className="absolute top-20 right-4 z-[60] animate-in slide-in-from-right fade-in duration-300 pointer-events-none max-w-[200px]">
+        <div key={lastEvent.timestamp} className="absolute top-20 right-4 z-40 animate-in slide-in-from-right fade-in duration-300 pointer-events-none max-w-[200px]">
           <div className="flex flex-col items-center relative">
-            <div className="absolute inset-0 bg-pink-500/50 blur-[40px] rounded-full animate-pulse"></div>
+            {/* Subtle glow instead of huge blur box */}
+            <div className="absolute inset-0 bg-pink-500/30 blur-[30px] rounded-full animate-pulse"></div>
 
-            <div className="relative mb-2">
-              <div className="w-16 h-16 rounded-full p-1 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 shadow-2xl">
-                <img src={lastEvent.profilePictureUrl || getAvatarUrl(lastEvent.nickname)} alt="Gifter" className="w-full h-full rounded-full object-cover border-2 border-slate-900 bg-slate-800" />
+            <div className="relative mb-1">
+              <div className="w-14 h-14 rounded-full p-1 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 shadow-xl">
+                <img src={lastEvent.profilePictureUrl || getAvatarUrl(lastEvent.nickname)} alt="Gifter" className="w-full h-full rounded-full object-cover border border-slate-900 bg-slate-800" />
               </div>
-              <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-black font-black text-[10px] px-2 py-0.5 rounded-full shadow-lg border border-white transform rotate-6">GIFT!</div>
+              <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-black font-black text-[9px] px-1.5 py-0.5 rounded-full shadow-lg border border-white transform rotate-6">GIFT!</div>
             </div>
 
-            <div className="bg-slate-900/90 border border-pink-500/50 backdrop-blur-xl px-4 py-2 rounded-xl shadow-2xl text-center transform hover:scale-105 transition-transform">
-              <p className="text-pink-300 text-[8px] font-bold tracking-widest uppercase mb-0.5">{t("supporter")}</p>
-              <div className="flex flex-col">
-                <span className="text-sm font-black text-white drop-shadow-md truncate max-w-[150px]">{lastEvent.nickname}</span>
-                <span className="text-xs text-slate-300">
-                  {t("sent")} <span className="text-yellow-400 font-bold">{lastEvent.giftName}</span> 🎁
-                </span>
-              </div>
+            <div className="text-center flex flex-col items-center">
+              <span className="text-xs sm:text-sm font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] truncate max-w-[120px]">{lastEvent.nickname}</span>
+              
+              {/* Menampilkan Gambar Gift */}
+              {(lastEvent.giftPictureUrl || lastEvent.pictureUrl) ? (
+                <div className="flex items-center gap-1 mt-0.5">
+                   <span className="text-[10px] text-slate-200 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] font-bold">{t("sent")}</span>
+                   <img 
+                    src={lastEvent.giftPictureUrl || lastEvent.pictureUrl} 
+                    alt="Gift Image" 
+                    className="w-6 h-6 object-contain drop-shadow-[0_0_8px_rgba(255,105,180,0.8)] animate-bounce"
+                   />
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 mt-0.5">
+                   <span className="text-[10px] text-slate-200 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] font-bold">{t("sent")}</span>
+                   <span className="text-yellow-400 font-bold text-[10px] drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">{lastEvent.giftName}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
