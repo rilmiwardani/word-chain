@@ -2354,7 +2354,7 @@ export default function App() {
 
   const connectWebSocket = () => {
     const hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
-    const url = `https://jajaj.onrender`;
+    const url = `ws://localhost:62024`;
     wsRef.current = new WebSocket(url);
     wsRef.current.onopen = () => {
       addLog("System", `Connected to IndoFinity (${hostname})`);
@@ -3335,4 +3335,5 @@ export default function App() {
     </div>
   );
 }
+
 
