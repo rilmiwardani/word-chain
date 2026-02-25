@@ -80,7 +80,7 @@ const FALLBACK_DICTIONARY_EN = new Set([
   "ice", "ink", "iron", "idea", "island", "image", "item", "insect", "inside", "issue", "input", "index", "icon",
   "jam", "jar", "jet", "job", "joy", "juice", "joke", "jump", "jacket", "jeep", "jungle", "jewel", "judge", "joint",
   "key", "king", "kite", "knee", "knife", "knot", "kick", "kid", "kitchen", "keyboard", "lamp", "leg", "lip", "lock",
-  "log", "love", "low", "light", "lake", "leaf", "life", "line", "lion", "list", "lemon", "man", "map", "mat", "moon",
+  "log", "love", "low", "light", "lake", "leaf", "life", "line", "lion", "list", "man", "map", "mat", "moon",
   "milk", "mouse", "mouth", "money", "music", "mother", "monkey", "market", "metal", "magic", "net", "nut", "nose",
   "neck", "name", "night", "north", "nurse", "nest", "news", "noise", "note", "number", "nature", "owl", "oil", "orange",
   "ocean", "office", "onion", "open", "order", "oven", "owner", "object", "opera", "orbit", "out", "oops", "ooze",
@@ -201,7 +201,7 @@ const getAvatarUrl = (id) => `https://api.dicebear.com/7.x/adventurer/svg?seed=$
 
 const normalizeWord = (word) => {
   if (typeof word !== "string") return "";
-  return word.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z]/g, "");
+  return word.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s]/g, "").trim();
 };
 
 const getEnglishSyllableSuffix = (word) => {
@@ -394,20 +394,17 @@ export default function App() {
   const [tableStatus, setTableStatus] = useState("idle");
   const [feedbackMessage, setFeedbackMessage] = useState(null);
   
-  // Fitur Baru: Modifiers (Action Cards & Point Rush)
   const [actionCardsEnabled, setActionCardsEnabled] = useState(false);
   const [pointRushEnabled, setPointRushEnabled] = useState(false);
   const [isReversed, setIsReversed] = useState(false);
   const [overlapLength, setOverlapLength] = useState(1);
 
-  // Stats & Dynamic Mode
   const [showStats, setShowStats] = useState(false);
   const [allStats, setAllStats] = useState([]);
   const [activeChallenge, setActiveChallenge] = useState(null);
   const [turnCount, setTurnCount] = useState(0);
   const [challengeQueue, setChallengeQueue] = useState([]);
 
-  // Rush/Settings State
   const [gameDuration, setGameDuration] = useState(60);
   const [targetScore, setTargetScore] = useState(50);
   const [targetRounds, setTargetRounds] = useState(3);
@@ -415,14 +412,12 @@ export default function App() {
   const [globalTimer, setGlobalTimer] = useState(null);
   const [roundStarterId, setRoundStarterId] = useState(null);
 
-  // Dictionaries
   const [dictionary, setDictionary] = useState(FALLBACK_DICTIONARY_EN);
   const [syllableMap, setSyllableMap] = useState({});
   const [cityMetadata, setCityMetadata] = useState({});
   const [logs, setLogs] = useState([]);
   const [lastEvent, setLastEvent] = useState(null);
 
-  // UI Settings
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [turnDuration, setTurnDuration] = useState(15);
   const [timer, setTimer] = useState(turnDuration);
@@ -454,7 +449,6 @@ export default function App() {
     ID: null, CITIES: null, MIX: null
   });
 
-  // State Sync Refs (Mencegah Stale Closures)
   const playersRef = useRef(players);
   const turnIndexRef = useRef(currentTurnIndex);
   const turnDurationRef = useRef(turnDuration);
@@ -478,7 +472,6 @@ export default function App() {
 
   // === EFFECTS ===
   
-  // Sync Refs
   useEffect(() => {
     playersRef.current = players; turnIndexRef.current = currentTurnIndex;
     turnDurationRef.current = turnDuration; usedWordsRef.current = usedWords;
@@ -498,7 +491,6 @@ export default function App() {
     gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointRushEnabled, isReversed, overlapLength
   ]);
 
-  // Populasi Target Rima
   useEffect(() => {
     const counts = {};
     dictionary.forEach(w => {
@@ -514,7 +506,6 @@ export default function App() {
     rhymeTargetsRef.current = targets.sort((a,b) => counts[b] - counts[a]);
   }, [dictionary]);
 
-  // Sync Stats
   useEffect(() => {
     if (showStats) {
       const rawStats = StatsManager.loadAll();
@@ -524,10 +515,8 @@ export default function App() {
     }
   }, [showStats]);
 
-  // Helper Score Mode (Universal)
   const isScoreMode = () => pointRushEnabledRef.current;
 
-  // Global Timer for "TIME" Win Condition
   useEffect(() => {
     if (gameState === "PLAYING" && isScoreMode() && winCondition === "TIME") {
       if (globalTimer !== null && globalTimer <= 0) {
@@ -541,7 +530,7 @@ export default function App() {
         }
       }
     }
-  }, [globalTimer, gameState, gameMode, winCondition, pointRushEnabled]);
+  }, [globalTimer, gameState, winCondition, pointRushEnabled]);
 
   useEffect(() => {
     if (gameState === "PLAYING" && isScoreMode() && winCondition === "TIME") {
@@ -553,9 +542,8 @@ export default function App() {
     } else {
       if (gameState !== "PLAYING") setGlobalTimer(null);
     }
-  }, [gameState, gameMode, gameDuration, winCondition, pointRushEnabled]);
+  }, [gameState, gameDuration, winCondition, pointRushEnabled]);
 
-  // Turn Timer Effect (Handles Bomb logic)
   useEffect(() => {
     if (gameState === "PLAYING") {
       clearInterval(timerRef.current);
@@ -580,61 +568,42 @@ export default function App() {
     if (timer === 0) handleTimeout();
   }, [timer, gameState]);
 
-
-  // === BOT LOGIC ===
   useEffect(() => {
     if (gameState !== "PLAYING") return;
     const currentPlayer = players[currentTurnIndex];
     if (currentPlayer && currentPlayer.isBot && !currentPlayer.isEliminated) {
       const diff = currentPlayer.botDifficulty || 2;
-      
-      // Kecepatan berpikir berdasarkan tingkat kesulitan
       let minTime = 2000, maxTime = 4000;
-      if (diff === 1) { minTime = 3500; maxTime = 6500; } // Bodoh: Sangat lambat
-      if (diff === 3) { minTime = 500; maxTime = 1500; }  // Pro: Sangat cepat
-
+      if (diff === 1) { minTime = 3500; maxTime = 6500; }
+      if (diff === 3) { minTime = 500; maxTime = 1500; }
       const thinkingTime = Math.floor(Math.random() * (maxTime - minTime)) + minTime;
-
       const botTimer = setTimeout(() => {
         if (currentWordRef.current !== currentWord && gameModeRef.current !== "RHYME") return;
         const dictArray = Array.from(dictionary);
         let candidates = dictArray.filter((word) => !usedWordsRef.current.has(word) && validateConnection(currentWordRef.current, word));
-        
         if (candidates.length > 0) {
-          // Level 1: Ada kemungkinan 20% bot tiba-tiba ngeblank/menyerah meski ada kata
           if (diff === 1 && Math.random() < 0.20) {
             addLog("Bot", `${currentPlayer.nickname} ${t("log_stumped")}`);
-            return; // Tunggu sampai waktu habis (Timeout)
+            return;
           }
-
           let selectedWord;
-
           if (diff === 3) {
-            // Level 3 (Pro): Sangat Agresif & Kompetitif
             if (actionCardsEnabledRef.current) {
-              const actionCandidates = candidates.filter(w => ['s','b','a'].includes(w.slice(-1)));
-              // 85% Peluang menggunakan kartu aksi jika ada
+              const actionCandidates = candidates.filter(w => ['s','b','z'].includes(w.slice(-1)));
               if (actionCandidates.length > 0 && Math.random() < 0.85) candidates = actionCandidates;
             }
-            // Sortir mencari kata paling panjang (Poin tertinggi)
             candidates.sort((a, b) => b.length - a.length);
-            selectedWord = candidates[Math.floor(Math.random() * Math.min(3, candidates.length))]; // Ambil dari top 3 terpanjang
-
+            selectedWord = candidates[Math.floor(Math.random() * Math.min(3, candidates.length))];
           } else if (diff === 1) {
-            // Level 1 (Noob): Polos & Tidak kompetitif
-            // Mencari kata terpendek (Poin paling kecil)
             candidates.sort((a, b) => a.length - b.length);
             selectedWord = candidates[Math.floor(Math.random() * Math.min(3, candidates.length))];
-          
           } else {
-            // Level 2 (Normal): Random
             if (actionCardsEnabledRef.current) {
-              const actionCandidates = candidates.filter(w => ['s','b','a'].includes(w.slice(-1)));
+              const actionCandidates = candidates.filter(w => ['s','b','z'].includes(w.slice(-1)));
               if (actionCandidates.length > 0 && Math.random() < 0.4) candidates = actionCandidates;
             }
             selectedWord = candidates[Math.floor(Math.random() * candidates.length)];
           }
-
           submitAnswer(selectedWord);
         } else {
           addLog("Bot", `${currentPlayer.nickname} ${t("log_stumped")}`);
@@ -644,8 +613,6 @@ export default function App() {
     }
   }, [currentTurnIndex, gameState, currentWord, players, dictionary]);
 
-
-  // === WEBSOCKET ===
   useEffect(() => {
     fetch("/dictionary.json")
       .then((res) => { if (!res.ok) throw new Error("Not found"); return res.json(); })
@@ -657,7 +624,6 @@ export default function App() {
         setDictLoadedInfo(`Loaded (${cleanedWords.length})`);
         dictionaryCache.current.EN = { dict: newDict, syl: {}, info: `Loaded (${cleanedWords.length})`, phrases: new Set(FALLBACK_PHRASES_EN) };
       }).catch(() => {});
-
     connectWebSocket();
     return () => {
       if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
@@ -667,7 +633,7 @@ export default function App() {
 
   const connectWebSocket = () => {
     const hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
-    const url = `ws://localhost:62024`;
+    const url = `ws://${hostname}:62024`;
     wsRef.current = new WebSocket(url);
     wsRef.current.onopen = () => { addLog("System", `Connected to IndoFinity (${hostname})`); fallbackToLocalhostRef.current = false; };
     wsRef.current.onmessage = (event) => {
@@ -687,8 +653,6 @@ export default function App() {
 
   useEffect(() => { chatHandlerRef.current = handleChatEvent; });
 
-
-  // === GAME HELPER FUNCTIONS ===
   const isHostJoined = players.some((p) => p.uniqueId === "host_player");
   const playSound = (effect) => { if (!isMutedRef.current) SoundManager.play(effect); };
   const t = (key) => TRANSLATIONS[language === "MIX" ? "ID" : language]?.[key] || TRANSLATIONS["EN"][key] || key;
@@ -735,7 +699,6 @@ export default function App() {
         const forbiddenChars = challenge.id.replace("NO_", "").toLowerCase().split("_");
         if (forbiddenChars.some((char) => currentSuffix.includes(char))) isSafe = false;
       }
-      
       if (isSafe) return { selected: tempQueue.splice(i, 1)[0], newQueue: tempQueue };
     }
     return { selected: tempQueue.shift(), newQueue: tempQueue };
@@ -751,7 +714,6 @@ export default function App() {
     if (gameMode === "STEP_UP") return word.slice(-overlap);
     if (gameMode === "SECOND_LETTER") return word.length >= 2 ? word[1] : "";
     if (gameMode === "LONGER_WORD") return word.slice(-overlap);
-    
     if ((language === "ID" || language === "MIX") && gameMode === "SYLLABLE") {
       const data = syllableMapRef.current[word.toLowerCase()];
       if (data && data.nama) return data.nama.split(".").pop();
@@ -777,10 +739,8 @@ export default function App() {
   function getRuleDisplay(word) {
     const target = getSuffixOrRule(word).toUpperCase();
     const action = t("rule_start");
-    // BUG FIX: Memastikan MIX juga memicu terjemahan ID (labelID)
     const labelID = (challenge) => ((language === "ID" || language === "MIX") && challenge?.labelID) ? challenge.labelID : challenge?.label;
     const overlap = overlapLength;
-
     if (gameMode === "CITIES") return { label: "City Chain", target, desc: `${t("rule_end")} '${target}'`, action };
     if (gameMode === "WRAP_AROUND") return { label: "Wrap Around", target: `${word.slice(-overlap).toUpperCase()}...${word.slice(0, overlap).toUpperCase()}`, desc: `${t("rule_start")} '${word.slice(-overlap).toUpperCase()}' & ${t("rule_end")} '${word.slice(0, overlap).toUpperCase()}'`, action: "" };
     if (gameMode === "PHRASE_CHAIN") return { label: "Phrase Chain", target, desc: `${t("rule_phrase")}: ${target} ...`, action: "Add next word" };
@@ -808,7 +768,6 @@ export default function App() {
     if (gameMode === "MIRROR") return word.length < overlap ? { pre: "", high: word, post: "" } : { pre: "", high: word.slice(0, overlap), post: word.slice(overlap) };
     if (gameMode === "SECOND_LETTER") return word.length < 2 ? { pre: word, high: "", post: "" } : { pre: word.slice(0, 1), high: word.slice(1, 2), post: word.slice(2) };
     if (gameMode === "WRAP_AROUND") return { pre: word.slice(0, -overlap), high: word.slice(-overlap), post: "" };
-
     const suffix = getSuffixOrRule(word);
     const prefixLen = Math.max(0, word.length - suffix.length);
     return { pre: word.slice(0, prefixLen), high: suffix, post: "" };
@@ -820,21 +779,18 @@ export default function App() {
     const n = next.toLowerCase();
     const currentMode = gameModeRef.current || gameMode;
     const overlap = overlapLengthRef.current;
-
     if (currentMode === "PHRASE_CHAIN") return phraseDictionary.current.has(`${p} ${n}`);
     if (currentMode === "WRAP_AROUND") return n !== p && n.length >= overlap * 2 && n.startsWith(p.slice(-overlap)) && n.endsWith(p.slice(0, overlap));
     if (currentMode === "DYNAMIC") {
       const suffix = p.slice(-overlap);
       if (n === suffix || !n.startsWith(suffix)) return false;
       if (activeChallenge?.check && !activeChallenge.check(n)) {
-        // BUG FIX: Konsistensi bahasa saat fail log
         const label = (languageRef.current === "ID" || languageRef.current === "MIX") && activeChallenge.labelID ? activeChallenge.labelID : activeChallenge.label;
         addLog("Game", `⚠️ Gagal: ${label}`);
         return false;
       }
       return true;
     }
-
     let requiredSuffix = "";
     if (currentMode === "MIRROR") { 
       if (p.length < overlap) return false;
@@ -907,29 +863,23 @@ export default function App() {
     const currentPlayers = playersRef.current;
     const currentIndex = turnIndexRef.current;
     const playerToEliminate = currentPlayers[currentIndex];
-
     if (!playerToEliminate || playerToEliminate.isEliminated) return;
-
     let killerId = null;
     if (lastSuccessfulPlayerIdRef.current && lastSuccessfulPlayerIdRef.current !== playerToEliminate.uniqueId) {
       killerId = lastSuccessfulPlayerIdRef.current;
       StatsManager.addKill(killerId);
     }
-
     const newPlayers = currentPlayers.map((p, idx) => {
       let pData = { ...p };
       if (idx === currentIndex) pData.isEliminated = true;
       if (killerId && p.uniqueId === killerId) pData.sessionKills = (pData.sessionKills || 0) + 1;
       return pData;
     });
-
     setPlayers(newPlayers);
     addLog("System", `${playerToEliminate.nickname} ${t("log_eliminated")}`);
-
     if (gameModeRef.current === "RHYME" && gameStateRef.current !== "ENDED") {
       setTimeout(changeRhymeTarget, 500); setTurnCount(0);
     }
-
     if (isScoreMode() && winConditionRef.current === "ROUNDS") {
       const activePlayers = newPlayers.filter((p) => !p.isEliminated);
       if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRoundsRef.current)) {
@@ -939,7 +889,6 @@ export default function App() {
         return;
       }
     }
-
     const activePlayers = newPlayers.filter((p) => !p.isEliminated);
     if (activePlayers.length <= 1) {
       if (activePlayers.length === 1) handleWin([activePlayers[0]]);
@@ -967,10 +916,8 @@ export default function App() {
     }
     const dictArray = Array.from(dictionary);
     if (dictArray.length === 0) return "start";
-    
     let candidates = dictArray.filter((w) => w.length >= 3 && w.length <= 6);
     if (candidates.length === 0) candidates = dictArray;
-    
     for (let i = 0; i < 50; i++) {
       const choice = candidates[Math.floor(Math.random() * candidates.length)];
       if (hasPossibleAnswer(choice)) return choice;
@@ -982,32 +929,26 @@ export default function App() {
     if (gameStateRef.current !== "PLAYING") return;
     const currentPlayers = playersRef.current;
     const pIndex = currentPlayers.findIndex(p => p.uniqueId === playerToSurrender.uniqueId);
-
     if (pIndex === -1 || currentPlayers[pIndex].isEliminated) return;
     playSound("eliminate");
     const isActivePlayer = pIndex === turnIndexRef.current;
-    
     let killerId = null;
     if (isActivePlayer && lastSuccessfulPlayerIdRef.current && lastSuccessfulPlayerIdRef.current !== playerToSurrender.uniqueId) {
       killerId = lastSuccessfulPlayerIdRef.current; StatsManager.addKill(killerId);
     }
-
     const newPlayers = currentPlayers.map((p, idx) => {
       let pData = { ...p };
       if (idx === pIndex) pData.isEliminated = true;
       if (killerId && p.uniqueId === killerId) pData.sessionKills = (pData.sessionKills || 0) + 1;
       return pData;
     });
-
     playersRef.current = newPlayers;
     setPlayers(newPlayers);
     addLog("Game", `${playerToSurrender.nickname} ${t("log_surrender")}`);
-
     const activePlayers = newPlayers.filter((p) => !p.isEliminated);
     if (gameModeRef.current === "RHYME" && gameStateRef.current !== "ENDED" && isActivePlayer) {
       setTimeout(changeRhymeTarget, 500); setTurnCount(0);
     }
-
     if (isScoreMode() && winConditionRef.current === "ROUNDS") {
       if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRoundsRef.current)) {
         const sorted = [...activePlayers].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -1016,7 +957,6 @@ export default function App() {
         return;
       }
     }
-
     if (activePlayers.length <= 1) {
       if (activePlayers.length === 1) handleWin([activePlayers[0]]);
       else { setGameState("ENDED"); playSound("win"); }
@@ -1061,71 +1001,70 @@ export default function App() {
       const idx = playersRef.current.findIndex(p => p.uniqueId === forcedUniqueId);
       if (idx !== -1) playerIndex = idx;
     }
-
     if (gameModeRef.current !== "PHRASE_CHAIN" && !dictionary.has(word)) {
       addLog("Game", `❌ "${word}" ${t("log_invalid")}.`);
       playSound("wrong"); triggerTableEffect("error"); showFeedback(`${word} ${t("log_invalid")}`, "error");
       return;
     }
-
     if (usedWordsRef.current.has(word)) {
       addLog("Game", `❌ "${word}" ${t("log_used")}.`);
       playSound("wrong"); triggerTableEffect("warning"); showFeedback(`${word} ${t("log_used")}`, "warning");
       return;
     }
-
     const isValid = validateConnection(currentWordRef.current, word);
-
     if (isValid) {
       playSound("correct"); triggerTableEffect("success");
       usedWordsRef.current.add(word); setUsedWords(new Set(usedWordsRef.current));
-      
       const prevWord = currentWordRef.current;
       let nextWord = word; let stepsToAdvance = 1; let applyBomb = false;
       let pointsAwarded = word.length;
-
       if (gameModeRef.current === "STEP_UP") pointsAwarded = 10;
-
       const newPlayersList = playersRef.current.map((p, index) => {
         if (index === playerIndex) return { ...p, score: (p.score || 0) + pointsAwarded, turnCount: (p.turnCount || 0) + 1 };
         return p;
       });
-      setPlayers(newPlayersList);
-
+      let modifiedPlayers = [...newPlayersList];
       if (actionCardsEnabledRef.current) {
         const lastChar = word.slice(-1).toLowerCase();
         if (lastChar === 's') { stepsToAdvance = 2; addLog("Action", `⏭️ SKIP!`); triggerTableEffect("warning"); playSound("notification"); }
         else if (lastChar === 'b') { applyBomb = true; addLog("Action", `💣 BOM WAKTU! (10 Detik)`); triggerTableEffect("error"); playSound("eliminate"); }
-        else if (lastChar === 'a') { 
-          setIsReversed(!isReversedRef.current);
-          addLog("Action", `🔄 ARAH BALIK!`);
-          triggerTableEffect("info");
-          playSound("notification"); 
+        else if (lastChar === 'z') { 
+          const len = modifiedPlayers.length;
+          const direction = isReversedRef.current ? -1 : 1;
+          let nextIdx = (playerIndex + direction + len) % len;
+          let attempts = 0;
+          while (modifiedPlayers[nextIdx].isEliminated && attempts < len) {
+            nextIdx = (nextIdx + direction + len) % len;
+            attempts++;
+          }
+          modifiedPlayers[nextIdx] = { 
+            ...modifiedPlayers[nextIdx], 
+            score: Math.max(0, (modifiedPlayers[nextIdx].score || 0) - 5) 
+          };
+          addLog("Action", `💀 ${modifiedPlayers[nextIdx].nickname} -5 POIN!`);
+          triggerTableEffect("error");
+          playSound("wrong"); 
         }
       }
-
+      setPlayers(modifiedPlayers);
       bombNextRef.current = applyBomb;
-
       if (isScoreMode()) {
         let gameEnded = false;
-        if (winConditionRef.current === "SCORE" && newPlayersList[playerIndex].score >= targetScoreRef.current) gameEnded = true;
+        if (winConditionRef.current === "SCORE" && modifiedPlayers[playerIndex].score >= targetScoreRef.current) gameEnded = true;
         if (winConditionRef.current === "ROUNDS") {
-          const activePlayers = newPlayersList.filter((p) => !p.isEliminated);
+          const activePlayers = modifiedPlayers.filter((p) => !p.isEliminated);
           if (activePlayers.length > 0 && activePlayers.every((p) => (p.turnCount || 0) >= targetRoundsRef.current)) gameEnded = true;
         }
         if (gameEnded) {
-          const activePlayers = newPlayersList.filter((p) => !p.isEliminated);
+          const activePlayers = modifiedPlayers.filter((p) => !p.isEliminated);
           const sorted = [...activePlayers].sort((a, b) => (b.score || 0) - (a.score || 0));
           const winners = sorted.filter(p => (p.score || 0) === (sorted[0].score || 0));
-          lastSuccessfulPlayerIdRef.current = playersRef.current[playerIndex].uniqueId;
+          lastSuccessfulPlayerIdRef.current = modifiedPlayers[playerIndex].uniqueId;
           handleWin(winners);
           return;
         }
       }
-
-      // Logging logic
       let pts = isScoreMode() ? ` (+${pointsAwarded})` : "";
-
       if (gameModeRef.current === "CITIES") {
         addLog("Game", `✅ ${word.toUpperCase()} ${cityMetadataRef.current[word] ? `(${cityMetadataRef.current[word]}) ` : ""}${pts}`);
       } else if (gameModeRef.current === "PHRASE_CHAIN") {
@@ -1156,22 +1095,18 @@ export default function App() {
           addLog("Game", `✅ ${t("log_correct")} "${word.toUpperCase()}"`);
         }
       }
-
       setCurrentWord(nextWord);
-
       if (gameModeRef.current === "RHYME") {
-        const activePlayers = playersRef.current.filter(p => !p.isEliminated).length;
-        if (turnCount + 1 >= activePlayers) { setTimeout(changeRhymeTarget, 800); setTurnCount(0); }
+        const activePlayersCount = modifiedPlayers.filter(p => !p.isEliminated).length;
+        if (turnCount + 1 >= activePlayersCount) { setTimeout(changeRhymeTarget, 800); setTurnCount(0); }
         else setTurnCount(turnCount + 1);
       }
-
       if ((gameModeRef.current === "DYNAMIC") && gameStateRef.current !== "ENDED") {
         setTurnCount((prev) => {
-          if (prev + 1 >= Math.max(1, playersRef.current.filter((p) => !p.isEliminated).length)) {
+          if (prev + 1 >= Math.max(1, modifiedPlayers.filter((p) => !p.isEliminated).length)) {
             const suffix = word.slice(-overlapLengthRef.current).toLowerCase();
             const { selected, newQueue } = getNextChallenge(challengeQueueRef.current, suffix);
             setActiveChallenge(selected); setChallengeQueue(newQueue);
-            // BUG FIX: Konsistensi bahasa log saat mode MIX
             const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
             addLog("System", `🚨 ${t("log_rule_change")}: ${label} 🚨`);
             playSound("tick");
@@ -1180,10 +1115,8 @@ export default function App() {
           return prev + 1;
         });
       }
-
-      lastSuccessfulPlayerIdRef.current = playersRef.current[playerIndex].uniqueId;
-      if (gameStateRef.current !== "ENDED") advanceTurn(newPlayersList, playerIndex, stepsToAdvance);
-
+      lastSuccessfulPlayerIdRef.current = modifiedPlayers[playerIndex].uniqueId;
+      if (gameStateRef.current !== "ENDED") advanceTurn(modifiedPlayers, playerIndex, stepsToAdvance);
     } else {
       const msg = gameModeRef.current === "PHRASE_CHAIN" ? "Invalid Phrase Pair" : (gameModeRef.current === "RHYME" ? "Salah Rima" : t("log_bad_link"));
       addLog("Game", `❌ "${word}" ${msg}.`);
@@ -1194,10 +1127,8 @@ export default function App() {
   function unjoinGame(uniqueId, nickname) {
     if (gameStateRef.current !== "WAITING") return addLog("System", `${nickname}: ${t("log_cant_unjoin")}`);
     if (!playersRef.current.some(p => p.uniqueId === uniqueId)) return;
-    
     quitHistoryRef.current[uniqueId] = (quitHistoryRef.current[uniqueId] || 0) + 1;
     addLog("System", `${nickname} ${t("log_unjoin")}`); playSound("eliminate");
-    
     playersRef.current = playersRef.current.filter(p => p.uniqueId !== uniqueId);
     setPlayers([...playersRef.current]);
   }
@@ -1205,9 +1136,7 @@ export default function App() {
   function joinGame(uniqueId, nickname, profilePictureUrl, botDifficulty = 0) {
     if (gameStateRef.current !== "WAITING" || (quitHistoryRef.current[uniqueId] || 0) >= 2 || playersRef.current.length >= maxPlayers) return;
     if (playersRef.current.some((p) => p.uniqueId === uniqueId)) return;
-
     playSound("join"); addLog("System", `${nickname} ${t("log_joined")}`, uniqueId);
-
     const isBot = botDifficulty > 0;
     const stats = isBot ? { wins: 0, games: 0, kills: 0, badges: [] } : StatsManager.load(uniqueId);
     const newPlayer = {
@@ -1220,13 +1149,10 @@ export default function App() {
   function addBot() {
     const existingNames = new Set(playersRef.current.map((p) => p.nickname));
     const availableBots = BOT_PROFILES.filter((b) => !existingNames.has(b.name));
-    
     if (availableBots.length === 0) {
-      // Fallback jika sudah dimasukkan semua bot
       joinGame(`bot_${Date.now()}_${Math.random()}`, `Bot Kloning ${Math.floor(Math.random() * 100)}`, null, 2);
       return;
     }
-
     const selected = availableBots[Math.floor(Math.random() * availableBots.length)];
     joinGame(`bot_${Date.now()}_${Math.random()}`, selected.name, null, selected.diff);
   }
@@ -1247,40 +1173,30 @@ export default function App() {
   function startGame() {
     if (playersRef.current.length < 2) return addLog("System", t("log_need_players"));
     playSound("start");
-    
     bombNextRef.current = false; lastSuccessfulPlayerIdRef.current = null;
     setIsReversed(false);
     let randomStart = "";
-
     if (gameModeRef.current === "RHYME") {
       setTargetRhyme(rhymeTargetsRef.current.length > 0 ? rhymeTargetsRef.current[Math.floor(Math.random() * rhymeTargetsRef.current.length)] : "ing");
     } else randomStart = getNewRandomWord();
-
     const initialUsed = new Set(randomStart ? [randomStart] : []);
     setUsedWords(initialUsed); usedWordsRef.current = initialUsed;
-
     const updatedStatsMap = {};
     playersRef.current.forEach((p) => { if (!p.isBot) updatedStatsMap[p.uniqueId] = StatsManager.update(p.uniqueId, false, true, p.nickname); });
     setPlayers((prev) => prev.map((p) => ({ ...p, stats: updatedStatsMap[p.uniqueId] || p.stats, score: 0, turnCount: 0, sessionKills: 0, isEliminated: false })));
-
     if (isScoreMode() && winConditionRef.current === "TIME") setGlobalTimer(gameDuration);
-
     if (gameModeRef.current === "DYNAMIC") {
       const queue = generateChallengeQueue();
       const { selected, newQueue } = getNextChallenge(queue, "");
       setActiveChallenge(selected); setChallengeQueue(newQueue); setTurnCount(0);
-      // BUG FIX: Konsistensi bahasa saat mode MIX
       const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
       addLog("System", `Mode: DYNAMIC CHAOS! \nRule: ${label}`);
     }
-    
     if (gameModeRef.current === "RHYME") { setTurnCount(0); addLog("System", `Mode: RHYME RUSH! Target: ...${targetRhymeRef.current || ""}`); }
-
     setCurrentWord(randomStart);
     const randomFirstPlayerIndex = Math.floor(Math.random() * playersRef.current.length);
     setCurrentTurnIndex(randomFirstPlayerIndex); setRoundStarterId(playersRef.current[randomFirstPlayerIndex].uniqueId);
     setTimer(turnDuration); setGameState("PLAYING"); setShowSettings(false);
-
     addLog("System", `Start: ${playersRef.current[randomFirstPlayerIndex].nickname} ${t("log_goes_first")}`);
     if (randomStart) addLog("System", `Word: ${randomStart.toUpperCase()} ${cityMetadataRef.current[randomStart] ? `(${cityMetadataRef.current[randomStart]})` : ""}`);
   }
@@ -1334,7 +1250,6 @@ export default function App() {
   function toggleLanguage(forceReload = false) {
     let targetLang = forceReload ? language : (language === "EN" ? "ID" : language === "ID" ? "MIX" : "EN");
     if (!forceReload) setLanguage(targetLang);
-    
     if (dictionaryCache.current[targetLang]) {
       setDictionary(dictionaryCache.current[targetLang].dict); setSyllableMap(dictionaryCache.current[targetLang].syl);
       phraseDictionary.current = dictionaryCache.current[targetLang].phrases; setDictLoadedInfo(dictionaryCache.current[targetLang].info);
@@ -1410,11 +1325,9 @@ export default function App() {
     }
   }
 
-  // === EVENT HANDLERS ===
   const handleChatEvent = (data) => {
     const { uniqueId, nickname, comment, profilePictureUrl } = data;
     const lowerComment = (comment || "").trim().toLowerCase();
-    
     if (lowerComment === "!join" || lowerComment === "join") return joinGame(uniqueId, nickname, profilePictureUrl);
     if (lowerComment === "!unjoin" || lowerComment === "unjoin") return unjoinGame(uniqueId, nickname);
     if (["!surrender", "!surrend", "surrend", "surrender", "ff", "menyerah", "!ff"].includes(lowerComment)) {
@@ -1422,7 +1335,6 @@ export default function App() {
       if (p && !p.isEliminated) handleSurrender(p);
       return;
     }
-
     if (gameStateRef.current === "PLAYING") {
       const currentPlayer = playersRef.current[turnIndexRef.current];
       if (currentPlayer?.uniqueId === uniqueId && !currentPlayer.isEliminated) {
@@ -1433,18 +1345,29 @@ export default function App() {
   };
 
   const handleManualSubmit = (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     if (!manualInput.trim()) return;
-    const lower = manualInput.trim().toLowerCase();
+
+    // Tambahan Validasi: Hanya bisa kirim saat giliran Host (Jika Host sedang main)
+    const currentPlayer = playersRef.current[turnIndexRef.current];
+    const isHostTurn = currentPlayer?.uniqueId === "host_player";
     
-    if (["!surrender", "!surrend", "surrend", "surrender", "ff", "menyerah", "!ff"].includes(lower)) {
-      if (gameStateRef.current === "PLAYING") {
-        const currentPlayer = playersRef.current[turnIndexRef.current];
-        if (currentPlayer && !currentPlayer.isEliminated) handleSurrender(currentPlayer);
+    // Untuk simulasi/debugging, Host tetap bisa kirim jika tidak ada turn yang aktif (error state), 
+    // tapi saat game jalan harus mengikuti turn pemain.
+    if (gameStateRef.current === "PLAYING") {
+      if (!isHostTurn) {
+          showFeedback("Bukan Giliran Host!", "warning");
+          setManualInput("");
+          return;
       }
-    } else {
-      const cleanWord = normalizeWord(manualInput);
-      if (cleanWord.length > 0 && gameStateRef.current === "PLAYING") submitAnswer(cleanWord);
+      
+      const lower = manualInput.trim().toLowerCase();
+      if (["!surrender", "!surrend", "surrend", "surrender", "ff", "menyerah", "!ff"].includes(lower)) {
+          handleSurrender(currentPlayer);
+      } else {
+          const cleanWord = normalizeWord(manualInput);
+          if (cleanWord.length > 0) submitAnswer(cleanWord);
+      }
     }
     setManualInput("");
   };
@@ -1456,7 +1379,6 @@ export default function App() {
       try {
         const json = JSON.parse(e.target.result);
         let dictSet = new Set(); let sMap = {}; let meta = {}; let phraseSet = new Set();
-
         if (Array.isArray(json)) {
           if (json.length > 0 && typeof json[0] === "object" && json[0].name) {
             json.forEach((item) => {
@@ -1519,13 +1441,8 @@ export default function App() {
     }
   };
 
-
-  // ==========================================
-  // 4. RENDER
-  // ==========================================
   return (
     <div ref={containerRef} className="min-h-screen bg-slate-900 text-white font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative">
-      {/* HEADER */}
       <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 pointer-events-none">
         <h1 className="text-xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600 drop-shadow-lg">MAD CHAIN</h1>
         <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 mt-1">
@@ -1537,7 +1454,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* CONTROLS (Top Right) */}
       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[70] flex flex-col items-end">
         <div className="flex gap-2">
           <button onClick={() => setShowStats(true)} className="w-10 h-10 flex items-center justify-center rounded-full shadow-xl transition-all duration-300 border border-slate-600 bg-slate-800 hover:bg-slate-700 hover:scale-110" title="Hall of Fame">
@@ -1551,11 +1467,8 @@ export default function App() {
           </button>
         </div>
 
-        {/* SETTINGS PANEL */}
         <div className={`mt-3 flex flex-col gap-2 transition-all duration-300 origin-top-right ${showSettings ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 -translate-y-4 pointer-events-none absolute top-10 right-0 w-0 h-0 overflow-hidden"}`}>
           <div className="bg-slate-800/95 backdrop-blur-md p-2.5 rounded-xl border border-slate-600 shadow-2xl flex flex-col gap-2 w-64">
-            
-            {/* TABS HEADER */}
             <div className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-700">
               <button onClick={() => setSettingsTab('rules')} title="Aturan Game" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'rules' ? 'bg-blue-600 text-white shadow-inner scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Gamepad2 className="w-4 h-4"/></button>
               <button onClick={() => setSettingsTab('lobby')} title="Lobi & Pemain" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'lobby' ? 'bg-pink-600 text-white shadow-inner scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Users className="w-4 h-4"/></button>
@@ -1563,28 +1476,22 @@ export default function App() {
               <button onClick={() => setSettingsTab('dev')} title="Simulasi/Dev" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'dev' ? 'bg-amber-600 text-white shadow-inner scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Bot className="w-4 h-4"/></button>
             </div>
 
-            {/* TAB CONTENTS */}
             <div className="flex flex-col gap-2 min-h-[190px]">
-              
-              {/* TAB 1: RULES */}
               {settingsTab === 'rules' && (
                 <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
                   <button onClick={cycleGameMode} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
                     <span className="text-slate-300">{t("mode")}:</span><span className="text-yellow-400 group-hover:text-yellow-300">{getModeLabel()}</span>
                   </button>
-                  
                   <div className="flex flex-col gap-1.5">
                     <button onClick={() => setActionCardsEnabled(!actionCardsEnabled)} className={`w-full ${actionCardsEnabled ? 'bg-amber-900 hover:bg-amber-800 border-amber-500' : 'bg-slate-700 hover:bg-slate-600 border-slate-600'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
                       <div className="flex items-center gap-2"><Zap className={`w-3 h-3 ${actionCardsEnabled ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} /><span className="text-slate-300">Action Cards</span></div>
                       <span className={actionCardsEnabled ? "text-amber-400" : "text-slate-400"}>{actionCardsEnabled ? "ON" : "OFF"}</span>
                     </button>
-
                     <button onClick={() => setPointRushEnabled(!pointRushEnabled)} className={`w-full ${pointRushEnabled ? 'bg-green-900 hover:bg-green-800 border-green-500' : 'bg-slate-700 hover:bg-slate-600 border-slate-600'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
                       <div className="flex items-center gap-2"><Target className={`w-3 h-3 ${pointRushEnabled ? 'text-green-400 animate-pulse' : 'text-slate-400'}`} /><span className="text-slate-300">Point Rush (Pts)</span></div>
                       <span className={pointRushEnabled ? "text-green-400" : "text-slate-400"}>{pointRushEnabled ? "ON" : "OFF"}</span>
                     </button>
                   </div>
-
                   <div className="w-full bg-slate-700 p-2 rounded border border-slate-600 flex flex-col gap-1.5 mt-0.5">
                     <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold mb-0.5">
                       <span>{t("end_condition")}:</span>
@@ -1610,7 +1517,6 @@ export default function App() {
                       </div>
                     )}
                   </div>
-
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-1.5 text-slate-300"><Clock className="w-3 h-3 text-green-400" /><span className="font-bold">{t("turn_time")}</span></div>
                     <div className="flex items-center gap-1 bg-slate-900 rounded p-0.5 border border-slate-700">
@@ -1619,7 +1525,6 @@ export default function App() {
                       <button onClick={() => setTurnDuration((d) => Math.min(60, d + 5))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Plus className="w-3 h-3" /></button>
                     </div>
                   </div>
-
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-1.5 text-slate-300"><Link className="w-3 h-3 text-indigo-400" /><span className="font-bold">Overlap Letters</span></div>
                     <div className="flex items-center gap-1 bg-slate-900 rounded p-0.5 border border-slate-700">
@@ -1630,8 +1535,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              {/* TAB 2: LOBBY */}
               {settingsTab === 'lobby' && (
                 <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
                   <div className="flex items-center justify-between gap-3 text-xs bg-slate-700 p-2 rounded border border-slate-600">
@@ -1642,7 +1545,6 @@ export default function App() {
                       <button onClick={() => setMaxPlayers((n) => Math.min(100, n + 1))} className="w-6 h-6 flex items-center justify-center hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"><Plus className="w-3 h-3" /></button>
                     </div>
                   </div>
-                  
                   <div className="flex gap-2">
                     <button onClick={addHost} className="flex-1 bg-slate-700 hover:bg-slate-600 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-center gap-1.5 group">
                       <User className="w-3.5 h-3.5 text-blue-400" /><span className="text-slate-300 group-hover:text-white">{t("add_host")}</span>
@@ -1651,28 +1553,22 @@ export default function App() {
                       <Bot className="w-3.5 h-3.5 text-purple-400" /><span className="text-slate-300 group-hover:text-white">{t("add_bot")}</span>
                     </button>
                   </div>
-
                   <div className="h-px bg-slate-600/50 my-1"></div>
-
                   <button onClick={clearLobby} className="w-full bg-slate-900 hover:bg-red-950 px-3 py-2 rounded text-xs font-bold border border-slate-700 hover:border-red-800 text-slate-500 hover:text-red-400 transition-colors flex items-center justify-center gap-2 group">
                     <Delete className="w-3.5 h-3.5" /> {t("clear_lobby")}
                   </button>
                 </div>
               )}
-
-              {/* TAB 3: GENERAL/SYSTEM */}
               {settingsTab === 'general' && (
                 <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
                   <button onClick={() => setIsMuted(!isMuted)} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
                     <div className="flex items-center gap-2">{isMuted ? <VolumeX className="w-3 h-3 text-red-400" /> : <Volume2 className="w-3 h-3 text-green-400" />}<span className="text-slate-300">{t("sound")}</span></div>
                     <span className="text-white">{isMuted ? "Off" : "On"}</span>
                   </button>
-                  
                   <button onClick={() => toggleLanguage()} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
                     <div className="flex items-center gap-2"><Globe className="w-3 h-3 text-blue-400" /><span className="text-slate-300">{t("language")}</span></div>
                     <span className="text-white group-hover:text-yellow-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix"}</span>
                   </button>
-
                   <div className="w-full bg-slate-700 p-2.5 rounded border border-slate-600 flex flex-col gap-2 mt-2">
                     <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Kamus (Dictionary)</div>
                     <div className="flex items-center justify-between gap-2 text-xs">
@@ -1685,8 +1581,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              {/* TAB 4: SIMULATION/DEV */}
               {settingsTab === 'dev' && (
                 <div className="animate-in fade-in zoom-in-95 duration-200 bg-black/40 p-3 rounded-lg border border-slate-700 flex flex-col justify-center h-full min-h-[190px]">
                   <div className="text-xs uppercase font-bold text-slate-500 text-center tracking-wider mb-4">{t("simulation")} Tools</div>
@@ -1698,10 +1592,7 @@ export default function App() {
                 </div>
               )}
             </div>
-            
             <div className="h-px bg-slate-600/50 my-1"></div>
-            
-            {/* START / RESET BUTTON (ALWAYS VISIBLE) */}
             <button onClick={gameState === "WAITING" ? startGame : resetGame} className={`w-full px-3 py-2.5 rounded-lg text-sm font-black tracking-widest uppercase shadow-lg transition-transform active:scale-95 border border-transparent ${gameState === "WAITING" ? "bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 text-white" : "bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 text-white"}`}>
               {gameState === "WAITING" ? t("start_game") : t("reset_game")}
             </button>
@@ -1709,7 +1600,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* HALL OF FAME */}
       {showStats && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-300 p-4">
           <div className="bg-slate-900/90 w-full max-w-2xl max-h-[80vh] rounded-2xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden">
@@ -1784,10 +1674,8 @@ export default function App() {
         </div>
       )}
 
-      {/* GAME AREA */}
       <div className="transform scale-[0.85] -translate-y-12 sm:translate-y-0 sm:scale-100 transition-transform duration-300">
         <div className="relative w-[360px] h-[360px] sm:w-[500px] sm:h-[500px] flex items-center justify-center">
-          {/* Main Table */}
           <div className={`absolute inset-0 rounded-full border-[8px] bg-slate-800 transition-all duration-200 flex items-center justify-center overflow-hidden ${getTableStatusClass()}`}>
             <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-gray-100 via-gray-900 to-black"></div>
             <div className="relative z-10 text-center flex flex-col items-center">
@@ -1804,7 +1692,7 @@ export default function App() {
                   <button onClick={() => { setPlayers([]); setGameState("WAITING"); }} className="mt-2 bg-purple-600 px-4 py-1 rounded text-sm">{t("new_game")}</button>
                 </div>
               ) : (
-                <div>
+                <div className="flex flex-col items-center">
                   {isScoreMode() && (
                     <div className="mb-3 flex justify-center animate-in slide-in-from-top fade-in duration-500">
                       {winCondition === "TIME" ? (
@@ -1823,94 +1711,96 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Mode Badges */}
-                  {actionCardsEnabled && <div className="text-[10px] font-bold bg-amber-900/80 px-2 py-0.5 rounded text-amber-300 mb-1 flex items-center justify-center gap-1 inline-flex shadow-[0_0_10px_rgba(251,191,36,0.5)] border border-amber-500"><Zap className="w-3 h-3 animate-pulse" /> ACTION CARDS ON</div>}
-                  {pointRushEnabled && <div className="text-[10px] font-bold bg-green-900/80 px-2 py-0.5 rounded text-green-300 mb-1 flex items-center justify-center gap-1 inline-flex shadow-[0_0_10px_rgba(34,197,94,0.5)] border border-green-500"><Target className="w-3 h-3 animate-pulse" /> POINT RUSH ON</div>}
-                  {gameMode === "CITIES" && <div className="text-[10px] font-bold bg-blue-900/50 px-2 py-0.5 rounded text-blue-300 mb-1 flex items-center justify-center gap-1 inline-flex"><MapPin className="w-3 h-3" /> CITIES MODE</div>}
-                  {gameMode === "WRAP_AROUND" && <div className="text-[10px] font-bold bg-rose-900/50 px-2 py-0.5 rounded text-rose-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-pulse"><Repeat2 className="w-3 h-3" /> WRAP AROUND</div>}
-                  {gameMode === "RHYME" && <div className="text-[10px] font-bold bg-purple-900/50 px-2 py-0.5 rounded text-purple-300 mb-1 flex items-center justify-center gap-1 inline-flex"><Hash className="w-3 h-3" /> RHYME RUSH</div>}
-                  {gameMode === "MIRROR" && <div className="text-[10px] font-bold bg-pink-900/50 px-2 py-0.5 rounded text-pink-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-pulse"><FlipHorizontal className="w-3 h-3" /> MIRROR CHAIN</div>}
-                  {gameMode === "STEP_UP" && <div className="text-[10px] font-bold bg-cyan-900/50 px-2 py-0.5 rounded text-cyan-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-bounce"><MoveUpRight className="w-3 h-3" /> STEP UP</div>}
-                  {gameMode === "PHRASE_CHAIN" && <div className="text-[10px] font-bold bg-indigo-900/50 px-2 py-0.5 rounded text-indigo-300 mb-1 flex items-center justify-center gap-1 inline-flex">{tableStatus === "info" ? <Unlink className="w-3 h-3 animate-bounce" /> : <Link className="w-3 h-3" />} PHRASE CHAIN</div>}
-                  {gameMode === "DYNAMIC" && <div className="text-[10px] font-bold bg-orange-900/50 px-2 py-0.5 rounded text-orange-300 mb-1 flex items-center justify-center gap-1 inline-flex"><AlertTriangle className="w-3 h-3" /> DYNAMIC CHAOS</div>}
+                  <div className="flex items-center gap-1.5 mb-2 h-7">
+                    {actionCardsEnabled && (
+                      <div title="Action Cards Enabled" className="w-6 h-6 rounded-full bg-amber-900/80 text-amber-300 flex items-center justify-center shadow-[0_0_8px_rgba(251,191,36,0.5)] border border-amber-500">
+                        <Zap className="w-3.5 h-3.5 animate-pulse" />
+                      </div>
+                    )}
+                    {pointRushEnabled && (
+                      <div title="Point Rush Active" className="w-6 h-6 rounded-full bg-green-900/80 text-green-300 flex items-center justify-center shadow-[0_0_8px_rgba(34,197,94,0.5)] border border-green-500">
+                        <Target className="w-3.5 h-3.5 animate-pulse" />
+                      </div>
+                    )}
+                    <div title={`Game Mode: ${getModeLabel()}`} className="px-1.5 h-6 rounded-full bg-slate-900/60 border border-slate-600 flex items-center gap-1">
+                      {gameMode === "CITIES" && <MapPin className="w-3.5 h-3.5 text-blue-400" />}
+                      {gameMode === "WRAP_AROUND" && <Repeat2 className="w-3.5 h-3.5 text-rose-400 animate-pulse" />}
+                      {gameMode === "RHYME" && <Hash className="w-3.5 h-3.5 text-purple-400" />}
+                      {gameMode === "MIRROR" && <FlipHorizontal className="w-3.5 h-3.5 text-pink-400 animate-pulse" />}
+                      {gameMode === "STEP_UP" && <MoveUpRight className="w-3.5 h-3.5 text-cyan-400 animate-bounce" />}
+                      {gameMode === "PHRASE_CHAIN" && (tableStatus === "info" ? <Unlink className="w-3.5 h-3.5 text-indigo-400 animate-bounce" /> : <Link className="w-3.5 h-3.5 text-indigo-400" />)}
+                      {gameMode === "DYNAMIC" && <AlertTriangle className="w-3.5 h-3.5 text-orange-400" />}
+                      {!["CITIES", "WRAP_AROUND", "RHYME", "MIRROR", "STEP_UP", "PHRASE_CHAIN", "DYNAMIC"].includes(gameMode) && <TrendingUpIcon className="w-3.5 h-3.5 text-slate-400" />}
+                      <span className="text-[9px] font-bold text-slate-300 uppercase tracking-tighter">{getModeLabel().split(' ')[0]}</span>
+                    </div>
+                  </div>
 
-                  <p className="text-slate-500 text-xs uppercase tracking-widest mb-1 mt-1 flex items-center justify-center gap-2">
+                  <p className="text-slate-500 text-[10px] uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
                     {gameMode === "RHYME" ? t("rhyme_target") : t("current_word")}
                   </p>
                   
-                  {/* Current Word Display */}
                   <h2 className={`${currentWord?.length > 14 ? "text-xl sm:text-3xl" : currentWord?.length > 9 ? "text-2xl sm:text-4xl" : "text-3xl sm:text-5xl"} font-black text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)] flex justify-center transition-all duration-300 px-2`}>
                     {(() => {
-                    if (gameMode === "RHYME") {
-                      return (
-                        <div className="flex flex-col items-center">
-                          <span className="text-4xl text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]">...{targetRhyme.toUpperCase()}</span>
-                          {currentWord && <span className="text-xs text-slate-400 mt-1 font-normal opacity-50">Last: {currentWord.toUpperCase()}</span>}
-                        </div>
-                      );
-                    }
-                    const { pre, high, post } = getDisplayParts(currentWord);
-                    return (<><span>{pre.toUpperCase()}</span><span className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]">{high.toUpperCase()}</span><span>{post.toUpperCase()}</span></>);
-                  })()}
-                </h2>
-
-                <div className="flex flex-col items-center w-full">
-                  <div className="mt-2 flex flex-col items-center gap-2 w-full max-w-[260px] sm:max-w-[380px]">
-                    {isReversed && (
-                      <div className="text-[10px] sm:text-xs font-bold text-black bg-yellow-500 px-3 py-1 rounded-full border border-yellow-300 shadow-[0_0_10px_rgba(234,179,8,0.5)] flex items-center gap-1 animate-pulse shrink-0">
-                        <Repeat2 className="w-3 h-3 sm:w-4 sm:h-4" /> ARAH BALIK
-                      </div>
-                    )}
-                    <div className="w-full font-mono text-purple-300 bg-purple-900/40 px-2 py-1.5 rounded-xl border border-purple-500/30 flex justify-center items-center text-center">
-                      {(() => {
-                        const rule = getRuleDisplay(currentWord);
-                        const totalLen = (rule.desc?.length || 0) + (rule.action?.length || 0) + (rule.target?.length || 0);
-                        const dynamicTextSize = totalLen > 30 ? "text-[11px] sm:text-sm" : "text-xs sm:text-base";
-                        
+                      if (gameMode === "RHYME") {
                         return (
-                          <div className={`${dynamicTextSize} flex flex-col justify-center items-center gap-y-1.5 leading-snug w-full`}>
-                            <span className="font-semibold text-purple-200 px-1 text-center">{rule.desc}</span>
-                            {gameMode !== "RHYME" && (
-                              <div className="flex items-center justify-center bg-black/30 px-2 py-0.5 rounded-lg border border-purple-500/20">
-                                <span className="mr-1.5 opacity-60">→</span>
-                                {rule.action && <span className="mr-1.5">{rule.action}</span>}
-                                <span className="font-bold text-yellow-400 bg-black/50 px-2 py-0.5 rounded-md shadow-inner tracking-widest">{rule.target}</span>
-                              </div>
-                            )}
+                          <div className="flex flex-col items-center">
+                            <span className="text-4xl text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]">...{targetRhyme.toUpperCase()}</span>
+                            {currentWord && <span className="text-xs text-slate-400 mt-1 font-normal opacity-50">Last: {currentWord.toUpperCase()}</span>}
                           </div>
                         );
-                      })()}
-                    </div>
-                  </div>
-                  {feedbackMessage && (
-                      <div className={`mt-2 px-3 py-1 rounded-md text-xs font-bold animate-bounce ${feedbackMessage.type === 'error' ? 'bg-red-900/80 text-red-200 border border-red-500' : feedbackMessage.type === 'warning' ? 'bg-yellow-900/80 text-yellow-200 border border-yellow-500' : feedbackMessage.type === 'info' ? 'bg-blue-900/80 text-blue-200 border border-blue-500' : 'bg-green-900/80 text-green-200'}`}>
-                        {feedbackMessage.text}
+                      }
+                      const { pre, high, post } = getDisplayParts(currentWord);
+                      return (<><span>{pre.toUpperCase()}</span><span className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]">{high.toUpperCase()}</span><span>{post.toUpperCase()}</span></>);
+                    })()}
+                  </h2>
+
+                  <div className="flex flex-col items-center w-full">
+                    <div className="mt-2 flex flex-col items-center gap-2 w-full max-w-[260px] sm:max-w-[380px]">
+                      <div className="w-full font-mono text-purple-300 bg-purple-900/40 px-2 py-1.5 rounded-xl border border-purple-500/30 flex justify-center items-center text-center">
+                        {(() => {
+                          const rule = getRuleDisplay(currentWord);
+                          const totalLen = (rule.desc?.length || 0) + (rule.action?.length || 0) + (rule.target?.length || 0);
+                          const dynamicTextSize = totalLen > 30 ? "text-[11px] sm:text-sm" : "text-xs sm:text-base";
+                          return (
+                            <div className={`${dynamicTextSize} flex flex-col justify-center items-center gap-y-1.5 leading-snug w-full`}>
+                              <span className="font-semibold text-purple-200 px-1 text-center">{rule.desc}</span>
+                              {gameMode !== "RHYME" && (
+                                <div className="flex items-center justify-center bg-black/30 px-2 py-0.5 rounded-lg border border-purple-500/20">
+                                  <span className="mr-1.5 opacity-60">→</span>
+                                  {rule.action && <span className="mr-1.5">{rule.action}</span>}
+                                  <span className="font-bold text-yellow-400 bg-black/50 px-2 py-0.5 rounded-md shadow-inner tracking-widest">{rule.target}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
-                    )}
+                    </div>
+                    {feedbackMessage && (
+                        <div className={`mt-2 px-3 py-1 rounded-md text-xs font-bold animate-bounce ${feedbackMessage.type === 'error' ? 'bg-red-900/80 text-red-200 border border-red-500' : feedbackMessage.type === 'warning' ? 'bg-yellow-900/80 text-yellow-200 border border-yellow-500' : feedbackMessage.type === 'info' ? 'bg-blue-900/80 text-blue-200 border border-blue-500' : 'bg-green-900/80 text-green-200'}`}>
+                          {feedbackMessage.text}
+                        </div>
+                      )}
                   </div>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Players */}
           {players.map((player, index) => {
             const angleDeg = index * (360 / Math.max(players.length, 1)) + 90;
             const isTurn = gameState === "PLAYING" && currentTurnIndex === index && !player.isEliminated;
             const maxWins = Math.max(...players.map((p) => p.stats?.wins || 0));
             const isKing = maxWins > 0 && (player.stats?.wins || 0) === maxWins && !player.isEliminated;
             const isStarter = player.uniqueId === roundStarterId;
-
             return (
-              <div key={player.uniqueId} className="absolute transition-all duration-500 ease-out flex flex-col items-center justify-center w-20 h-24" style={{ transform: `rotate(${angleDeg}deg) translate(${gameState === "WAITING" ? 140 : 210}px) rotate(-${angleDeg}deg)`, zIndex: isTurn ? 100 : 20 }}>
+              <div key={player.uniqueId} className="absolute transition-all duration-500 ease-out flex flex-col items-center justify-center w-24 h-28" style={{ transform: `rotate(${angleDeg}deg) translate(${gameState === "WAITING" ? 140 : 210}px) rotate(-${angleDeg}deg)`, zIndex: isTurn ? 100 : 20 }}>
                 <div className={`relative group ${player.isEliminated ? "opacity-60 grayscale" : "opacity-100"}`}>
                   {isTurn && <div className="absolute -inset-2 bg-yellow-400 rounded-full animate-ping opacity-75"></div>}
                   {isKing && <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-xl z-50 animate-bounce drop-shadow-sm">👑</div>}
                   <div className={`w-14 h-14 rounded-full border-4 overflow-hidden bg-slate-800 z-10 relative shadow-lg ${isTurn ? (bombNextRef.current ? "border-red-500 scale-125 animate-shake" : "border-yellow-400 scale-110") : isKing ? "border-yellow-300 scale-105" : "border-slate-600"} ${player.isEliminated ? "border-red-900" : ""} transition-all duration-300`}>
                     <img src={player.avatarUrl} alt={player.nickname} className={`w-full h-full object-cover transition-all ${isKing ? "brightness-110 contrast-110" : ""}`} />
                   </div>
-                  
-                  {/* Badge Identitas Bot dengan Warna Dinamis Berdasarkan Kesulitan */}
                   {player.isBot && (
                     <div className={`absolute -top-1 -right-3 sm:-right-4 text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-full text-white font-bold border z-30 flex items-center shadow-md transition-colors ${
                       player.botDifficulty === 1 ? "bg-green-600 border-green-400" :
@@ -1920,26 +1810,13 @@ export default function App() {
                       {player.botDifficulty === 1 ? "👶 NOOB" : player.botDifficulty === 3 ? "🔥 PRO" : "🤖 BOT"}
                     </div>
                   )}
-
                   {isStarter && !player.isEliminated && (
                     <div className="absolute -top-1 -left-2 bg-gradient-to-br from-cyan-500 to-blue-600 border border-cyan-200 text-white p-1.5 rounded-full shadow-[0_0_12px_rgba(6,182,212,0.9)] z-40 animate-pulse" title="First Player (Round Starter)"><Flag className="w-3 h-3 fill-white" /></div>
                   )}
                   {isTurn && <div className={`absolute -top-6 left-1/2 -translate-x-1/2 font-bold text-xs px-2 py-0.5 rounded-full shadow-lg z-50 whitespace-nowrap ${timer <= 5 ? "bg-red-600 text-white animate-pulse border border-red-400" : "bg-yellow-500 text-black"}`}>{`${timer}s`}</div>}
-                  
-                  {/* Animasi Gelembung Berpikir (Typing Indicator) */}
-                  {isTurn && (
-                    <div className="absolute top-0 -right-8 sm:-right-9 bg-slate-100 px-2 py-1.5 rounded-2xl rounded-bl-sm shadow-xl z-[60] flex items-center gap-0.5 animate-in zoom-in fade-in duration-300 border border-slate-300">
-                      <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
-                      <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
-                      <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
-                    </div>
-                  )}
-
                   {player.isEliminated && <div className="absolute inset-0 flex items-center justify-center z-20"><Skull className="w-8 h-8 text-red-600 drop-shadow-md" /></div>}
                 </div>
-
-                {/* Name & Badges */}
-                <div className="mt-[-12px] flex flex-col items-center z-40 relative">
+                <div className="mt-[-12px] flex flex-col items-center z-40 relative w-full">
                   <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full backdrop-blur-md border shadow-lg transition-all duration-300 ${isTurn ? "bg-yellow-500/90 border-yellow-400/50 text-yellow-900 scale-110" : "bg-slate-900/80 border-slate-700/50 text-slate-200"}`}>
                     {player.stats?.wins > 0 && (
                       <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-yellow-700/30" : "border-white/20"}`}>
@@ -1956,8 +1833,17 @@ export default function App() {
                         <Skull className={`w-3 h-3 drop-shadow-sm ${isTurn ? "text-red-700" : "text-red-400"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-red-800" : "text-red-200"}`}>{player.sessionKills}</span>
                       </div>
                     )}
-                    <span className="text-[10px] font-bold tracking-wide truncate max-w-[80px]">{player.nickname}</span>
+                    <span className="text-[10px] font-bold tracking-wide truncate max-w-[70px]">{player.nickname}</span>
                   </div>
+                  {player.stats?.badges && player.stats.badges.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-0.5 mt-1 animate-in slide-in-from-top-1 duration-300">
+                       <div className="flex items-center bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded-full border border-white/10 shadow-sm">
+                         {player.stats.badges.map((b, i) => (
+                           <span key={i} className="text-[9px] leading-none select-none hover:scale-125 transition-transform" title="Achievement Badge">{b}</span>
+                         ))}
+                       </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -1965,36 +1851,46 @@ export default function App() {
         </div>
       </div>
 
-      {/* VIRTUAL KEYBOARD (HOST ONLY) */}
       {gameState === "PLAYING" && isHostJoined && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-2 flex flex-col gap-2 items-center">
-          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-600 rounded-full px-4 py-2 w-64 shadow-lg backdrop-blur-md">
-            <span className="flex-1 text-center font-mono font-bold text-lg text-white tracking-widest min-h-[1.5rem] uppercase truncate">
-              {manualInput || <span className="text-slate-600 text-xs font-sans font-normal opacity-50 lowercase">Type answer...</span>}
-            </span>
-            {manualInput && <button onClick={() => setManualInput("")} className="text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>}
-            <button onClick={handleManualSubmit} className="bg-green-600 text-white p-1.5 rounded-full hover:bg-green-500 shadow-lg active:scale-90 transition-transform"><Send className="w-3 h-3" /></button>
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-lg px-2 flex flex-col gap-2 items-center">
+          <div className="flex items-center gap-2 bg-slate-900/95 border border-slate-600 rounded-full px-4 py-2 w-full sm:max-w-md shadow-lg backdrop-blur-md">
+            <input 
+              type="text" 
+              readOnly 
+              value={manualInput} 
+              placeholder="type answer..." 
+              className="flex-1 bg-transparent text-center font-mono font-bold text-lg sm:text-xl text-white tracking-widest uppercase outline-none placeholder:text-slate-500 placeholder:text-sm placeholder:font-sans placeholder:lowercase placeholder:tracking-normal w-full min-w-0"
+            />
+            {manualInput && <button onClick={() => setManualInput("")} className="text-slate-400 hover:text-white shrink-0"><X className="w-5 h-5" /></button>}
+            <button onClick={handleManualSubmit} className="bg-green-600 text-white p-2 rounded-full hover:bg-green-500 shadow-lg active:scale-90 transition-transform shrink-0"><Send className="w-4 h-4" /></button>
           </div>
           <button onClick={() => setShowVirtualKeyboard(!showVirtualKeyboard)} className="text-[10px] text-slate-400 bg-black/40 px-3 py-1 rounded-full hover:bg-black/60 transition-colors flex items-center gap-1 backdrop-blur-sm border border-slate-700/50">
             <Keyboard className="w-3 h-3" /> {showVirtualKeyboard ? "Hide Keyboard" : "Show Keyboard"}
           </button>
           {showVirtualKeyboard && (
-            <div className="bg-slate-900/90 p-2 rounded-xl border border-slate-700 shadow-2xl backdrop-blur-md w-full animate-in slide-in-from-bottom-10 fade-in duration-300">
+            <div className="bg-slate-900/95 p-2.5 sm:p-3 rounded-2xl border border-slate-700 shadow-2xl backdrop-blur-md w-full sm:w-[90%] animate-in slide-in-from-bottom-10 fade-in duration-300">
               {["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"].map((row, i) => (
-                <div key={i} className="flex justify-center gap-1 mb-1 last:mb-0">
-                  {row.split("").map((char) => <button key={char} onClick={() => setManualInput(prev => prev + char)} className="w-7 h-9 sm:w-8 sm:h-10 bg-slate-700 hover:bg-slate-600 text-white rounded font-bold text-sm sm:text-base shadow active:scale-95 transition-all active:bg-slate-500">{char}</button>)}
+                <div key={i} className="flex justify-center gap-1.5 sm:gap-2 mb-2 last:mb-0">
+                  {row.split("").map((char) => (
+                    <button key={char} onClick={() => setManualInput(prev => prev + char)} className="w-8 h-10 sm:w-11 sm:h-12 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-bold text-sm sm:text-base shadow active:scale-95 transition-all active:bg-slate-500">{char}</button>
+                  ))}
                 </div>
               ))}
-              <div className="flex justify-center gap-1 mt-1 px-1">
-                <button onClick={() => setManualInput(prev => prev.slice(0, -1))} className="flex-1 bg-red-900/80 hover:bg-red-800 text-white rounded font-bold text-xs h-9 flex items-center justify-center shadow active:scale-95 gap-1 transition-colors"><Delete className="w-4 h-4" /> DEL</button>
-                <button onClick={handleManualSubmit} className="flex-[2] bg-green-700/80 hover:bg-green-600 text-white rounded font-bold text-xs h-9 flex items-center justify-center shadow active:scale-95 transition-colors">ENTER</button>
+              <div className="flex justify-center gap-2 mt-2 px-0.5 sm:px-2">
+                {/* Tombol ENTER di sebelah Kiri */}
+                <button onClick={handleManualSubmit} className="flex-[1.5] bg-green-700/80 hover:bg-green-600 text-white rounded-lg font-bold text-xs sm:text-sm h-11 sm:h-13 flex items-center justify-center shadow active:scale-95 transition-colors uppercase">ENTER</button>
+                
+                {/* Tombol SPACE di Tengah */}
+                <button onClick={() => setManualInput(prev => prev + " ")} className="flex-[4] bg-slate-600 hover:bg-slate-500 text-white rounded-lg font-bold text-xs sm:text-sm h-11 sm:h-13 flex items-center justify-center shadow active:scale-95 transition-colors uppercase tracking-widest">SPACE</button>
+                
+                {/* Tombol DELETE di sebelah Kanan */}
+                <button onClick={() => setManualInput(prev => prev.slice(0, -1))} className="flex-[1.5] bg-red-900/80 hover:bg-red-800 text-white rounded-lg font-bold text-xs sm:text-sm h-11 sm:h-13 flex items-center justify-center shadow active:scale-95 gap-1 transition-colors uppercase"><Delete className="w-4 h-4 sm:w-5 sm:h-5" /></button>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* WINNER SCREEN */}
       {gameState === "ENDED" && getWinners().length > 0 && (
         <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-in fade-in duration-500 p-4">
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -2002,14 +1898,12 @@ export default function App() {
               <div key={i} className="absolute animate-ping" style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, animationDuration: `${1 + Math.random()}s`, animationDelay: `${Math.random()}s`, backgroundColor: ["#FFD700", "#FF69B4", "#00BFFF", "#32CD32"][Math.floor(Math.random() * 4)], width: "6px", height: "6px", borderRadius: "50%" }}></div>
             ))}
           </div>
-          
           <div className="relative bg-slate-900/95 border border-yellow-500/30 shadow-[0_0_40px_rgba(250,204,21,0.2)] rounded-3xl p-6 sm:p-8 max-w-3xl w-full flex flex-col items-center transform transition-all animate-in zoom-in-90 duration-300">
             <div className="flex items-center justify-center gap-3 sm:gap-4 mb-6">
               <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)] animate-bounce" />
               <h2 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-300 via-yellow-500 to-yellow-700 drop-shadow-md">{getWinners().length > 1 ? t("draw") : t("winner")}</h2>
               <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)] animate-bounce" />
             </div>
-
             <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 w-full max-h-[35vh] overflow-y-auto custom-scrollbar">
               {getWinners().map((winner, idx) => (
                 <div key={idx} className="flex flex-col items-center bg-slate-800/60 p-3 rounded-2xl border border-yellow-500/20 min-w-[110px] sm:min-w-[130px] animate-in zoom-in duration-300" style={{animationDelay: `${idx * 100}ms`}}>
@@ -2023,13 +1917,10 @@ export default function App() {
                 </div>
               ))}
             </div>
-
-            {/* Most Killer Badge */}
             {(() => {
               const killers = players.filter(p => (p.sessionKills || 0) > 0).sort((a,b) => b.sessionKills - a.sessionKills);
               const maxKills = killers.length > 0 ? killers[0].sessionKills : 0;
               const mostKillers = killers.filter(p => p.sessionKills === maxKills);
-
               if (mostKillers.length > 0) {
                 return (
                   <div className="w-full bg-red-950/30 border border-red-900/50 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 mb-6">
@@ -2053,7 +1944,6 @@ export default function App() {
               }
               return null;
             })()}
-
             <button onClick={() => { setPlayers([]); setGameState("WAITING"); }} className="px-8 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-full shadow-lg hover:shadow-green-500/50 active:scale-95 transition-all text-sm sm:text-base border border-green-400/50">
               {t("play_again")}
             </button>
@@ -2061,7 +1951,6 @@ export default function App() {
         </div>
       )}
 
-      {/* CHAT LOGS */}
       <div className="absolute bottom-12 left-2 w-48 sm:bottom-4 sm:left-4 sm:w-64 h-32 sm:h-48 overflow-y-auto z-40 custom-scrollbar rounded-lg">
         <div className="flex flex-col-reverse justify-end min-h-full gap-1">
           {logs.map((log) => (
@@ -2074,7 +1963,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* GIFT NOTIFICATION */}
       {lastEvent && lastEvent.type === "gift" && (
         <div key={lastEvent.timestamp} className="absolute top-20 right-4 z-40 animate-in slide-in-from-right fade-in duration-300 pointer-events-none max-w-[200px]">
           <div className="flex flex-col items-center relative">
@@ -2100,10 +1988,7 @@ export default function App() {
         </div>
       )}
 
-      {/* FOOTER */}
       <div className="absolute bottom-2 sm:bottom-4 text-center w-full text-slate-500 text-[8px] sm:text-[10px] pointer-events-none z-40">{t("footer")}</div>
-
-      {/* GLOBAL STYLES */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); }
@@ -2119,5 +2004,3 @@ export default function App() {
     </div>
   );
 }
-
-
