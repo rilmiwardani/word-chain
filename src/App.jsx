@@ -182,6 +182,12 @@ const DYNAMIC_CHALLENGES = [
   { id: "MIDDLE_VOWEL", label: "🎯 Middle Letter is Vowel", labelID: "🎯 Huruf Tengah Vokal", check: (w) => w.length % 2 !== 0 && /[aeiou]/i.test(w[Math.floor(w.length / 2)]), tier: 4 }
 ];
 
+const BOT_PROFILES = [
+  { name: "Bot Balita", diff: 1 }, { name: "Bot Tolol", diff: 1 }, { name: "Bot Plenger", diff: 1 }, { name: "Bot AFK", diff: 1 }, { name: "Bot Nyasar", diff: 1 },
+  { name: "Bot Santai", diff: 2 }, { name: "Bot Normal", diff: 2 }, { name: "Bot Pelajar", diff: 2 }, { name: "Bot Magang", diff: 2 },
+  { name: "Bot Sepuh", diff: 3 }, { name: "Bot Suhu", diff: 3 }, { name: "Bot Psikopat", diff: 3 }, { name: "Bot Terminator", diff: 3 }, { name: "Bot Citter", diff: 3 }
+];
+
 
 // ==========================================
 // 2. UTILITY FUNCTIONS & MANAGERS
@@ -388,10 +394,11 @@ export default function App() {
   const [tableStatus, setTableStatus] = useState("idle");
   const [feedbackMessage, setFeedbackMessage] = useState(null);
   
-  // Fitur Baru: Action Cards Modifier
+  // Fitur Baru: Modifiers (Action Cards & Point Rush)
   const [actionCardsEnabled, setActionCardsEnabled] = useState(false);
+  const [pointRushEnabled, setPointRushEnabled] = useState(false);
   const [isReversed, setIsReversed] = useState(false);
-  const [overlapLength, setOverlapLength] = useState(1); // Setting Khusus Huruf
+  const [overlapLength, setOverlapLength] = useState(1);
 
   // Stats & Dynamic Mode
   const [showStats, setShowStats] = useState(false);
@@ -422,7 +429,7 @@ export default function App() {
   const [manualInput, setManualInput] = useState("");
   const [showVirtualKeyboard, setShowVirtualKeyboard] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState("rules"); // Fitur Baru: Tab Settings
+  const [settingsTab, setSettingsTab] = useState("rules");
   const [dictLoadedInfo, setDictLoadedInfo] = useState("Default (EN)");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -465,6 +472,7 @@ export default function App() {
   const targetRoundsRef = useRef(targetRounds);
   const targetScoreRef = useRef(targetScore);
   const actionCardsEnabledRef = useRef(actionCardsEnabled);
+  const pointRushEnabledRef = useRef(pointRushEnabled);
   const isReversedRef = useRef(isReversed);
   const overlapLengthRef = useRef(overlapLength);
 
@@ -481,12 +489,13 @@ export default function App() {
     gameStateRef.current = gameState; winConditionRef.current = winCondition;
     targetRoundsRef.current = targetRounds; targetScoreRef.current = targetScore;
     actionCardsEnabledRef.current = actionCardsEnabled;
+    pointRushEnabledRef.current = pointRushEnabled;
     isReversedRef.current = isReversed;
     overlapLengthRef.current = overlapLength;
   }, [
     players, currentTurnIndex, turnDuration, usedWords, syllableMap, isMuted,
     cityMetadata, challengeQueue, language, gameMode, currentWord, targetRhyme,
-    gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, isReversed, overlapLength
+    gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointRushEnabled, isReversed, overlapLength
   ]);
 
   // Populasi Target Rima
@@ -515,6 +524,9 @@ export default function App() {
     }
   }, [showStats]);
 
+  // Helper Score Mode (Universal)
+  const isScoreMode = () => pointRushEnabledRef.current;
+
   // Global Timer for "TIME" Win Condition
   useEffect(() => {
     if (gameState === "PLAYING" && isScoreMode() && winCondition === "TIME") {
@@ -529,7 +541,7 @@ export default function App() {
         }
       }
     }
-  }, [globalTimer, gameState, gameMode, winCondition]);
+  }, [globalTimer, gameState, gameMode, winCondition, pointRushEnabled]);
 
   useEffect(() => {
     if (gameState === "PLAYING" && isScoreMode() && winCondition === "TIME") {
@@ -541,7 +553,7 @@ export default function App() {
     } else {
       if (gameState !== "PLAYING") setGlobalTimer(null);
     }
-  }, [gameState, gameMode, gameDuration, winCondition]);
+  }, [gameState, gameMode, gameDuration, winCondition, pointRushEnabled]);
 
   // Turn Timer Effect (Handles Bomb logic)
   useEffect(() => {
@@ -574,21 +586,56 @@ export default function App() {
     if (gameState !== "PLAYING") return;
     const currentPlayer = players[currentTurnIndex];
     if (currentPlayer && currentPlayer.isBot && !currentPlayer.isEliminated) {
-      const thinkingTime = Math.floor(Math.random() * 2000) + 2000;
+      const diff = currentPlayer.botDifficulty || 2;
+      
+      // Kecepatan berpikir berdasarkan tingkat kesulitan
+      let minTime = 2000, maxTime = 4000;
+      if (diff === 1) { minTime = 3500; maxTime = 6500; } // Bodoh: Sangat lambat
+      if (diff === 3) { minTime = 500; maxTime = 1500; }  // Pro: Sangat cepat
+
+      const thinkingTime = Math.floor(Math.random() * (maxTime - minTime)) + minTime;
+
       const botTimer = setTimeout(() => {
         if (currentWordRef.current !== currentWord && gameModeRef.current !== "RHYME") return;
         const dictArray = Array.from(dictionary);
-        const candidates = dictArray.filter((word) => !usedWordsRef.current.has(word) && validateConnection(currentWordRef.current, word));
+        let candidates = dictArray.filter((word) => !usedWordsRef.current.has(word) && validateConnection(currentWordRef.current, word));
         
         if (candidates.length > 0) {
-          if (actionCardsEnabled) {
-            const strategicCandidates = candidates.filter(w => ['s','b','a'].includes(w.slice(-1)));
-            if (strategicCandidates.length > 0 && Math.random() > 0.5) {
-              submitAnswer(strategicCandidates[Math.floor(Math.random() * strategicCandidates.length)]);
-              return;
-            }
+          // Level 1: Ada kemungkinan 20% bot tiba-tiba ngeblank/menyerah meski ada kata
+          if (diff === 1 && Math.random() < 0.20) {
+            addLog("Bot", `${currentPlayer.nickname} ${t("log_stumped")}`);
+            return; // Tunggu sampai waktu habis (Timeout)
           }
-          submitAnswer(candidates[Math.floor(Math.random() * candidates.length)]);
+
+          let selectedWord;
+
+          if (diff === 3) {
+            // Level 3 (Pro): Sangat Agresif & Kompetitif
+            if (actionCardsEnabledRef.current) {
+              const actionCandidates = candidates.filter(w => ['s','b','a'].includes(w.slice(-1)));
+              // 85% Peluang menggunakan kartu aksi jika ada
+              if (actionCandidates.length > 0 && Math.random() < 0.85) candidates = actionCandidates;
+            }
+            // Sortir mencari kata paling panjang (Poin tertinggi)
+            candidates.sort((a, b) => b.length - a.length);
+            selectedWord = candidates[Math.floor(Math.random() * Math.min(3, candidates.length))]; // Ambil dari top 3 terpanjang
+
+          } else if (diff === 1) {
+            // Level 1 (Noob): Polos & Tidak kompetitif
+            // Mencari kata terpendek (Poin paling kecil)
+            candidates.sort((a, b) => a.length - b.length);
+            selectedWord = candidates[Math.floor(Math.random() * Math.min(3, candidates.length))];
+          
+          } else {
+            // Level 2 (Normal): Random
+            if (actionCardsEnabledRef.current) {
+              const actionCandidates = candidates.filter(w => ['s','b','a'].includes(w.slice(-1)));
+              if (actionCandidates.length > 0 && Math.random() < 0.4) candidates = actionCandidates;
+            }
+            selectedWord = candidates[Math.floor(Math.random() * candidates.length)];
+          }
+
+          submitAnswer(selectedWord);
         } else {
           addLog("Bot", `${currentPlayer.nickname} ${t("log_stumped")}`);
         }
@@ -620,7 +667,7 @@ export default function App() {
 
   const connectWebSocket = () => {
     const hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
-    const url = `ws://localhost:62024`;
+    const url = `ws://${hostname}:62024`;
     wsRef.current = new WebSocket(url);
     wsRef.current.onopen = () => { addLog("System", `Connected to IndoFinity (${hostname})`); fallbackToLocalhostRef.current = false; };
     wsRef.current.onmessage = (event) => {
@@ -645,7 +692,6 @@ export default function App() {
   const isHostJoined = players.some((p) => p.uniqueId === "host_player");
   const playSound = (effect) => { if (!isMutedRef.current) SoundManager.play(effect); };
   const t = (key) => TRANSLATIONS[language === "MIX" ? "ID" : language]?.[key] || TRANSLATIONS["EN"][key] || key;
-  const isScoreMode = () => ["POINT_RUSH", "CITIES", "PHRASE_CHAIN", "RHYME", "MIRROR"].includes(gameModeRef.current);
 
   const addLog = (user, message, uniqueId = null) => {
     const logId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -697,7 +743,7 @@ export default function App() {
 
   function getSuffixOrRule(word) {
     const overlap = overlapLengthRef.current;
-    if (gameMode === "CITIES" || gameMode === "LAST_LETTER" || gameMode === "POINT_RUSH" || gameMode === "DYNAMIC") return word.slice(-overlap);
+    if (gameMode === "CITIES" || gameMode === "LAST_LETTER" || gameMode === "DYNAMIC") return word.slice(-overlap);
     if (gameMode === "RHYME") return targetRhymeRef.current || word.slice(-2);
     if (gameMode === "PHRASE_CHAIN") return word;
     if (gameMode === "MIRROR") return word.slice(0, overlap);
@@ -731,20 +777,20 @@ export default function App() {
   function getRuleDisplay(word) {
     const target = getSuffixOrRule(word).toUpperCase();
     const action = t("rule_start");
-    const labelID = (challenge) => (language === "ID" && challenge?.labelID) ? challenge.labelID : challenge?.label;
+    // BUG FIX: Memastikan MIX juga memicu terjemahan ID (labelID)
+    const labelID = (challenge) => ((language === "ID" || language === "MIX") && challenge?.labelID) ? challenge.labelID : challenge?.label;
     const overlap = overlapLength;
 
     if (gameMode === "CITIES") return { label: "City Chain", target, desc: `${t("rule_end")} '${target}'`, action };
     if (gameMode === "WRAP_AROUND") return { label: "Wrap Around", target: `${word.slice(-overlap).toUpperCase()}...${word.slice(0, overlap).toUpperCase()}`, desc: `${t("rule_start")} '${word.slice(-overlap).toUpperCase()}' & ${t("rule_end")} '${word.slice(0, overlap).toUpperCase()}'`, action: "" };
     if (gameMode === "PHRASE_CHAIN") return { label: "Phrase Chain", target, desc: `${t("rule_phrase")}: ${target} ...`, action: "Add next word" };
-    if (gameMode === "POINT_RUSH") return { label: `Point Rush (${overlap})`, target, desc: overlap > 1 ? `${t("rule_start")} '${target}' (1 Let=1 ${t("log_pts")})` : `1 Letter = 1 ${t("log_pts")}`, action };
-    if (gameMode === "DYNAMIC") return { label: `Dynamic Chaos (${overlap})`, target, desc: activeChallenge ? `${labelID(activeChallenge)} + ${t("rule_start")} '${target}'` : `${t("rule_start")} '${target}'`, action };
+    if (gameMode === "DYNAMIC") return { label: `Dynamic Chaos (${overlap})`, target, desc: activeChallenge ? `${labelID(activeChallenge)} • ${t("rule_end")} '${target}'` : `${t("rule_end")} '${target}'`, action };
     if (gameMode === "RHYME") return { label: "Rhyme Rush", target: targetRhyme.toUpperCase(), desc: `${t("rule_end")} ...${targetRhyme.toUpperCase()}`, action: "Target" };
     if (gameMode === "MIRROR") return { label: `Mirror Chain (${overlap})`, target, desc: `${t("rule_mirror")} '${target}'`, action: "End with" };
-    if (gameMode === "STEP_UP") return { label: word.length >= 10 ? "Step Up (Reset)" : `Step Up (${overlap})`, target, desc: `${t("rule_start")} '${target}' (${word.length >= 10 ? t("rule_ladder_reset") + " -> 3/4" : t("rule_ladder") + " -> " + (word.length + 1)})`, action };
+    if (gameMode === "STEP_UP") return { label: word.length >= 10 ? "Step Up (Reset)" : `Step Up (${overlap})`, target, desc: `${t("rule_end")} '${target}' (${word.length >= 10 ? t("rule_ladder_reset") + " -> 3/4" : t("rule_ladder") + " -> " + (word.length + 1)})`, action };
     if (gameMode === "LAST_LETTER") return { label: `Last Letter(s) [${overlap}]`, target, desc: `${t("rule_end")} '${target}'`, action };
     if (gameMode === "SECOND_LETTER") return { label: "2nd Letter", target, desc: `2nd Letter is '${target}'`, action };
-    if (gameMode === "LONGER_WORD") return { label: word.length >= 10 ? "Longer Word (Reset)" : `Longer (${overlap})`, target: `> ${word.length >= 10 ? '3 chars' : word.length}`, desc: `${t("rule_start")} '${target}' (> ${word.length >= 10 ? '3 letters - RESET!' : word.length + ' letters'})`, action };
+    if (gameMode === "LONGER_WORD") return { label: word.length >= 10 ? "Longer Word (Reset)" : `Longer (${overlap})`, target: `> ${word.length >= 10 ? '3 chars' : word.length}`, desc: `${t("rule_end")} '${target}' (> ${word.length >= 10 ? '3 letters - RESET!' : word.length + ' letters'})`, action };
     return { label: "Last Syllable", target, desc: `${t("rule_syllable")} '${target}'`, action };
   }
 
@@ -781,7 +827,9 @@ export default function App() {
       const suffix = p.slice(-overlap);
       if (n === suffix || !n.startsWith(suffix)) return false;
       if (activeChallenge?.check && !activeChallenge.check(n)) {
-        addLog("Game", `⚠️ Gagal: ${languageRef.current === "ID" && activeChallenge.labelID ? activeChallenge.labelID : activeChallenge.label}`);
+        // BUG FIX: Konsistensi bahasa saat fail log
+        const label = (languageRef.current === "ID" || languageRef.current === "MIX") && activeChallenge.labelID ? activeChallenge.labelID : activeChallenge.label;
+        addLog("Game", `⚠️ Gagal: ${label}`);
         return false;
       }
       return true;
@@ -799,7 +847,7 @@ export default function App() {
       return p.length >= 10 ? (n.length === 3 || n.length === 4) : n.length === p.length + 1;
     }
     if (currentMode === "RHYME") return n !== targetRhymeRef.current && n.endsWith(targetRhymeRef.current);
-    if (["CITIES", "LAST_LETTER", "POINT_RUSH"].includes(currentMode)) {
+    if (["CITIES", "LAST_LETTER"].includes(currentMode)) {
       requiredSuffix = p.slice(-overlap); return n !== requiredSuffix && n.startsWith(requiredSuffix);
     }
     if (currentMode === "SECOND_LETTER") {
@@ -1036,7 +1084,7 @@ export default function App() {
       let nextWord = word; let stepsToAdvance = 1; let applyBomb = false;
       let pointsAwarded = word.length;
 
-      if (gameModeRef.current === "STEP_UP" || gameModeRef.current === "STEP_UP_2") pointsAwarded = 10;
+      if (gameModeRef.current === "STEP_UP") pointsAwarded = 10;
 
       const newPlayersList = playersRef.current.map((p, index) => {
         if (index === playerIndex) return { ...p, score: (p.score || 0) + pointsAwarded, turnCount: (p.turnCount || 0) + 1 };
@@ -1076,31 +1124,36 @@ export default function App() {
       }
 
       // Logging logic
-      if (isScoreMode()) {
-        if (gameModeRef.current === "CITIES") {
-          addLog("Game", `✅ ${word.toUpperCase()} ${cityMetadataRef.current[word] ? `(${cityMetadataRef.current[word]}) ` : ""}+${word.length}`);
-        } else if (gameModeRef.current === "PHRASE_CHAIN") {
-          addLog("Game", `✅ ${prevWord.toUpperCase()} -> ${word.toUpperCase()} (+${word.length})`);
-          if (!wordStartsPhrase(word)) {
-            const recovery = findRecoveryWord(word);
-            if (recovery) {
-              setTimeout(() => {
-                addLog("System", `${t("chain_broken")} 🔗`);
-                addLog("System", `${t("reconnecting")}: ...${recovery.suffix} -> ${recovery.word.toUpperCase()}`);
-                triggerTableEffect("info"); playSound("notification"); showFeedback(t("chain_broken"), "info");
-              }, 600);
-              nextWord = recovery.word;
-            }
+      let pts = isScoreMode() ? ` (+${pointsAwarded})` : "";
+
+      if (gameModeRef.current === "CITIES") {
+        addLog("Game", `✅ ${word.toUpperCase()} ${cityMetadataRef.current[word] ? `(${cityMetadataRef.current[word]}) ` : ""}${pts}`);
+      } else if (gameModeRef.current === "PHRASE_CHAIN") {
+        addLog("Game", `✅ ${prevWord.toUpperCase()} -> ${word.toUpperCase()}${pts}`);
+        if (!wordStartsPhrase(word)) {
+          const recovery = findRecoveryWord(word);
+          if (recovery) {
+            setTimeout(() => {
+              addLog("System", `${t("chain_broken")} 🔗`);
+              addLog("System", `${t("reconnecting")}: ...${recovery.suffix} -> ${recovery.word.toUpperCase()}`);
+              triggerTableEffect("info"); playSound("notification"); showFeedback(t("chain_broken"), "info");
+            }, 600);
+            nextWord = recovery.word;
           }
-        } else if (gameModeRef.current === "RHYME") addLog("Game", `✅ ${word.toUpperCase()} (...${targetRhymeRef.current.toUpperCase()}) +${word.length}`);
-        else if (gameModeRef.current === "WRAP_AROUND") addLog("Game", `✅ ${word.toUpperCase()} (${word.slice(0, overlapLengthRef.current).toUpperCase()}...${word.slice(-overlapLengthRef.current).toUpperCase()}) +${word.length}`);
-        else if (gameModeRef.current === "MIRROR") addLog("Game", `✅ ${word.toUpperCase()} (End: ${word.slice(-overlapLengthRef.current).toUpperCase()}) +${word.length}`);
-        else addLog("Game", `✅ +${word.length} ${t("log_pts")}!`);
+        }
+      } else if (gameModeRef.current === "RHYME") {
+        addLog("Game", `✅ ${word.toUpperCase()} (...${targetRhymeRef.current.toUpperCase()})${pts}`);
+      } else if (gameModeRef.current === "WRAP_AROUND") {
+        addLog("Game", `✅ ${word.toUpperCase()} (${word.slice(0, overlapLengthRef.current).toUpperCase()}...${word.slice(-overlapLengthRef.current).toUpperCase()})${pts}`);
+      } else if (gameModeRef.current === "MIRROR") {
+        addLog("Game", `✅ ${word.toUpperCase()} (End: ${word.slice(-overlapLengthRef.current).toUpperCase()})${pts}`);
+      } else if (gameModeRef.current === "STEP_UP") {
+        addLog("Game", `✅ ${word.toUpperCase()} (Len: ${word.length}) ➡️ Next: ${word.length >= 10 ? "Reset" : word.length + 1}${pts}`);
       } else {
-        if (gameModeRef.current === "STEP_UP") {
-          addLog("Game", `✅ ${word.toUpperCase()} (Len: ${word.length}) ➡️ Next: ${word.length >= 10 ? "Reset" : word.length + 1}`);
+        if (isScoreMode()) {
+          addLog("Game", `✅ ${word.toUpperCase()} +${word.length} ${t("log_pts")}!`);
         } else {
-          addLog("Game", `✅ ${cityMetadataRef.current[word] ? `${word.toUpperCase()} (${cityMetadataRef.current[word]})` : `${t("log_correct")} "${word}"`}`);
+          addLog("Game", `✅ ${t("log_correct")} "${word.toUpperCase()}"`);
         }
       }
 
@@ -1118,7 +1171,9 @@ export default function App() {
             const suffix = word.slice(-overlapLengthRef.current).toLowerCase();
             const { selected, newQueue } = getNextChallenge(challengeQueueRef.current, suffix);
             setActiveChallenge(selected); setChallengeQueue(newQueue);
-            addLog("System", `🚨 ${t("log_rule_change")}: ${languageRef.current === "ID" && selected.labelID ? selected.labelID : selected.label} 🚨`);
+            // BUG FIX: Konsistensi bahasa log saat mode MIX
+            const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
+            addLog("System", `🚨 ${t("log_rule_change")}: ${label} 🚨`);
             playSound("tick");
             return 0;
           }
@@ -1147,27 +1202,36 @@ export default function App() {
     setPlayers([...playersRef.current]);
   }
 
-  function joinGame(uniqueId, nickname, profilePictureUrl, isBot = false) {
+  function joinGame(uniqueId, nickname, profilePictureUrl, botDifficulty = 0) {
     if (gameStateRef.current !== "WAITING" || (quitHistoryRef.current[uniqueId] || 0) >= 2 || playersRef.current.length >= maxPlayers) return;
     if (playersRef.current.some((p) => p.uniqueId === uniqueId)) return;
 
     playSound("join"); addLog("System", `${nickname} ${t("log_joined")}`, uniqueId);
 
+    const isBot = botDifficulty > 0;
     const stats = isBot ? { wins: 0, games: 0, kills: 0, badges: [] } : StatsManager.load(uniqueId);
     const newPlayer = {
       id: uniqueId, uniqueId, nickname, avatarUrl: profilePictureUrl || getAvatarUrl(uniqueId),
-      isEliminated: false, color: getRandomColor(), isBot, stats, score: 0, turnCount: 0, sessionKills: 0
+      isEliminated: false, color: getRandomColor(), isBot, botDifficulty, stats, score: 0, turnCount: 0, sessionKills: 0
     };
     playersRef.current = [...playersRef.current, newPlayer]; setPlayers([...playersRef.current]);
   }
 
   function addBot() {
     const existingNames = new Set(playersRef.current.map((p) => p.nickname));
-    const availableNames = ["Bot Alpha", "Bot Beta", "Bot Gamma", "Bot Delta", "Bot Omega", "Bot Zeta"].filter((n) => !existingNames.has(n));
-    joinGame(`bot_${Date.now()}_${Math.random()}`, availableNames.length > 0 ? availableNames[0] : `Bot ${Math.floor(Math.random() * 1000)}`, null, true);
+    const availableBots = BOT_PROFILES.filter((b) => !existingNames.has(b.name));
+    
+    if (availableBots.length === 0) {
+      // Fallback jika sudah dimasukkan semua bot
+      joinGame(`bot_${Date.now()}_${Math.random()}`, `Bot Kloning ${Math.floor(Math.random() * 100)}`, null, 2);
+      return;
+    }
+
+    const selected = availableBots[Math.floor(Math.random() * availableBots.length)];
+    joinGame(`bot_${Date.now()}_${Math.random()}`, selected.name, null, selected.diff);
   }
 
-  function addHost() { joinGame("host_player", "HOST", `https://api.dicebear.com/7.x/fun-emoji/svg?seed=HOST`, false); }
+  function addHost() { joinGame("host_player", "HOST", `https://api.dicebear.com/7.x/fun-emoji/svg?seed=HOST`, 0); }
 
   const loadCitiesData = (citiesArray) => {
     const dictSet = new Set(); const meta = {};
@@ -1201,11 +1265,13 @@ export default function App() {
 
     if (isScoreMode() && winConditionRef.current === "TIME") setGlobalTimer(gameDuration);
 
-    if (gameModeRef.current === "DYNAMIC" || gameModeRef.current === "DYNAMIC_2") {
+    if (gameModeRef.current === "DYNAMIC") {
       const queue = generateChallengeQueue();
       const { selected, newQueue } = getNextChallenge(queue, "");
       setActiveChallenge(selected); setChallengeQueue(newQueue); setTurnCount(0);
-      addLog("System", `Mode: DYNAMIC CHAOS! \nRule: ${languageRef.current === "ID" && selected.labelID ? selected.labelID : selected.label}`);
+      // BUG FIX: Konsistensi bahasa saat mode MIX
+      const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
+      addLog("System", `Mode: DYNAMIC CHAOS! \nRule: ${label}`);
     }
     
     if (gameModeRef.current === "RHYME") { setTurnCount(0); addLog("System", `Mode: RHYME RUSH! Target: ...${targetRhymeRef.current || ""}`); }
@@ -1246,7 +1312,7 @@ export default function App() {
     const modes = [
       "LAST_LETTER", "WRAP_AROUND", "STEP_UP",
       "RHYME", "MIRROR", "PHRASE_CHAIN", "DYNAMIC", "SECOND_LETTER",
-      "POINT_RUSH", "SYLLABLE", "LONGER_WORD", "CITIES"
+      "SYLLABLE", "LONGER_WORD", "CITIES"
     ];
     setGameMode(modes[(modes.indexOf(gameMode) + 1) % modes.length]);
   }
@@ -1327,7 +1393,7 @@ export default function App() {
     const labels = {
       LAST_LETTER: `LETTERS (${overlapLength})`, WRAP_AROUND: `WRAP AROUND (${overlapLength})`,
       SECOND_LETTER: "2ND LETTER", RHYME: "RHYME RUSH", MIRROR: `MIRROR (${overlapLength})`,
-      STEP_UP: `STEP UP (${overlapLength})`, POINT_RUSH: `POINT RUSH (${overlapLength})`,
+      STEP_UP: `STEP UP (${overlapLength})`,
       SYLLABLE: "SYLLABLE", LONGER_WORD: `LONGER (${overlapLength})`,
       CITIES: `CITIES (${overlapLength})`, DYNAMIC: `DYNAMIC (${overlapLength})`, PHRASE_CHAIN: "PHRASE"
     };
@@ -1497,7 +1563,7 @@ export default function App() {
               <button onClick={() => setSettingsTab('dev')} title="Simulasi/Dev" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'dev' ? 'bg-amber-600 text-white shadow-inner scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Bot className="w-4 h-4"/></button>
             </div>
 
-            {/* TAB CONTENTS (Fixed Minimum Height to prevent jitter) */}
+            {/* TAB CONTENTS */}
             <div className="flex flex-col gap-2 min-h-[190px]">
               
               {/* TAB 1: RULES */}
@@ -1506,12 +1572,20 @@ export default function App() {
                   <button onClick={cycleGameMode} className="w-full bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-xs font-bold border border-slate-600 transition-colors flex items-center justify-between group">
                     <span className="text-slate-300">{t("mode")}:</span><span className="text-yellow-400 group-hover:text-yellow-300">{getModeLabel()}</span>
                   </button>
-                  <button onClick={() => setActionCardsEnabled(!actionCardsEnabled)} className={`w-full ${actionCardsEnabled ? 'bg-amber-900 hover:bg-amber-800 border-amber-500' : 'bg-slate-700 hover:bg-slate-600 border-slate-600'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
-                    <div className="flex items-center gap-2"><Zap className={`w-3 h-3 ${actionCardsEnabled ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} /><span className="text-slate-300">Action Cards</span></div>
-                    <span className={actionCardsEnabled ? "text-amber-400" : "text-slate-400"}>{actionCardsEnabled ? "ON" : "OFF"}</span>
-                  </button>
+                  
+                  <div className="flex flex-col gap-1.5">
+                    <button onClick={() => setActionCardsEnabled(!actionCardsEnabled)} className={`w-full ${actionCardsEnabled ? 'bg-amber-900 hover:bg-amber-800 border-amber-500' : 'bg-slate-700 hover:bg-slate-600 border-slate-600'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
+                      <div className="flex items-center gap-2"><Zap className={`w-3 h-3 ${actionCardsEnabled ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`} /><span className="text-slate-300">Action Cards</span></div>
+                      <span className={actionCardsEnabled ? "text-amber-400" : "text-slate-400"}>{actionCardsEnabled ? "ON" : "OFF"}</span>
+                    </button>
 
-                  <div className="w-full bg-slate-700 p-2 rounded border border-slate-600 flex flex-col gap-1.5">
+                    <button onClick={() => setPointRushEnabled(!pointRushEnabled)} className={`w-full ${pointRushEnabled ? 'bg-green-900 hover:bg-green-800 border-green-500' : 'bg-slate-700 hover:bg-slate-600 border-slate-600'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
+                      <div className="flex items-center gap-2"><Target className={`w-3 h-3 ${pointRushEnabled ? 'text-green-400 animate-pulse' : 'text-slate-400'}`} /><span className="text-slate-300">Point Rush (Pts)</span></div>
+                      <span className={pointRushEnabled ? "text-green-400" : "text-slate-400"}>{pointRushEnabled ? "ON" : "OFF"}</span>
+                    </button>
+                  </div>
+
+                  <div className="w-full bg-slate-700 p-2 rounded border border-slate-600 flex flex-col gap-1.5 mt-0.5">
                     <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold mb-0.5">
                       <span>{t("end_condition")}:</span>
                       <button onClick={cycleWinCondition} className="text-blue-400 hover:text-white transition-colors uppercase">{winCondition}</button>
@@ -1751,13 +1825,13 @@ export default function App() {
 
                   {/* Mode Badges */}
                   {actionCardsEnabled && <div className="text-[10px] font-bold bg-amber-900/80 px-2 py-0.5 rounded text-amber-300 mb-1 flex items-center justify-center gap-1 inline-flex shadow-[0_0_10px_rgba(251,191,36,0.5)] border border-amber-500"><Zap className="w-3 h-3 animate-pulse" /> ACTION CARDS ON</div>}
+                  {pointRushEnabled && <div className="text-[10px] font-bold bg-green-900/80 px-2 py-0.5 rounded text-green-300 mb-1 flex items-center justify-center gap-1 inline-flex shadow-[0_0_10px_rgba(34,197,94,0.5)] border border-green-500"><Target className="w-3 h-3 animate-pulse" /> POINT RUSH ON</div>}
                   {gameMode === "CITIES" && <div className="text-[10px] font-bold bg-blue-900/50 px-2 py-0.5 rounded text-blue-300 mb-1 flex items-center justify-center gap-1 inline-flex"><MapPin className="w-3 h-3" /> CITIES MODE</div>}
                   {gameMode === "WRAP_AROUND" && <div className="text-[10px] font-bold bg-rose-900/50 px-2 py-0.5 rounded text-rose-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-pulse"><Repeat2 className="w-3 h-3" /> WRAP AROUND</div>}
                   {gameMode === "RHYME" && <div className="text-[10px] font-bold bg-purple-900/50 px-2 py-0.5 rounded text-purple-300 mb-1 flex items-center justify-center gap-1 inline-flex"><Hash className="w-3 h-3" /> RHYME RUSH</div>}
                   {gameMode === "MIRROR" && <div className="text-[10px] font-bold bg-pink-900/50 px-2 py-0.5 rounded text-pink-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-pulse"><FlipHorizontal className="w-3 h-3" /> MIRROR CHAIN</div>}
                   {gameMode === "STEP_UP" && <div className="text-[10px] font-bold bg-cyan-900/50 px-2 py-0.5 rounded text-cyan-300 mb-1 flex items-center justify-center gap-1 inline-flex animate-bounce"><MoveUpRight className="w-3 h-3" /> STEP UP</div>}
                   {gameMode === "PHRASE_CHAIN" && <div className="text-[10px] font-bold bg-indigo-900/50 px-2 py-0.5 rounded text-indigo-300 mb-1 flex items-center justify-center gap-1 inline-flex">{tableStatus === "info" ? <Unlink className="w-3 h-3 animate-bounce" /> : <Link className="w-3 h-3" />} PHRASE CHAIN</div>}
-                  {gameMode === "POINT_RUSH" && <div className="text-[10px] font-bold bg-green-900/50 px-2 py-0.5 rounded text-green-300 mb-1 flex items-center justify-center gap-1 inline-flex"><Zap className="w-3 h-3" /> POINT RUSH</div>}
                   {gameMode === "DYNAMIC" && <div className="text-[10px] font-bold bg-orange-900/50 px-2 py-0.5 rounded text-orange-300 mb-1 flex items-center justify-center gap-1 inline-flex"><AlertTriangle className="w-3 h-3" /> DYNAMIC CHAOS</div>}
 
                   <p className="text-slate-500 text-xs uppercase tracking-widest mb-1 mt-1 flex items-center justify-center gap-2">
@@ -1787,21 +1861,21 @@ export default function App() {
                         <Repeat2 className="w-3 h-3 sm:w-4 sm:h-4" /> ARAH BALIK
                       </div>
                     )}
-                    <div className="w-full font-mono text-purple-300 bg-purple-900/40 px-3 py-1.5 rounded-xl border border-purple-500/30 flex justify-center items-center text-center">
+                    <div className="w-full font-mono text-purple-300 bg-purple-900/40 px-2 py-1.5 rounded-xl border border-purple-500/30 flex justify-center items-center text-center">
                       {(() => {
                         const rule = getRuleDisplay(currentWord);
                         const totalLen = (rule.desc?.length || 0) + (rule.action?.length || 0) + (rule.target?.length || 0);
-                        const dynamicTextSize = totalLen > 35 ? "text-[9px] sm:text-xs" : totalLen > 25 ? "text-[10px] sm:text-sm" : "text-xs sm:text-base";
+                        const dynamicTextSize = totalLen > 30 ? "text-[11px] sm:text-sm" : "text-xs sm:text-base";
                         
                         return (
-                          <div className={`${dynamicTextSize} flex flex-wrap justify-center items-center gap-y-1 leading-snug`}>
-                            <span>{rule.desc}</span>
+                          <div className={`${dynamicTextSize} flex flex-col justify-center items-center gap-y-1.5 leading-snug w-full`}>
+                            <span className="font-semibold text-purple-200 px-1 text-center">{rule.desc}</span>
                             {gameMode !== "RHYME" && (
-                              <>
-                                <span className="mx-1.5 opacity-60">→</span>
-                                <span>{rule.action}</span>
-                                <span className="font-bold text-yellow-400 ml-1.5 bg-black/40 px-2 py-0.5 rounded-md shadow-inner">{rule.target}</span>
-                              </>
+                              <div className="flex items-center justify-center bg-black/30 px-2 py-0.5 rounded-lg border border-purple-500/20">
+                                <span className="mr-1.5 opacity-60">→</span>
+                                {rule.action && <span className="mr-1.5">{rule.action}</span>}
+                                <span className="font-bold text-yellow-400 bg-black/50 px-2 py-0.5 rounded-md shadow-inner tracking-widest">{rule.target}</span>
+                              </div>
                             )}
                           </div>
                         );
@@ -1835,11 +1909,32 @@ export default function App() {
                   <div className={`w-14 h-14 rounded-full border-4 overflow-hidden bg-slate-800 z-10 relative shadow-lg ${isTurn ? (bombNextRef.current ? "border-red-500 scale-125 animate-shake" : "border-yellow-400 scale-110") : isKing ? "border-yellow-300 scale-105" : "border-slate-600"} ${player.isEliminated ? "border-red-900" : ""} transition-all duration-300`}>
                     <img src={player.avatarUrl} alt={player.nickname} className={`w-full h-full object-cover transition-all ${isKing ? "brightness-110 contrast-110" : ""}`} />
                   </div>
-                  {player.isBot && <div className="absolute -top-1 -right-1 bg-purple-600 text-[8px] px-1 rounded-full text-white font-bold border border-purple-400 z-30">BOT</div>}
+                  
+                  {/* Badge Identitas Bot dengan Warna Dinamis Berdasarkan Kesulitan */}
+                  {player.isBot && (
+                    <div className={`absolute -top-1 -right-3 sm:-right-4 text-[7px] sm:text-[8px] px-1.5 py-0.5 rounded-full text-white font-bold border z-30 flex items-center shadow-md transition-colors ${
+                      player.botDifficulty === 1 ? "bg-green-600 border-green-400" :
+                      player.botDifficulty === 3 ? "bg-red-700 border-red-400 animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.8)]" :
+                      "bg-blue-600 border-blue-400"
+                    }`}>
+                      {player.botDifficulty === 1 ? "👶 NOOB" : player.botDifficulty === 3 ? "🔥 PRO" : "🤖 BOT"}
+                    </div>
+                  )}
+
                   {isStarter && !player.isEliminated && (
                     <div className="absolute -top-1 -left-2 bg-gradient-to-br from-cyan-500 to-blue-600 border border-cyan-200 text-white p-1.5 rounded-full shadow-[0_0_12px_rgba(6,182,212,0.9)] z-40 animate-pulse" title="First Player (Round Starter)"><Flag className="w-3 h-3 fill-white" /></div>
                   )}
                   {isTurn && <div className={`absolute -top-6 left-1/2 -translate-x-1/2 font-bold text-xs px-2 py-0.5 rounded-full shadow-lg z-50 whitespace-nowrap ${timer <= 5 ? "bg-red-600 text-white animate-pulse border border-red-400" : "bg-yellow-500 text-black"}`}>{`${timer}s`}</div>}
+                  
+                  {/* Animasi Gelembung Berpikir (Typing Indicator) */}
+                  {isTurn && (
+                    <div className="absolute top-0 -right-8 sm:-right-9 bg-slate-100 px-2 py-1.5 rounded-2xl rounded-bl-sm shadow-xl z-[60] flex items-center gap-0.5 animate-in zoom-in fade-in duration-300 border border-slate-300">
+                      <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                      <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                      <div className="w-1.5 h-1.5 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                    </div>
+                  )}
+
                   {player.isEliminated && <div className="absolute inset-0 flex items-center justify-center z-20"><Skull className="w-8 h-8 text-red-600 drop-shadow-md" /></div>}
                 </div>
 
