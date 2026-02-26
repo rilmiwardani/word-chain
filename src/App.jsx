@@ -5,7 +5,7 @@ import {
   Keyboard, Link, LogOut, MapPin, Maximize, Medal, Minimize, Minus,
   MoveUpRight, Music, Plus, RefreshCw, Repeat2, Send, Settings, Skull,
   Star, Target, TrendingUp, TrendingUp as TrendingUpIcon, Trophy, Unlink,
-  User, Users, Volume2, VolumeX, X, Zap
+  User, Users, Volume2, VolumeX, X, Zap, MessageSquare, MessageSquareOff
 } from "lucide-react";
 
 // ==========================================
@@ -428,6 +428,7 @@ export default function App() {
   const [dictLoadedInfo, setDictLoadedInfo] = useState("Default (EN)");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [showLogs, setShowLogs] = useState(true);
 
   // === REFS ===
   const quitHistoryRef = useRef({});
@@ -633,7 +634,7 @@ export default function App() {
 
   const connectWebSocket = () => {
     const hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
-    const url = `ws://localhost:62024`;
+    const url = `ws://${hostname}:62024`;
     wsRef.current = new WebSocket(url);
     wsRef.current.onopen = () => { addLog("System", `Connected to IndoFinity (${hostname})`); fallbackToLocalhostRef.current = false; };
     wsRef.current.onmessage = (event) => {
@@ -1951,16 +1952,29 @@ export default function App() {
         </div>
       )}
 
-      <div className="absolute bottom-12 left-2 w-48 sm:bottom-4 sm:left-4 sm:w-64 h-32 sm:h-48 overflow-y-auto z-40 custom-scrollbar rounded-lg">
-        <div className="flex flex-col-reverse justify-end min-h-full gap-1">
-          {logs.map((log) => (
-            <div key={log.id} className={`flex items-center px-3 py-1 rounded text-[10px] sm:text-xs animate-in slide-in-from-left fade-in transition-colors w-full bg-black/40 backdrop-blur-md cursor-default`}>
-              <div className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                {log.user === "Action" ? <span className="font-bold text-amber-400 drop-shadow-sm">{log.message}</span> : <><span className="font-bold text-blue-300">{log.user}:</span> <span className="text-white">{log.message}</span></>}
-              </div>
+      <div className="absolute bottom-12 left-2 sm:bottom-4 sm:left-4 z-40 flex flex-col gap-1 items-start">
+        <button 
+          onClick={() => setShowLogs(!showLogs)} 
+          className="text-[10px] text-slate-400 bg-black/40 px-2 py-1 rounded-md hover:bg-black/60 transition-colors flex items-center gap-1.5 backdrop-blur-sm border border-slate-700/50"
+          title={showLogs ? "Sembunyikan Log" : "Tampilkan Log"}
+        >
+          {showLogs ? <MessageSquareOff className="w-3 h-3" /> : <MessageSquare className="w-3 h-3" />}
+          <span className="hidden sm:inline">{showLogs ? "Hide Logs" : "Show Logs"}</span>
+        </button>
+
+        {showLogs && (
+          <div className="w-48 sm:w-64 h-32 sm:h-48 overflow-y-auto custom-scrollbar rounded-lg">
+            <div className="flex flex-col-reverse justify-end min-h-full gap-1">
+              {logs.map((log) => (
+                <div key={log.id} className={`flex items-center px-3 py-1 rounded text-[10px] sm:text-xs animate-in slide-in-from-left fade-in transition-colors w-full bg-black/40 backdrop-blur-md cursor-default`}>
+                  <div className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
+                    {log.user === "Action" ? <span className="font-bold text-amber-400 drop-shadow-sm">{log.message}</span> : <><span className="font-bold text-blue-300">{log.user}:</span> <span className="text-white">{log.message}</span></>}
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {lastEvent && lastEvent.type === "gift" && (
@@ -2004,4 +2018,3 @@ export default function App() {
     </div>
   );
 }
-
