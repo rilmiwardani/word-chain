@@ -634,7 +634,7 @@ export default function App() {
 
   const connectWebSocket = () => {
     const hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
-    const url = `ws://${hostname}:62024`;
+    const url = `ws://localhost:62024`;
     wsRef.current = new WebSocket(url);
     wsRef.current.onopen = () => { addLog("System", `Connected to IndoFinity (${hostname})`); fallbackToLocalhostRef.current = false; };
     wsRef.current.onmessage = (event) => {
@@ -2018,3 +2018,4 @@ export default function App() {
     </div>
   );
 }
+
