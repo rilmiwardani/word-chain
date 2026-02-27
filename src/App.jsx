@@ -5,7 +5,8 @@ import {
   Keyboard, Link, LogOut, MapPin, Maximize, Medal, Minimize, Minus,
   MoveUpRight, Music, Plus, RefreshCw, Repeat2, Send, Settings, Skull,
   Star, Target, TrendingUp, TrendingUp as TrendingUpIcon, Trophy, Unlink,
-  User, Users, Volume2, VolumeX, X, Zap, MessageSquare, MessageSquareOff
+  User, Users, Volume2, VolumeX, X, Zap, MessageSquare, MessageSquareOff,
+  Pause, Play
 } from "lucide-react";
 
 // ==========================================
@@ -417,6 +418,7 @@ export default function App() {
   const [cityMetadata, setCityMetadata] = useState({});
   const [logs, setLogs] = useState([]);
   const [lastEvent, setLastEvent] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState("disconnected");
 
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [turnDuration, setTurnDuration] = useState(15);
@@ -520,28 +522,13 @@ export default function App() {
 
   useEffect(() => {
     if (gameState === "PLAYING" && isScoreMode() && winCondition === "TIME") {
-      if (globalTimer !== null && globalTimer <= 0) {
-        const activePlayers = players.filter(p => !p.isEliminated);
-        if (activePlayers.length > 0) {
-          const sorted = [...activePlayers].sort((a, b) => (b.score || 0) - (a.score || 0));
-          const maxScore = sorted[0].score || 0;
-          handleWin(sorted.filter(p => (p.score || 0) === maxScore)); 
-        } else {
-          setGameState("ENDED");
-        }
-      }
-    }
-  }, [globalTimer, gameState, winCondition, pointRushEnabled]);
-
-  useEffect(() => {
-    if (gameState === "PLAYING" && isScoreMode() && winCondition === "TIME") {
       if (globalTimer === null) setGlobalTimer(gameDuration);
       const interval = setInterval(() => {
         setGlobalTimer((prev) => prev === null ? gameDuration : Math.max(0, prev - 1));
       }, 1000);
       return () => clearInterval(interval);
     } else {
-      if (gameState !== "PLAYING") setGlobalTimer(null);
+      if (gameState === "WAITING" || gameState === "ENDED") setGlobalTimer(null);
     }
   }, [gameState, gameDuration, winCondition, pointRushEnabled]);
 
@@ -636,15 +623,29 @@ export default function App() {
     const hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
     const url = `ws://localhost:62024`;
     wsRef.current = new WebSocket(url);
-    wsRef.current.onopen = () => { addLog("System", `Connected to IndoFinity (${hostname})`); fallbackToLocalhostRef.current = false; };
+    wsRef.current.onopen = () => { 
+      setConnectionStatus("ws_only");
+      addLog("System", `Connected to Backend (${hostname})`); 
+      fallbackToLocalhostRef.current = false; 
+    };
     wsRef.current.onmessage = (event) => {
       try {
         const { event: eventName, data } = JSON.parse(event.data);
         if (eventName === "chat" && chatHandlerRef.current) chatHandlerRef.current(data);
         if (eventName === "gift") setLastEvent({ type: "gift", timestamp: Date.now(), ...data });
+        if (eventName === "tiktok_connected") {
+          setConnectionStatus("tiktok_ready");
+          addLog("System", `Terkoneksi ke TikTok Live! 🟢`);
+          playSound("notification");
+        }
+        if (eventName === "tiktok_disconnected") {
+          setConnectionStatus("ws_only");
+          addLog("System", `Terputus dari TikTok Live 🔴`);
+        }
       } catch (err) { console.error("WS Error", err); }
     };
     wsRef.current.onclose = () => {
+      setConnectionStatus("disconnected");
       if (!fallbackToLocalhostRef.current && window.location.hostname !== "localhost") {
         fallbackToLocalhostRef.current = true;
       }
@@ -1210,6 +1211,20 @@ export default function App() {
     bombNextRef.current = false; setIsReversed(false); addLog("System", t("log_reset"));
   }
 
+  function togglePause() {
+    if (gameState === "PLAYING") {
+      setGameState("PAUSED");
+      addLog("System", "Game Paused ⏸️");
+      triggerTableEffect("warning");
+      playSound("notification");
+    } else if (gameState === "PAUSED") {
+      setGameState("PLAYING");
+      addLog("System", "Game Resumed ▶️");
+      triggerTableEffect("success");
+      playSound("start");
+    }
+  }
+
   function clearLobby() {
     setGameState("WAITING"); setPlayers([]); playersRef.current = []; setUsedWords(new Set());
     usedWordsRef.current = new Set(); setCurrentWord(""); setTargetRhyme(""); setGlobalTimer(null);
@@ -1447,7 +1462,10 @@ export default function App() {
       <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 pointer-events-none">
         <h1 className="text-xl sm:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-600 drop-shadow-lg">MAD CHAIN</h1>
         <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 mt-1">
-          <span className={`w-2 h-2 rounded-full ${wsRef.current?.readyState === 1 ? "bg-green-500" : "bg-red-500"}`}></span>
+          <span 
+            className={`w-2 h-2 rounded-full ${connectionStatus === "tiktok_ready" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" : connectionStatus === "ws_only" ? "bg-yellow-500 animate-pulse" : "bg-red-500"}`}
+            title={connectionStatus === "tiktok_ready" ? "Terhubung ke TikTok" : connectionStatus === "ws_only" ? "Backend OK, TikTok Belum Connect" : "Backend Offline"}
+          ></span>
           <div className="flex gap-2">
             <span className="text-yellow-400 font-bold bg-slate-800 px-2 rounded border border-slate-600">{language}</span>
             <span className="text-blue-400 font-bold bg-slate-800 px-2 rounded border border-slate-600">{getModeLabel()}</span>
@@ -1457,6 +1475,11 @@ export default function App() {
 
       <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[70] flex flex-col items-end">
         <div className="flex gap-2">
+          {(gameState === "PLAYING" || gameState === "PAUSED") && (
+            <button onClick={togglePause} className={`w-10 h-10 flex items-center justify-center rounded-full shadow-xl transition-all duration-300 border border-slate-600 ${gameState === "PAUSED" ? "bg-amber-600 hover:bg-amber-500 animate-pulse shadow-[0_0_15px_rgba(217,119,6,0.5)]" : "bg-slate-800 hover:bg-slate-700 hover:scale-110"}`} title={gameState === "PAUSED" ? "Resume Game" : "Pause Game"}>
+              {gameState === "PAUSED" ? <Play className="w-5 h-5 text-white" /> : <Pause className="w-5 h-5 text-yellow-400" />}
+            </button>
+          )}
           <button onClick={() => setShowStats(true)} className="w-10 h-10 flex items-center justify-center rounded-full shadow-xl transition-all duration-300 border border-slate-600 bg-slate-800 hover:bg-slate-700 hover:scale-110" title="Hall of Fame">
             <BarChart2 className="w-5 h-5 text-yellow-400" />
           </button>
@@ -1678,6 +1701,13 @@ export default function App() {
       <div className="transform scale-[0.85] -translate-y-12 sm:translate-y-0 sm:scale-100 transition-transform duration-300">
         <div className="relative w-[360px] h-[360px] sm:w-[500px] sm:h-[500px] flex items-center justify-center">
           <div className={`absolute inset-0 rounded-full border-[8px] bg-slate-800 transition-all duration-200 flex items-center justify-center overflow-hidden ${getTableStatusClass()}`}>
+            {gameState === "PAUSED" && (
+              <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-300">
+                <Pause className="w-16 h-16 sm:w-20 sm:h-20 text-amber-500 mb-2 animate-pulse drop-shadow-[0_0_15px_rgba(245,158,11,0.5)]" />
+                <p className="text-2xl sm:text-4xl font-black text-amber-400 tracking-widest drop-shadow-md">PAUSED</p>
+                <p className="text-xs sm:text-sm text-amber-200/70 mt-2 font-mono">Menunggu Jaringan Stabil...</p>
+              </div>
+            )}
             <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-gray-100 via-gray-900 to-black"></div>
             <div className="relative z-10 text-center flex flex-col items-center">
               {gameState === "WAITING" ? (
@@ -2018,4 +2048,3 @@ export default function App() {
     </div>
   );
 }
-
