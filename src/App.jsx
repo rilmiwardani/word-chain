@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   AlertTriangle, BarChart2, Bomb, Bot, Clock, Crown, Delete, FastForward,
-  FileJson, Flag, FlipHorizontal, Gamepad2, Gift, Globe, Hash, Info,
+  FileJson, Flag, FlipHorizontal, Gamepad2, Gift, Globe, Hash, Heart, Info,
   Keyboard, Link, LogOut, MapPin, Maximize, Medal, Minimize, Minus,
   MoveUpRight, Music, Plus, RefreshCw, Repeat2, Send, Settings, Skull,
   Star, Target, TrendingUp, TrendingUp as TrendingUpIcon, Trophy, Unlink,
@@ -472,6 +472,7 @@ export default function App() {
   const pointRushEnabledRef = useRef(pointRushEnabled);
   const isReversedRef = useRef(isReversed);
   const overlapLengthRef = useRef(overlapLength);
+  const activeChallengeRef = useRef(activeChallenge);
 
   // === EFFECTS ===
   
@@ -488,10 +489,11 @@ export default function App() {
     pointRushEnabledRef.current = pointRushEnabled;
     isReversedRef.current = isReversed;
     overlapLengthRef.current = overlapLength;
+    activeChallengeRef.current = activeChallenge;
   }, [
     players, currentTurnIndex, turnDuration, usedWords, syllableMap, isMuted,
     cityMetadata, challengeQueue, language, gameMode, currentWord, targetRhyme,
-    gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointRushEnabled, isReversed, overlapLength
+    gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointRushEnabled, isReversed, overlapLength, activeChallenge
   ]);
 
   useEffect(() => {
@@ -576,18 +578,66 @@ export default function App() {
           }
           let selectedWord;
           if (diff === 3) {
+            let preferredCandidates = candidates;
             if (actionCardsEnabledRef.current) {
-              const actionCandidates = candidates.filter(w => ['s','b','z'].includes(w.slice(-1)));
-              if (actionCandidates.length > 0 && Math.random() < 0.85) candidates = actionCandidates;
+              const actionCandidates = candidates.filter(w => {
+                const low = w.toLowerCase();
+                return low.endsWith('sk') || low.endsWith('bo') || low.endsWith('po');
+              });
+              if (actionCandidates.length > 0 && Math.random() < 0.85) preferredCandidates = actionCandidates;
             }
-            candidates.sort((a, b) => b.length - a.length);
-            selectedWord = candidates[Math.floor(Math.random() * Math.min(3, candidates.length))];
+            
+            preferredCandidates.sort((a, b) => b.length - a.length);
+            
+            // Evaluasi Top 20 kandidat kata agar Bot PRO tidak blunder
+            const topCandidates = preferredCandidates.slice(0, 20);
+            const aliveCount = players.filter(p => !p.isEliminated).length;
+            
+            let killMove = null;
+            let safeMoves = [];
+
+            for (const w of topCandidates) {
+              let steps = 1;
+              const low = w.toLowerCase();
+              if (actionCardsEnabledRef.current && low.endsWith('sk')) steps = 2;
+              
+              // Cek apakah aksi ini akan membuat giliran berbalik ke bot itu sendiri
+              const landsOnSelf = (steps % aliveCount === 0);
+              // Simulasi apakah kata ini menyebabkan jalan buntu (deadlock) di kamus
+              const isDeadlock = !hasPossibleAnswer(w);
+
+              if (isDeadlock) {
+                if (!landsOnSelf) {
+                  // Kata ini adalah jalan buntu dan BUKAN mendarat di bot. 
+                  // Ini adalah serangan sempurna! Ambil segera.
+                  killMove = w;
+                  break; 
+                }
+                // Jika isDeadlock && landsOnSelf, ini adalah BUNUH DIRI (Blunder).
+                // Bot PRO akan mengabaikan (discard) kandidat kata ini sepenuhnya.
+              } else {
+                safeMoves.push(w);
+              }
+            }
+
+            // Eksekusi pilihan (Prioritas: Membunuh Lawan > Aman > Acak Darurat)
+            if (killMove) {
+              selectedWord = killMove;
+            } else if (safeMoves.length > 0) {
+              selectedWord = safeMoves[Math.floor(Math.random() * Math.min(3, safeMoves.length))];
+            } else {
+              // Terpaksa acak jika seluruh opsi Top 20 adalah blunder bunuh diri
+              selectedWord = candidates[Math.floor(Math.random() * candidates.length)];
+            }
           } else if (diff === 1) {
             candidates.sort((a, b) => a.length - b.length);
             selectedWord = candidates[Math.floor(Math.random() * Math.min(3, candidates.length))];
           } else {
             if (actionCardsEnabledRef.current) {
-              const actionCandidates = candidates.filter(w => ['s','b','z'].includes(w.slice(-1)));
+              const actionCandidates = candidates.filter(w => {
+                const low = w.toLowerCase();
+                return low.endsWith('sk') || low.endsWith('bo') || low.endsWith('po');
+              });
               if (actionCandidates.length > 0 && Math.random() < 0.4) candidates = actionCandidates;
             }
             selectedWord = candidates[Math.floor(Math.random() * candidates.length)];
@@ -633,6 +683,14 @@ export default function App() {
         const { event: eventName, data } = JSON.parse(event.data);
         if (eventName === "chat" && chatHandlerRef.current) chatHandlerRef.current(data);
         if (eventName === "gift") setLastEvent({ type: "gift", timestamp: Date.now(), ...data });
+        
+        // --- MENANGKAP EVENT LIKE ---
+        if (eventName === "like") {
+          setLastEvent({ type: "like", timestamp: Date.now(), ...data });
+          // Opsional: jika ingin log tap-tap muncul (biasanya terlalu spam, jadi matikan jika tidak perlu)
+          // addLog("System", `${data.uniqueId} mengirim ${data.likeCount} likes ❤️`);
+        }
+
         if (eventName === "tiktok_connected") {
           setConnectionStatus("tiktok_ready");
           addLog("System", `Terkoneksi ke TikTok Live! 🟢`);
@@ -786,8 +844,8 @@ export default function App() {
     if (currentMode === "DYNAMIC") {
       const suffix = p.slice(-overlap);
       if (n === suffix || !n.startsWith(suffix)) return false;
-      if (activeChallenge?.check && !activeChallenge.check(n)) {
-        const label = (languageRef.current === "ID" || languageRef.current === "MIX") && activeChallenge.labelID ? activeChallenge.labelID : activeChallenge.label;
+      if (activeChallengeRef.current?.check && !activeChallengeRef.current.check(n)) {
+        const label = (languageRef.current === "ID" || languageRef.current === "MIX") && activeChallengeRef.current.labelID ? activeChallengeRef.current.labelID : activeChallengeRef.current.label;
         addLog("Game", `⚠️ Gagal: ${label}`);
         return false;
       }
@@ -901,16 +959,15 @@ export default function App() {
   }
 
   const hasPossibleAnswer = (startWord) => {
-    let checkCount = 0;
+    // Hapus pembatasan loop (checkCount) agar simulasi masa depan Bot 100% akurat 
     for (const candidate of dictionary) {
-      if (++checkCount > 1000) break;
       if (usedWordsRef.current.has(candidate) || candidate === startWord) continue;
       if (validateConnection(startWord, candidate)) return true;
     }
     return false;
   };
 
-  const getNewRandomWord = () => {
+  const getNewRandomWord = (challenge = null) => {
     if (gameModeRef.current === "PHRASE_CHAIN") {
       const phrases = Array.from(phraseDictionary.current);
       if (phrases.length === 0) return "word";
@@ -918,8 +975,16 @@ export default function App() {
     }
     const dictArray = Array.from(dictionary);
     if (dictArray.length === 0) return "start";
+    
     let candidates = dictArray.filter((w) => w.length >= 3 && w.length <= 6);
-    if (candidates.length === 0) candidates = dictArray;
+    
+    // Filter kata awal agar lulus cek rule "Dynamic" yang sedang berjalan
+    if (challenge) {
+      candidates = candidates.filter(w => challenge.check(w));
+    }
+    if (candidates.length === 0) candidates = dictArray.filter(w => !challenge || challenge.check(w));
+    if (candidates.length === 0) candidates = dictArray; // Fallback darurat
+    
     for (let i = 0; i < 50; i++) {
       const choice = candidates[Math.floor(Math.random() * candidates.length)];
       if (hasPossibleAnswer(choice)) return choice;
@@ -1027,10 +1092,10 @@ export default function App() {
       });
       let modifiedPlayers = [...newPlayersList];
       if (actionCardsEnabledRef.current) {
-        const lastChar = word.slice(-1).toLowerCase();
-        if (lastChar === 's') { stepsToAdvance = 2; addLog("Action", `⏭️ SKIP!`); triggerTableEffect("warning"); playSound("notification"); }
-        else if (lastChar === 'b') { applyBomb = true; addLog("Action", `💣 BOM WAKTU! (10 Detik)`); triggerTableEffect("error"); playSound("eliminate"); }
-        else if (lastChar === 'z') { 
+        const lowWord = word.toLowerCase();
+        if (lowWord.endsWith('sk')) { stepsToAdvance = 2; addLog("Action", `⏭️ SKIP!`); triggerTableEffect("warning"); playSound("notification"); }
+        else if (lowWord.endsWith('bo')) { applyBomb = true; addLog("Action", `💣 BOM WAKTU! (10 Detik)`); triggerTableEffect("error"); playSound("eliminate"); }
+        else if (lowWord.endsWith('po')) { 
           const len = modifiedPlayers.length;
           const direction = isReversedRef.current ? -1 : 1;
           let nextIdx = (playerIndex + direction + len) % len;
@@ -1177,23 +1242,34 @@ export default function App() {
     playSound("start");
     bombNextRef.current = false; lastSuccessfulPlayerIdRef.current = null;
     setIsReversed(false);
+    
     let randomStart = "";
+    let selectedChallenge = null;
+
+    if (gameModeRef.current === "DYNAMIC") {
+      const queue = generateChallengeQueue();
+      const { selected, newQueue } = getNextChallenge(queue, "");
+      selectedChallenge = selected;
+      setActiveChallenge(selected); 
+      activeChallengeRef.current = selected; // Pastikan referensi ref terupdate instan
+      setChallengeQueue(newQueue); setTurnCount(0);
+      const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
+      addLog("System", `Mode: DYNAMIC CHAOS! \nRule: ${label}`);
+    }
+
     if (gameModeRef.current === "RHYME") {
       setTargetRhyme(rhymeTargetsRef.current.length > 0 ? rhymeTargetsRef.current[Math.floor(Math.random() * rhymeTargetsRef.current.length)] : "ing");
-    } else randomStart = getNewRandomWord();
+    } else {
+      randomStart = getNewRandomWord(selectedChallenge);
+    }
+    
     const initialUsed = new Set(randomStart ? [randomStart] : []);
     setUsedWords(initialUsed); usedWordsRef.current = initialUsed;
     const updatedStatsMap = {};
     playersRef.current.forEach((p) => { if (!p.isBot) updatedStatsMap[p.uniqueId] = StatsManager.update(p.uniqueId, false, true, p.nickname); });
     setPlayers((prev) => prev.map((p) => ({ ...p, stats: updatedStatsMap[p.uniqueId] || p.stats, score: 0, turnCount: 0, sessionKills: 0, isEliminated: false })));
     if (isScoreMode() && winConditionRef.current === "TIME") setGlobalTimer(gameDuration);
-    if (gameModeRef.current === "DYNAMIC") {
-      const queue = generateChallengeQueue();
-      const { selected, newQueue } = getNextChallenge(queue, "");
-      setActiveChallenge(selected); setChallengeQueue(newQueue); setTurnCount(0);
-      const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
-      addLog("System", `Mode: DYNAMIC CHAOS! \nRule: ${label}`);
-    }
+    
     if (gameModeRef.current === "RHYME") { setTurnCount(0); addLog("System", `Mode: RHYME RUSH! Target: ...${targetRhymeRef.current || ""}`); }
     setCurrentWord(randomStart);
     const randomFirstPlayerIndex = Math.floor(Math.random() * playersRef.current.length);
@@ -2007,27 +2083,28 @@ export default function App() {
         )}
       </div>
 
+      {/* --- RENDER NOTIFIKASI GIFT --- */}
       {lastEvent && lastEvent.type === "gift" && (
         <div key={lastEvent.timestamp} className="absolute top-20 right-4 z-40 animate-in slide-in-from-right fade-in duration-300 pointer-events-none max-w-[200px]">
-          <div className="flex flex-col items-center relative">
-            <div className="absolute inset-0 bg-pink-500/30 blur-[30px] rounded-full animate-pulse"></div>
-            <div className="relative mb-1">
-              <div className="w-14 h-14 rounded-full p-1 bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 shadow-xl">
-                <img src={lastEvent.profilePictureUrl || getAvatarUrl(lastEvent.nickname)} alt="Gifter" className="w-full h-full rounded-full object-cover border border-slate-900 bg-slate-800" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 bg-yellow-400 text-black font-black text-[9px] px-1.5 py-0.5 rounded-full shadow-lg border border-white transform rotate-6">GIFT!</div>
-            </div>
-            <div className="text-center flex flex-col items-center">
-              <span className="text-xs sm:text-sm font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] truncate max-w-[120px]">{lastEvent.nickname}</span>
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-[10px] text-slate-200 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] font-bold">{t("sent")}</span>
-                {(lastEvent.giftPictureUrl || lastEvent.pictureUrl) ? (
-                  <img src={lastEvent.giftPictureUrl || lastEvent.pictureUrl} alt="Gift Image" className="w-6 h-6 object-contain drop-shadow-[0_0_8px_rgba(255,105,180,0.8)] animate-bounce" />
-                ) : (
-                  <span className="text-yellow-400 font-bold text-[10px] drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)]">{lastEvent.giftName}</span>
-                )}
-              </div>
-            </div>
+          <div className="bg-gradient-to-r from-pink-500/80 to-purple-600/80 backdrop-blur-md text-white p-2 rounded-lg border border-pink-400/50 flex items-center gap-3 shadow-xl">
+             <img src={lastEvent.profilePictureUrl || "https://ui-avatars.com/api/?name=User&background=random"} alt="avatar" className="w-8 h-8 rounded-full border-2 border-white/50" />
+             <div className="flex flex-col">
+               <span className="text-xs font-bold truncate">{lastEvent.nickname}</span>
+               <span className="text-[10px] text-pink-200">Kirim: {lastEvent.giftName} 🎁</span>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- RENDER NOTIFIKASI LIKE / TAP-TAP --- */}
+      {lastEvent && lastEvent.type === "like" && (
+        <div key={`like-${lastEvent.timestamp}`} className="absolute top-36 right-4 z-40 animate-in slide-in-from-right fade-in fade-out duration-700 pointer-events-none max-w-[200px]">
+          <div className="bg-gradient-to-r from-red-500/80 to-rose-600/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full border border-red-400/50 flex items-center gap-2 shadow-lg scale-90 sm:scale-100">
+             <Heart className="w-4 h-4 text-white animate-bounce" fill="currentColor" />
+             <div className="flex flex-col leading-tight">
+               <span className="text-[10px] font-bold truncate">{lastEvent.nickname}</span>
+               <span className="text-[9px] text-red-200">Sent {lastEvent.likeCount} likes</span>
+             </div>
           </div>
         </div>
       )}
