@@ -417,7 +417,7 @@ export default function App() {
   const [syllableMap, setSyllableMap] = useState({});
   const [cityMetadata, setCityMetadata] = useState({});
   const [logs, setLogs] = useState([]);
-  const [lastEvent, setLastEvent] = useState(null);
+  const [activeEffects, setActiveEffects] = useState([]); // <-- STATE BARU UNTUK EFEK FLURRY
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
 
   const [maxPlayers, setMaxPlayers] = useState(8);
@@ -582,14 +582,13 @@ export default function App() {
             if (actionCardsEnabledRef.current) {
               const actionCandidates = candidates.filter(w => {
                 const low = w.toLowerCase();
-                return low.endsWith('sk') || low.endsWith('bo') || low.endsWith('po');
+                return low.endsWith('sk') || low.endsWith('bo') || low.endsWith('po') || low.endsWith('rv');
               });
               if (actionCandidates.length > 0 && Math.random() < 0.85) preferredCandidates = actionCandidates;
             }
             
             preferredCandidates.sort((a, b) => b.length - a.length);
             
-            // Evaluasi Top 20 kandidat kata agar Bot PRO tidak blunder
             const topCandidates = preferredCandidates.slice(0, 20);
             const aliveCount = players.filter(p => !p.isEliminated).length;
             
@@ -601,32 +600,24 @@ export default function App() {
               const low = w.toLowerCase();
               if (actionCardsEnabledRef.current && low.endsWith('sk')) steps = 2;
               
-              // Cek apakah aksi ini akan membuat giliran berbalik ke bot itu sendiri
               const landsOnSelf = (steps % aliveCount === 0);
-              // Simulasi apakah kata ini menyebabkan jalan buntu (deadlock) di kamus
               const isDeadlock = !hasPossibleAnswer(w);
 
               if (isDeadlock) {
                 if (!landsOnSelf) {
-                  // Kata ini adalah jalan buntu dan BUKAN mendarat di bot. 
-                  // Ini adalah serangan sempurna! Ambil segera.
                   killMove = w;
                   break; 
                 }
-                // Jika isDeadlock && landsOnSelf, ini adalah BUNUH DIRI (Blunder).
-                // Bot PRO akan mengabaikan (discard) kandidat kata ini sepenuhnya.
               } else {
                 safeMoves.push(w);
               }
             }
 
-            // Eksekusi pilihan (Prioritas: Membunuh Lawan > Aman > Acak Darurat)
             if (killMove) {
               selectedWord = killMove;
             } else if (safeMoves.length > 0) {
               selectedWord = safeMoves[Math.floor(Math.random() * Math.min(3, safeMoves.length))];
             } else {
-              // Terpaksa acak jika seluruh opsi Top 20 adalah blunder bunuh diri
               selectedWord = candidates[Math.floor(Math.random() * candidates.length)];
             }
           } else if (diff === 1) {
@@ -636,7 +627,7 @@ export default function App() {
             if (actionCardsEnabledRef.current) {
               const actionCandidates = candidates.filter(w => {
                 const low = w.toLowerCase();
-                return low.endsWith('sk') || low.endsWith('bo') || low.endsWith('po');
+                return low.endsWith('sk') || low.endsWith('bo') || low.endsWith('po') || low.endsWith('rv');
               });
               if (actionCandidates.length > 0 && Math.random() < 0.4) candidates = actionCandidates;
             }
@@ -669,6 +660,15 @@ export default function App() {
     };
   }, []);
 
+  const triggerVisualEffect = (type, uniqueId, data) => {
+    const id = `${type}-${Date.now()}-${Math.random()}`;
+    setActiveEffects(prev => [...prev, { id, type, uniqueId, ...data }]);
+    // Hapus efek setelah animasi selesai (Gifts tahan lebih lama dari Likes)
+    setTimeout(() => {
+        setActiveEffects(prev => prev.filter(e => e.id !== id));
+    }, type === 'gift' ? 3000 : 2000);
+  };
+
   const connectWebSocket = () => {
     const hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
     const url = `ws://localhost:62024`;
@@ -682,14 +682,10 @@ export default function App() {
       try {
         const { event: eventName, data } = JSON.parse(event.data);
         if (eventName === "chat" && chatHandlerRef.current) chatHandlerRef.current(data);
-        if (eventName === "gift") setLastEvent({ type: "gift", timestamp: Date.now(), ...data });
         
-        // --- MENANGKAP EVENT LIKE ---
-        if (eventName === "like") {
-          setLastEvent({ type: "like", timestamp: Date.now(), ...data });
-          // Opsional: jika ingin log tap-tap muncul (biasanya terlalu spam, jadi matikan jika tidak perlu)
-          // addLog("System", `${data.uniqueId} mengirim ${data.likeCount} likes ❤️`);
-        }
+        // Pemicu Animasi Hadiah / Like
+        if (eventName === "gift") triggerVisualEffect("gift", data.uniqueId, { giftName: data.giftName });
+        if (eventName === "like") triggerVisualEffect("like", data.uniqueId, { count: Math.min(data.likeCount || 1, 15) });
 
         if (eventName === "tiktok_connected") {
           setConnectionStatus("tiktok_ready");
@@ -750,15 +746,26 @@ export default function App() {
     for (let i = 0; i < tempQueue.length; i++) {
       const challenge = tempQueue[i];
       let isSafe = true;
+      
+      // Filter Aturan vs Vokal/Konsonan
       if (challenge.id === "NO_VOWELS" && /[aeiou]/i.test(currentSuffix)) isSafe = false;
       else if (challenge.id === "MAX_1_VOWEL" && (currentSuffix.match(/[aeiou]/gi) || []).length > 1) isSafe = false;
       else if (challenge.id === "EXACT_2_VOWELS" && (currentSuffix.match(/[aeiou]/gi) || []).length > 2) isSafe = false;
       else if (challenge.id === "UNIQUE" && new Set(currentSuffix).size !== currentSuffix.length) isSafe = false;
       else if (challenge.id === "START_END_CONS" && /[aeiou]/i.test(currentSuffix[0])) isSafe = false;
+      
+      // Cek panjang suffix (Overlap > 1) vs Aturan Posisi/Panjang
+      else if (challenge.id === "SECOND_VOWEL" && currentSuffix.length >= 2 && !/[aeiou]/i.test(currentSuffix[1])) isSafe = false;
+      else if (challenge.id === "EXACT_4" && currentSuffix.length >= 4) isSafe = false;
+      else if (challenge.id === "MAX_5" && currentSuffix.length >= 5) isSafe = false;
+      else if (challenge.id === "EXACT_6" && currentSuffix.length >= 6) isSafe = false;
+      
+      // Filter Karakter Terlarang dinamis
       else if (challenge.id.startsWith("NO_")) {
         const forbiddenChars = challenge.id.replace("NO_", "").toLowerCase().split("_");
         if (forbiddenChars.some((char) => currentSuffix.includes(char))) isSafe = false;
       }
+      
       if (isSafe) return { selected: tempQueue.splice(i, 1)[0], newQueue: tempQueue };
     }
     return { selected: tempQueue.shift(), newQueue: tempQueue };
@@ -801,16 +808,27 @@ export default function App() {
     const action = t("rule_start");
     const labelID = (challenge) => ((language === "ID" || language === "MIX") && challenge?.labelID) ? challenge.labelID : challenge?.label;
     const overlap = overlapLength;
+    
     if (gameMode === "CITIES") return { label: "City Chain", target, desc: `${t("rule_end")} '${target}'`, action };
     if (gameMode === "WRAP_AROUND") return { label: "Wrap Around", target: `${word.slice(-overlap).toUpperCase()}...${word.slice(0, overlap).toUpperCase()}`, desc: `${t("rule_start")} '${word.slice(-overlap).toUpperCase()}' & ${t("rule_end")} '${word.slice(0, overlap).toUpperCase()}'`, action: "" };
     if (gameMode === "PHRASE_CHAIN") return { label: "Phrase Chain", target, desc: `${t("rule_phrase")}: ${target} ...`, action: "Add next word" };
     if (gameMode === "DYNAMIC") return { label: `Dynamic Chaos (${overlap})`, target, desc: activeChallenge ? `${labelID(activeChallenge)} • ${t("rule_end")} '${target}'` : `${t("rule_end")} '${target}'`, action };
     if (gameMode === "RHYME") return { label: "Rhyme Rush", target: targetRhyme.toUpperCase(), desc: `${t("rule_end")} ...${targetRhyme.toUpperCase()}`, action: "Target" };
     if (gameMode === "MIRROR") return { label: `Mirror Chain (${overlap})`, target, desc: `${t("rule_mirror")} '${target}'`, action: "End with" };
-    if (gameMode === "STEP_UP") return { label: word.length >= 10 ? "Step Up (Reset)" : `Step Up (${overlap})`, target, desc: `${t("rule_end")} '${target}' (${word.length >= 10 ? t("rule_ladder_reset") + " -> 3/4" : t("rule_ladder") + " -> " + (word.length + 1)})`, action };
+    
+    if (gameMode === "STEP_UP") {
+        const nextLen1 = Math.max(3, overlap + 1);
+        const nextLen2 = Math.max(4, overlap + 2);
+        return { label: word.length >= 10 ? "Step Up (Reset)" : `Step Up (${overlap})`, target, desc: `${t("rule_end")} '${target}' (${word.length >= 10 ? t("rule_ladder_reset") + ` -> ${nextLen1}/${nextLen2}` : t("rule_ladder") + " -> " + (word.length + 1)})`, action };
+    }
+    if (gameMode === "LONGER_WORD") {
+        const resetLen = Math.max(4, overlap + 1);
+        return { label: word.length >= 10 ? "Longer Word (Reset)" : `Longer (${overlap})`, target: `> ${word.length >= 10 ? (resetLen - 1) + ' chars' : word.length}`, desc: `${t("rule_end")} '${target}' (> ${word.length >= 10 ? (resetLen - 1) + ' letters - RESET!' : word.length + ' letters'})`, action };
+    }
+    
     if (gameMode === "LAST_LETTER") return { label: `Last Letter(s) [${overlap}]`, target, desc: `${t("rule_end")} '${target}'`, action };
     if (gameMode === "SECOND_LETTER") return { label: "2nd Letter", target, desc: `2nd Letter is '${target}'`, action };
-    if (gameMode === "LONGER_WORD") return { label: word.length >= 10 ? "Longer Word (Reset)" : `Longer (${overlap})`, target: `> ${word.length >= 10 ? '3 chars' : word.length}`, desc: `${t("rule_end")} '${target}' (> ${word.length >= 10 ? '3 letters - RESET!' : word.length + ' letters'})`, action };
+    
     return { label: "Last Syllable", target, desc: `${t("rule_syllable")} '${target}'`, action };
   }
 
@@ -839,6 +857,7 @@ export default function App() {
     const n = next.toLowerCase();
     const currentMode = gameModeRef.current || gameMode;
     const overlap = overlapLengthRef.current;
+    
     if (currentMode === "PHRASE_CHAIN") return phraseDictionary.current.has(`${p} ${n}`);
     if (currentMode === "WRAP_AROUND") return n !== p && n.length >= overlap * 2 && n.startsWith(p.slice(-overlap)) && n.endsWith(p.slice(0, overlap));
     if (currentMode === "DYNAMIC") {
@@ -851,17 +870,22 @@ export default function App() {
       }
       return true;
     }
+    
     let requiredSuffix = "";
+    
     if (currentMode === "MIRROR") { 
-      if (p.length < overlap) return false;
       requiredSuffix = p.slice(0, overlap); 
       return n !== requiredSuffix && n.endsWith(requiredSuffix); 
     }
+    
     if (currentMode === "STEP_UP") {
       requiredSuffix = p.slice(-overlap);
       if (n === requiredSuffix || !n.startsWith(requiredSuffix)) return false;
-      return p.length >= 10 ? (n.length === 3 || n.length === 4) : n.length === p.length + 1;
+      const nextLen1 = Math.max(3, overlap + 1);
+      const nextLen2 = Math.max(4, overlap + 2);
+      return p.length >= 10 ? (n.length === nextLen1 || n.length === nextLen2) : n.length === p.length + 1;
     }
+    
     if (currentMode === "RHYME") return n !== targetRhymeRef.current && n.endsWith(targetRhymeRef.current);
     if (["CITIES", "LAST_LETTER"].includes(currentMode)) {
       requiredSuffix = p.slice(-overlap); return n !== requiredSuffix && n.startsWith(requiredSuffix);
@@ -869,28 +893,27 @@ export default function App() {
     if (currentMode === "SECOND_LETTER") {
       if (p.length < 2) return false; const targetChar = p[1]; return n !== targetChar && n.startsWith(targetChar);
     }
+    
     if (currentMode === "LONGER_WORD") {
       if (!n.startsWith(p.slice(-overlap))) return false;
-      return p.length >= 10 ? n.length >= 4 : n.length > p.length;
+      const resetLen = Math.max(4, overlap + 1);
+      return p.length >= 10 ? n.length >= resetLen : n.length > p.length;
     }
+    
     if (currentMode === "SYLLABLE") {
-      let isValid = false; let connectionPart = "";
+      let connectionPart = "";
       if (language === "EN") {
         connectionPart = getEnglishSyllableSuffix(p);
-        if (n.startsWith(connectionPart)) isValid = true;
       } else {
         const prevData = syllableMapRef.current[p];
         if (prevData?.nama) {
           connectionPart = prevData.nama.split(".").pop();
-          if (n.startsWith(connectionPart)) isValid = true;
         } else {
-          for (let len = Math.min(p.length, n.length, 4); len >= 2; len--) {
-            const suffix = p.slice(-len);
-            if (n.startsWith(suffix)) { connectionPart = suffix; isValid = true; break; }
-          }
+          const overlapData = getIndonesianOverlapSuffix(p);
+          connectionPart = overlapData.length > 0 ? overlapData : p.slice(-2);
         }
       }
-      return isValid && n !== connectionPart;
+      return n.startsWith(connectionPart) && n !== connectionPart;
     }
     return false;
   }
@@ -959,7 +982,6 @@ export default function App() {
   }
 
   const hasPossibleAnswer = (startWord) => {
-    // Hapus pembatasan loop (checkCount) agar simulasi masa depan Bot 100% akurat 
     for (const candidate of dictionary) {
       if (usedWordsRef.current.has(candidate) || candidate === startWord) continue;
       if (validateConnection(startWord, candidate)) return true;
@@ -970,7 +992,7 @@ export default function App() {
   const getNewRandomWord = (challenge = null) => {
     if (gameModeRef.current === "PHRASE_CHAIN") {
       const phrases = Array.from(phraseDictionary.current);
-      if (phrases.length === 0) return "word";
+      if (phrases.length === 0) return dictionary.size > 0 ? Array.from(dictionary)[0] : "word";
       return phrases[Math.floor(Math.random() * phrases.length)].split(" ")[0];
     }
     const dictArray = Array.from(dictionary);
@@ -978,12 +1000,11 @@ export default function App() {
     
     let candidates = dictArray.filter((w) => w.length >= 3 && w.length <= 6);
     
-    // Filter kata awal agar lulus cek rule "Dynamic" yang sedang berjalan
     if (challenge) {
       candidates = candidates.filter(w => challenge.check(w));
     }
     if (candidates.length === 0) candidates = dictArray.filter(w => !challenge || challenge.check(w));
-    if (candidates.length === 0) candidates = dictArray; // Fallback darurat
+    if (candidates.length === 0) candidates = dictArray; 
     
     for (let i = 0; i < 50; i++) {
       const choice = candidates[Math.floor(Math.random() * candidates.length)];
@@ -1095,6 +1116,13 @@ export default function App() {
         const lowWord = word.toLowerCase();
         if (lowWord.endsWith('sk')) { stepsToAdvance = 2; addLog("Action", `⏭️ SKIP!`); triggerTableEffect("warning"); playSound("notification"); }
         else if (lowWord.endsWith('bo')) { applyBomb = true; addLog("Action", `💣 BOM WAKTU! (10 Detik)`); triggerTableEffect("error"); playSound("eliminate"); }
+        else if (lowWord.endsWith('rv')) {
+          setIsReversed((prev) => !prev);
+          isReversedRef.current = !isReversedRef.current;
+          addLog("Action", `🔄 PUTAR BALIK!`);
+          triggerTableEffect("info");
+          playSound("notification");
+        }
         else if (lowWord.endsWith('po')) { 
           const len = modifiedPlayers.length;
           const direction = isReversedRef.current ? -1 : 1;
@@ -1251,7 +1279,7 @@ export default function App() {
       const { selected, newQueue } = getNextChallenge(queue, "");
       selectedChallenge = selected;
       setActiveChallenge(selected); 
-      activeChallengeRef.current = selected; // Pastikan referensi ref terupdate instan
+      activeChallengeRef.current = selected;
       setChallengeQueue(newQueue); setTurnCount(0);
       const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
       addLog("System", `Mode: DYNAMIC CHAOS! \nRule: ${label}`);
@@ -1440,12 +1468,9 @@ export default function App() {
     if (e && e.preventDefault) e.preventDefault();
     if (!manualInput.trim()) return;
 
-    // Tambahan Validasi: Hanya bisa kirim saat giliran Host (Jika Host sedang main)
     const currentPlayer = playersRef.current[turnIndexRef.current];
     const isHostTurn = currentPlayer?.uniqueId === "host_player";
     
-    // Untuk simulasi/debugging, Host tetap bisa kirim jika tidak ada turn yang aktif (error state), 
-    // tapi saat game jalan harus mengikuti turn pemain.
     if (gameStateRef.current === "PLAYING") {
       if (!isHostTurn) {
           showFeedback("Bukan Giliran Host!", "warning");
@@ -1506,6 +1531,21 @@ export default function App() {
     if (validWord && players[currentTurnIndex] && !players[currentTurnIndex].isEliminated) {
       handleChatEvent({ uniqueId: players[currentTurnIndex].uniqueId, nickname: players[currentTurnIndex].nickname, comment: validWord });
     } else addLog("Debug", "No valid word found.");
+  };
+
+  // Fungsi Simulasi Efek Visual dari Dev Tools
+  const simulateEffect = (type) => {
+      if (players.length === 0) {
+          showFeedback("Butuh pemain untuk melihat efek", "warning");
+          return;
+      }
+      const randomPlayer = players[Math.floor(Math.random() * players.length)];
+      if (type === 'like') {
+          triggerVisualEffect("like", randomPlayer.uniqueId, { count: 10 });
+      } else {
+          const gifts = ["Mawar", "Singa", "TikTok Universe", "Kopi", "Topi"];
+          triggerVisualEffect("gift", randomPlayer.uniqueId, { giftName: gifts[Math.floor(Math.random() * gifts.length)] });
+      }
   };
 
   const getWinners = () => {
@@ -1688,6 +1728,10 @@ export default function App() {
                     <button onClick={simulateJoin} className="bg-blue-900/60 hover:bg-blue-800 py-3 rounded text-blue-200 border border-blue-800/50 flex flex-col items-center justify-center gap-1.5 transition-colors"><Users className="w-4 h-4" /> <span className="text-[10px] font-bold">Join</span></button>
                     <button onClick={simulateCorrectAnswer} className="bg-green-900/60 hover:bg-green-800 py-3 rounded text-green-200 border border-green-800/50 flex flex-col items-center justify-center gap-1.5 transition-colors"><Gamepad2 className="w-4 h-4" /> <span className="text-[10px] font-bold">Ans</span></button>
                     <button onClick={handleTimeout} className="bg-red-900/60 hover:bg-red-800 py-3 rounded text-red-200 border border-red-800/50 flex flex-col items-center justify-center gap-1.5 transition-colors"><Clock className="w-4 h-4" /> <span className="text-[10px] font-bold">T.O.</span></button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                     <button onClick={() => simulateEffect('like')} className="bg-pink-900/60 hover:bg-pink-800 py-2 rounded text-pink-200 border border-pink-800/50 flex items-center justify-center gap-1 transition-colors"><Heart className="w-3 h-3" /> <span className="text-[10px] font-bold">Spam Like</span></button>
+                     <button onClick={() => simulateEffect('gift')} className="bg-purple-900/60 hover:bg-purple-800 py-2 rounded text-purple-200 border border-purple-800/50 flex items-center justify-center gap-1 transition-colors"><Gift className="w-3 h-3" /> <span className="text-[10px] font-bold">Send Gift</span></button>
                   </div>
                 </div>
               )}
@@ -1902,6 +1946,39 @@ export default function App() {
             const isStarter = player.uniqueId === roundStarterId;
             return (
               <div key={player.uniqueId} className="absolute transition-all duration-500 ease-out flex flex-col items-center justify-center w-24 h-28" style={{ transform: `rotate(${angleDeg}deg) translate(${gameState === "WAITING" ? 140 : 210}px) rotate(-${angleDeg}deg)`, zIndex: isTurn ? 100 : 20 }}>
+                
+                {/* --- RENDER EFEK VISUAL DI SINI --- */}
+                <div className="absolute inset-0 pointer-events-none z-[150]">
+                  {activeEffects.filter(e => e.uniqueId === player.uniqueId).map(effect => {
+                    if (effect.type === 'like') {
+                      return Array.from({ length: effect.count }).map((_, i) => {
+                        const tx = (Math.random() - 0.5) * 80; // Pancaran sumbu X (-40px s/d 40px)
+                        const ty = (Math.random() - 0.5) * 100 - 20; // Pancaran sumbu Y condong ke atas
+                        const delay = Math.random() * 0.4;
+                        return (
+                          <Heart 
+                            key={`${effect.id}-${i}`} 
+                            className="absolute top-1/2 left-1/2 text-rose-500 fill-rose-500 drop-shadow-md w-5 h-5 animate-flurry-heart" 
+                            style={{ '--tx': `${tx}px`, '--ty': `${ty}px`, animationDelay: `${delay}s`, opacity: 0, marginTop: '-10px', transform: 'translate(-50%, -50%)' }} 
+                          />
+                        );
+                      });
+                    }
+                    if (effect.type === 'gift') {
+                      return (
+                        <div key={effect.id} className="absolute top-0 left-1/2 -translate-x-1/2 animate-flurry-gift flex flex-col items-center justify-center pointer-events-none w-[150px]">
+                          <span className="text-4xl drop-shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-bounce">🎁</span>
+                          <span className="text-[10px] font-black text-white bg-gradient-to-r from-pink-600 to-purple-600 px-2 py-0.5 rounded-full border border-pink-400 shadow-xl whitespace-nowrap mt-1 leading-tight text-center">
+                            {effect.giftName}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+                {/* --------------------------------- */}
+
                 <div className={`relative group ${player.isEliminated ? "opacity-60 grayscale" : "opacity-100"}`}>
                   {isTurn && <div className="absolute -inset-2 bg-yellow-400 rounded-full animate-ping opacity-75"></div>}
                   {isKing && <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-xl z-50 animate-bounce drop-shadow-sm">👑</div>}
@@ -2083,32 +2160,6 @@ export default function App() {
         )}
       </div>
 
-      {/* --- RENDER NOTIFIKASI GIFT --- */}
-      {lastEvent && lastEvent.type === "gift" && (
-        <div key={lastEvent.timestamp} className="absolute top-20 right-4 z-40 animate-in slide-in-from-right fade-in duration-300 pointer-events-none max-w-[200px]">
-          <div className="bg-gradient-to-r from-pink-500/80 to-purple-600/80 backdrop-blur-md text-white p-2 rounded-lg border border-pink-400/50 flex items-center gap-3 shadow-xl">
-             <img src={lastEvent.profilePictureUrl || "https://ui-avatars.com/api/?name=User&background=random"} alt="avatar" className="w-8 h-8 rounded-full border-2 border-white/50" />
-             <div className="flex flex-col">
-               <span className="text-xs font-bold truncate">{lastEvent.nickname}</span>
-               <span className="text-[10px] text-pink-200">Kirim: {lastEvent.giftName} 🎁</span>
-             </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- RENDER NOTIFIKASI LIKE / TAP-TAP --- */}
-      {lastEvent && lastEvent.type === "like" && (
-        <div key={`like-${lastEvent.timestamp}`} className="absolute top-36 right-4 z-40 animate-in slide-in-from-right fade-in fade-out duration-700 pointer-events-none max-w-[200px]">
-          <div className="bg-gradient-to-r from-red-500/80 to-rose-600/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full border border-red-400/50 flex items-center gap-2 shadow-lg scale-90 sm:scale-100">
-             <Heart className="w-4 h-4 text-white animate-bounce" fill="currentColor" />
-             <div className="flex flex-col leading-tight">
-               <span className="text-[10px] font-bold truncate">{lastEvent.nickname}</span>
-               <span className="text-[9px] text-red-200">Sent {lastEvent.likeCount} likes</span>
-             </div>
-          </div>
-        </div>
-      )}
-
       <div className="absolute bottom-2 sm:bottom-4 text-center w-full text-slate-500 text-[8px] sm:text-[10px] pointer-events-none z-40">{t("footer")}</div>
       <style>{`
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
@@ -2121,6 +2172,28 @@ export default function App() {
             20%, 40%, 60%, 80% { transform: translateX(5px); }
         }
         .animate-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        
+        /* Animasi Flurry Heart / Likes */
+        @keyframes flurry-heart {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.1); }
+            10% { opacity: 1; transform: translate(calc(-50% + (var(--tx) * 0.2)), calc(-50% + (var(--ty) * 0.2))) scale(1.2); }
+            80% { opacity: 1; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1); }
+            100% { opacity: 0; transform: translate(calc(-50% + (var(--tx) * 1.5)), calc(-50% + (var(--ty) * 1.5) - 20px)) scale(0.5); }
+        }
+        .animate-flurry-heart {
+            animation: flurry-heart 1.5s ease-out forwards;
+        }
+
+        /* Animasi Flurry Gift */
+        @keyframes flurry-gift {
+            0% { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.5); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(-10px) scale(1.1); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(-40px) scale(1); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-60px) scale(0.8); }
+        }
+        .animate-flurry-gift {
+            animation: flurry-gift 3s ease-out forwards;
+        }
       `}</style>
     </div>
   );
