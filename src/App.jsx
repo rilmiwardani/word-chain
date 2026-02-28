@@ -417,7 +417,7 @@ export default function App() {
   const [syllableMap, setSyllableMap] = useState({});
   const [cityMetadata, setCityMetadata] = useState({});
   const [logs, setLogs] = useState([]);
-  const [activeEffects, setActiveEffects] = useState([]); // <-- STATE BARU UNTUK EFEK FLURRY
+  const [activeEffects, setActiveEffects] = useState([]); // <-- STATE BARU UNTUK EFEK FLURRY DAN TOAST
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
 
   const [maxPlayers, setMaxPlayers] = useState(8);
@@ -683,9 +683,18 @@ export default function App() {
         const { event: eventName, data } = JSON.parse(event.data);
         if (eventName === "chat" && chatHandlerRef.current) chatHandlerRef.current(data);
         
-        // Pemicu Animasi Hadiah / Like (di-update untuk mengambil giftPictureUrl)
-        if (eventName === "gift") triggerVisualEffect("gift", data.uniqueId, { giftName: data.giftName, giftPictureUrl: data.giftPictureUrl });
-        if (eventName === "like") triggerVisualEffect("like", data.uniqueId, { count: Math.min(data.likeCount || 1, 5) });
+        // Pemicu Animasi Hadiah / Like dengan menyertakan data user (Nickname & Foto)
+        if (eventName === "gift") triggerVisualEffect("gift", data.uniqueId, { 
+            nickname: data.nickname, 
+            profilePictureUrl: data.profilePictureUrl, 
+            giftName: data.giftName, 
+            giftPictureUrl: data.giftPictureUrl 
+        });
+        if (eventName === "like") triggerVisualEffect("like", data.uniqueId, { 
+            nickname: data.nickname, 
+            profilePictureUrl: data.profilePictureUrl, 
+            count: Math.min(data.likeCount || 1, 5) 
+        });
 
         if (eventName === "tiktok_connected") {
           setConnectionStatus("tiktok_ready");
@@ -1535,14 +1544,17 @@ export default function App() {
 
   // Fungsi Simulasi Efek Visual dari Dev Tools
   const simulateEffect = (type) => {
-      if (players.length === 0) {
-          showFeedback("Butuh pemain untuk melihat efek", "warning");
-          return;
-      }
-      const randomPlayer = players[Math.floor(Math.random() * players.length)];
+      // Pilih secara acak antara Player di game ATAU penonton (non-player)
+      const isPlayer = players.length > 0 && Math.random() > 0.3;
+      const targetUniqueId = isPlayer 
+          ? players[Math.floor(Math.random() * players.length)].uniqueId 
+          : `viewer_${Math.floor(Math.random() * 1000)}`;
+      
+      const targetNickname = isPlayer ? "" : "Penonton Setia";
+      const targetAvatar = isPlayer ? "" : getAvatarUrl(targetUniqueId);
+
       if (type === 'like') {
-          // Menurunkan batas like menjadi maksimal 5 untuk tampilan yang lebih manis
-          triggerVisualEffect("like", randomPlayer.uniqueId, { count: 5 });
+          triggerVisualEffect("like", targetUniqueId, { count: 5, nickname: targetNickname, profilePictureUrl: targetAvatar });
       } else {
           const gifts = [
               { name: "Mawar", pictureUrl: "https://cdn-icons-png.flaticon.com/512/126/126079.png" }, 
@@ -1550,7 +1562,7 @@ export default function App() {
               { name: "TikTok Universe", pictureUrl: "https://cdn-icons-png.flaticon.com/512/3176/3176335.png" }
           ];
           const g = gifts[Math.floor(Math.random() * gifts.length)];
-          triggerVisualEffect("gift", randomPlayer.uniqueId, { giftName: g.name, giftPictureUrl: g.pictureUrl });
+          triggerVisualEffect("gift", targetUniqueId, { giftName: g.name, giftPictureUrl: g.pictureUrl, nickname: targetNickname, profilePictureUrl: targetAvatar });
       }
   };
 
@@ -2169,6 +2181,38 @@ export default function App() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* --- GLOBAL TOAST UNTUK PENONTON (NON-PLAYERS) --- */}
+      <div className="absolute top-24 right-4 z-[120] flex flex-col gap-2 pointer-events-none items-end">
+        {activeEffects.filter(e => !players.some(p => p.uniqueId === e.uniqueId)).map(effect => {
+           if (effect.type === 'like') {
+             return (
+               <div key={effect.id} className="bg-gradient-to-r from-red-500/80 to-rose-600/80 backdrop-blur-md text-white px-3 py-1.5 rounded-full border border-red-400/50 flex items-center gap-2 shadow-lg animate-in slide-in-from-right fade-in fade-out duration-500">
+                  <img src={effect.profilePictureUrl || getAvatarUrl(effect.uniqueId)} alt="avatar" className="w-5 h-5 rounded-full border border-white/50 object-cover bg-slate-900" />
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-[10px] font-bold truncate max-w-[80px]">{effect.nickname || "Penonton"}</span>
+                    <span className="text-[8px] text-red-200">Sent likes <Heart className="w-2.5 h-2.5 inline text-white animate-pulse" fill="currentColor" /></span>
+                  </div>
+               </div>
+             )
+           }
+           if (effect.type === 'gift') {
+             return (
+               <div key={effect.id} className="bg-gradient-to-r from-pink-500/80 to-purple-600/80 backdrop-blur-md text-white p-2 rounded-lg border border-pink-400/50 flex items-center gap-3 shadow-xl animate-in slide-in-from-right fade-in fade-out duration-500">
+                  <img src={effect.profilePictureUrl || getAvatarUrl(effect.uniqueId)} alt="avatar" className="w-8 h-8 rounded-full border-2 border-white/50 object-cover bg-slate-900" />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold truncate max-w-[100px]">{effect.nickname || "Penonton"}</span>
+                    <span className="text-[10px] text-pink-200 flex items-center gap-1">
+                      Kirim: {effect.giftName} 
+                      {effect.giftPictureUrl ? <img src={effect.giftPictureUrl} className="w-4 h-4 object-contain inline" alt="gift" /> : "🎁"}
+                    </span>
+                  </div>
+               </div>
+             )
+           }
+           return null;
+        })}
       </div>
 
       <div className="absolute bottom-2 sm:bottom-4 text-center w-full text-slate-500 text-[8px] sm:text-[10px] pointer-events-none z-40">{t("footer")}</div>
