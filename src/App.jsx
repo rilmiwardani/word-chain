@@ -683,9 +683,9 @@ export default function App() {
         const { event: eventName, data } = JSON.parse(event.data);
         if (eventName === "chat" && chatHandlerRef.current) chatHandlerRef.current(data);
         
-        // Pemicu Animasi Hadiah / Like
-        if (eventName === "gift") triggerVisualEffect("gift", data.uniqueId, { giftName: data.giftName });
-        if (eventName === "like") triggerVisualEffect("like", data.uniqueId, { count: Math.min(data.likeCount || 1, 15) });
+        // Pemicu Animasi Hadiah / Like (di-update untuk mengambil giftPictureUrl)
+        if (eventName === "gift") triggerVisualEffect("gift", data.uniqueId, { giftName: data.giftName, giftPictureUrl: data.giftPictureUrl });
+        if (eventName === "like") triggerVisualEffect("like", data.uniqueId, { count: Math.min(data.likeCount || 1, 5) });
 
         if (eventName === "tiktok_connected") {
           setConnectionStatus("tiktok_ready");
@@ -1541,10 +1541,16 @@ export default function App() {
       }
       const randomPlayer = players[Math.floor(Math.random() * players.length)];
       if (type === 'like') {
-          triggerVisualEffect("like", randomPlayer.uniqueId, { count: 10 });
+          // Menurunkan batas like menjadi maksimal 5 untuk tampilan yang lebih manis
+          triggerVisualEffect("like", randomPlayer.uniqueId, { count: 5 });
       } else {
-          const gifts = ["Mawar", "Singa", "TikTok Universe", "Kopi", "Topi"];
-          triggerVisualEffect("gift", randomPlayer.uniqueId, { giftName: gifts[Math.floor(Math.random() * gifts.length)] });
+          const gifts = [
+              { name: "Mawar", pictureUrl: "https://cdn-icons-png.flaticon.com/512/126/126079.png" }, 
+              { name: "Kopi", pictureUrl: "https://cdn-icons-png.flaticon.com/512/3502/3502601.png" }, 
+              { name: "TikTok Universe", pictureUrl: "https://cdn-icons-png.flaticon.com/512/3176/3176335.png" }
+          ];
+          const g = gifts[Math.floor(Math.random() * gifts.length)];
+          triggerVisualEffect("gift", randomPlayer.uniqueId, { giftName: g.name, giftPictureUrl: g.pictureUrl });
       }
   };
 
@@ -1952,13 +1958,13 @@ export default function App() {
                   {activeEffects.filter(e => e.uniqueId === player.uniqueId).map(effect => {
                     if (effect.type === 'like') {
                       return Array.from({ length: effect.count }).map((_, i) => {
-                        const tx = (Math.random() - 0.5) * 80; // Pancaran sumbu X (-40px s/d 40px)
-                        const ty = (Math.random() - 0.5) * 100 - 20; // Pancaran sumbu Y condong ke atas
+                        const tx = (Math.random() - 0.5) * 60; // Diperkecil radius pancaran agar tidak terlalu lebar
+                        const ty = (Math.random() - 0.5) * 80 - 20; 
                         const delay = Math.random() * 0.4;
                         return (
                           <Heart 
                             key={`${effect.id}-${i}`} 
-                            className="absolute top-1/2 left-1/2 text-rose-500 fill-rose-500 drop-shadow-md w-5 h-5 animate-flurry-heart" 
+                            className="absolute top-1/2 left-1/2 text-rose-500 fill-rose-500 drop-shadow-sm w-4 h-4 animate-flurry-heart" 
                             style={{ '--tx': `${tx}px`, '--ty': `${ty}px`, animationDelay: `${delay}s`, opacity: 0, marginTop: '-10px', transform: 'translate(-50%, -50%)' }} 
                           />
                         );
@@ -1967,7 +1973,12 @@ export default function App() {
                     if (effect.type === 'gift') {
                       return (
                         <div key={effect.id} className="absolute top-0 left-1/2 -translate-x-1/2 animate-flurry-gift flex flex-col items-center justify-center pointer-events-none w-[150px]">
-                          <span className="text-4xl drop-shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-bounce">🎁</span>
+                          {/* Menggunakan Gambar dari TikTok jika tersedia, jika tidak kembali ke Emoji */}
+                          {effect.giftPictureUrl ? (
+                            <img src={effect.giftPictureUrl} alt={effect.giftName} className="w-12 h-12 object-contain drop-shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-bounce" />
+                          ) : (
+                            <span className="text-4xl drop-shadow-[0_0_10px_rgba(236,72,153,0.8)] animate-bounce">🎁</span>
+                          )}
                           <span className="text-[10px] font-black text-white bg-gradient-to-r from-pink-600 to-purple-600 px-2 py-0.5 rounded-full border border-pink-400 shadow-xl whitespace-nowrap mt-1 leading-tight text-center">
                             {effect.giftName}
                           </span>
@@ -2175,10 +2186,10 @@ export default function App() {
         
         /* Animasi Flurry Heart / Likes */
         @keyframes flurry-heart {
-            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.1); }
-            10% { opacity: 1; transform: translate(calc(-50% + (var(--tx) * 0.2)), calc(-50% + (var(--ty) * 0.2))) scale(1.2); }
-            80% { opacity: 1; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(1); }
-            100% { opacity: 0; transform: translate(calc(-50% + (var(--tx) * 1.5)), calc(-50% + (var(--ty) * 1.5) - 20px)) scale(0.5); }
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0); }
+            20% { opacity: 1; transform: translate(calc(-50% + (var(--tx) * 0.5)), calc(-50% + (var(--ty) * 0.5))) scale(1); }
+            80% { opacity: 1; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.8); }
+            100% { opacity: 0; transform: translate(calc(-50% + (var(--tx) * 1.5)), calc(-50% + (var(--ty) * 1.5) - 10px)) scale(0); }
         }
         .animate-flurry-heart {
             animation: flurry-heart 1.5s ease-out forwards;
