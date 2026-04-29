@@ -226,7 +226,7 @@ const getRandomColor = () => {
     return colors[Math.floor(Math.random() * colors.length)];
 };
 
-const getAvatarUrl = (id) => `https://api.dicebear.com/9.x/adventurer/svg�seed=${id}`;
+const getAvatarUrl = (id) => `https://api.dicebear.com/9.x/adventurer/svg?seed=${id}`;
 
 const normalizeWord = (word) => {
     if (typeof word !== "string") return "";
