@@ -136,6 +136,7 @@ export default function App() {
     const scrambleWordRef = useRef(scrambleWord);
     const scrambleWinnerRef = useRef(scrambleWinner);
     const miniGameDragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+    const miniGameOverlayRef = useRef(null);
     const miniGameWordsRef = useRef(["KUCING", "ANJING", "SEPATU", "BENDERA", "PELANGI", "GARUDA", "KAMERA", "PENSIL", "LEMARI", "KERTAS", "BONEKA", "PANGGUNG", "KACAMATA", "BINGKAI", "LUKISAN", "DOMPET", "BANTAL", "GULING", "SELIMUT", "KASUR"]);
     const unplayedMiniGameWordsRef = useRef([]);
 
@@ -180,6 +181,19 @@ export default function App() {
         if (miniGamePos.x === null) {
             setMiniGamePos({ x: rect.left, y: rect.top });
         }
+
+        // Apply fixed positioning directly to DOM for instant response
+        if (miniGameOverlayRef.current) {
+            miniGameOverlayRef.current.style.position = 'fixed';
+            miniGameOverlayRef.current.style.bottom = 'auto';
+            miniGameOverlayRef.current.style.right = 'auto';
+            const initialLeft = miniGamePos.x !== null ? miniGamePos.x : rect.left;
+            const initialTop = miniGamePos.y !== null ? miniGamePos.y : rect.top;
+            miniGameOverlayRef.current.style.left = initialLeft + 'px';
+            miniGameOverlayRef.current.style.top = initialTop + 'px';
+            miniGameDragRef.current.lastX = initialLeft;
+            miniGameDragRef.current.lastY = initialTop;
+        }
         e.stopPropagation();
     };
 
@@ -201,11 +215,22 @@ export default function App() {
             newX = Math.max(0, Math.min(window.innerWidth - 100, newX));
             newY = Math.max(0, Math.min(window.innerHeight - 50, newY));
 
-            setMiniGamePos({ x: newX, y: newY });
+            // Direct DOM update - avoids React re-render on every mousemove
+            if (miniGameOverlayRef.current) {
+                miniGameOverlayRef.current.style.left = newX + 'px';
+                miniGameOverlayRef.current.style.top = newY + 'px';
+            }
+            miniGameDragRef.current.lastX = newX;
+            miniGameDragRef.current.lastY = newY;
         };
 
         const handleMouseUp = () => {
-            miniGameDragRef.current.isDragging = false;
+            if (miniGameDragRef.current.isDragging) {
+                miniGameDragRef.current.isDragging = false;
+                if (miniGameDragRef.current.lastX !== undefined) {
+                    setMiniGamePos({ x: miniGameDragRef.current.lastX, y: miniGameDragRef.current.lastY });
+                }
+            }
         };
 
         document.addEventListener('mousemove', handleMouseMove, { passive: false });
@@ -2592,6 +2617,7 @@ export default function App() {
             {/* --- SCRAMBLE MINIGAME OVERLAY --- */}
             {scrambleWord && (
                 <div
+                    ref={miniGameOverlayRef}
                     className={`z-[90] flex pointer-events-none animate-in slide-in-from-right fade-in duration-500 ${miniGamePos.x !== null ? 'fixed' : 'absolute bottom-24 sm:bottom-32 right-2 sm:right-4'}`}
                     style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
                 >
