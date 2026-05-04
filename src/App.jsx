@@ -624,12 +624,12 @@ export default function App() {
 
                     if (eventName === "tiktok_connected") {
                         setConnectionStatus("tiktok_ready");
-                        addLog("System", `Terkoneksi ke TikTok Live! ðŸŸ¢`);
+                        addLog("System", `Terkoneksi ke TikTok Live! 🟢`);
                         playSound("notification");
                     }
                     if (eventName === "tiktok_disconnected") {
                         setConnectionStatus("ws_only");
-                        addLog("System", `Terputus dari TikTok Live ðŸ”´`);
+                        addLog("System", `Terputus dari TikTok Live 🔴`);
                     }
                 } catch (err) { console.error("WS Error", err); }
             };
@@ -1047,12 +1047,12 @@ export default function App() {
             let modifiedPlayers = [...newPlayersList];
             if (actionCardsEnabledRef.current) {
                 const lowWord = word.toLowerCase();
-                if (lowWord.endsWith('sk')) { stepsToAdvance = 2; addLog("Action", `â­ï¸ SKIP!`); triggerTableEffect("warning"); playSound("notification"); }
-                else if (lowWord.endsWith('bo')) { applyBomb = true; addLog("Action", `ðŸ’?? BOM WAKTU! (10 Detik)`); triggerTableEffect("error"); playSound("eliminate"); }
+                if (lowWord.endsWith('sk')) { stepsToAdvance = 2; addLog("Action", `⏸️ SKIP!`); triggerTableEffect("warning"); playSound("notification"); }
+                else if (lowWord.endsWith('bo')) { applyBomb = true; addLog("Action", `💣?? BOM WAKTU! (10 Detik)`); triggerTableEffect("error"); playSound("eliminate"); }
                 else if (lowWord.endsWith('rv')) {
                     setIsReversed((prev) => !prev);
                     isReversedRef.current = !isReversedRef.current;
-                    addLog("Action", `ðŸ”„ PUTAR BALIK!`);
+                    addLog("Action", `🔄 PUTAR BALIK!`);
                     triggerTableEffect("info");
                     playSound("notification");
                 }
@@ -1069,7 +1069,7 @@ export default function App() {
                         ...modifiedPlayers[nextIdx],
                         score: Math.max(0, (modifiedPlayers[nextIdx].score || 0) - 5)
                     };
-                    addLog("Action", `ðŸ’€ ${modifiedPlayers[nextIdx].nickname} -5 POIN!`);
+                    addLog("Action", `💀 ${modifiedPlayers[nextIdx].nickname} -5 POIN!`);
                     triggerTableEffect("error");
                     playSound("wrong");
                 }
@@ -1091,7 +1091,7 @@ export default function App() {
                     const recovery = findRecoveryWord(word);
                     if (recovery) {
                         setTimeout(() => {
-                            addLog("System", `${t("chain_broken")} ðŸ”—`);
+                            addLog("System", `${t("chain_broken")} 💥`);
                             addLog("System", `${t("reconnecting")}: ...${recovery.suffix} -> ${recovery.word.toUpperCase()}`);
                             triggerTableEffect("info"); playSound("notification"); showFeedback(t("chain_broken"), "info");
                         }, 600);
@@ -1105,7 +1105,7 @@ export default function App() {
             } else if (gameModeRef.current === "MIRROR") {
                 addLog("Game", `âœ… ${word.toUpperCase()} (End: ${word.slice(-overlapLengthRef.current).toUpperCase()})${pts}`);
             } else if (gameModeRef.current === "STEP_UP") {
-                addLog("Game", `âœ… ${word.toUpperCase()} (Len: ${word.length}) âž¡ï¸ Next: ${word.length >= 10 ? "Reset" : word.length + 1}${pts}`);
+                addLog("Game", `âœ… ${word.toUpperCase()} (Len: ${word.length}) ⟡️ Next: ${word.length >= 10 ? "Reset" : word.length + 1}${pts}`);
             } else if (gameModeRef.current === "FILL_BLANK") {
                 addLog("Game", `âœ… ${word.toUpperCase()} (+${pointsAwarded})`);
             } else {
@@ -1168,7 +1168,7 @@ export default function App() {
                         setChallengeQueue(newQueue);
                         challengeQueueRef.current = newQueue;
                         const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
-                        addLog("System", `ðŸš¨ ${t("log_rule_change")}: ${label} ðŸš¨`);
+                        addLog("System", `🚨 ${t("log_rule_change")}: ${label} 🚨`);
                         playSound("tick");
                     }
 
@@ -1177,7 +1177,7 @@ export default function App() {
                         if (nextSeq > 4) nextSeq = 2; // Siklus 2 -> 3 -> 4 -> 2
                         setOverlapLength(nextSeq);
                         overlapLengthRef.current = nextSeq;
-                        addLog("System", `ðŸ”„ Ronde Baru! Syarat Overlap: ${nextSeq} Huruf`);
+                        addLog("System", `🔄 Ronde Baru! Syarat Overlap: ${nextSeq} Huruf`);
                         playSound("notification");
                     }
 
@@ -1394,12 +1394,12 @@ export default function App() {
     function togglePause() {
         if (gameState === "PLAYING") {
             setGameState("PAUSED");
-            addLog("System", "Game Paused â¸ï¸");
+            addLog("System", "Game Paused ⏸️");
             triggerTableEffect("warning");
             playSound("notification");
         } else if (gameState === "PAUSED") {
             setGameState("PLAYING");
-            addLog("System", "Game Resumed â–¶ï¸");
+            addLog("System", "Game Resumed ▶️");
             triggerTableEffect("success");
             playSound("start");
         }
@@ -1408,7 +1408,7 @@ export default function App() {
     function handleOpenPointGuide() {
         if (gameState === "PLAYING") {
             setGameState("PAUSED");
-            addLog("System", "Game Paused â¸ï¸ (Melihat Panduan)");
+            addLog("System", "Game Paused ⏸️ (Melihat Panduan)");
             triggerTableEffect("warning");
             playSound("notification");
         }
@@ -1419,7 +1419,7 @@ export default function App() {
         setShowPointGuide(false);
         if (gameState === "PAUSED") {
             setGameState("PLAYING");
-            addLog("System", "Game Resumed â–¶ï¸");
+            addLog("System", "Game Resumed ▶️");
             triggerTableEffect("success");
             playSound("start");
         }
@@ -1670,7 +1670,7 @@ export default function App() {
             setScrambleWinner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
             playSound("notification");
             triggerTableEffect("info");
-            addLog("MiniGame", `ðŸŽ‰ HOST menebak anagram: ${scrambleWordRef.current}!`);
+            addLog("MiniGame", `🎉 HOST menebak anagram: ${scrambleWordRef.current}!`);
             setTimeout(() => {
                 startNewScramble();
             }, 5000);
