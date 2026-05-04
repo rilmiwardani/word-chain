@@ -69,6 +69,7 @@ export default function App() {
     const [showVirtualKeyboard, setShowVirtualKeyboard] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
     const [settingsTab, setSettingsTab] = useState("rules");
+    const [wsHost, setWsHost] = useState(() => localStorage.getItem("word_chain_ws_host") || "");
     const [dictLoadedInfo, setDictLoadedInfo] = useState("Default (EN)");
 
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -97,6 +98,7 @@ export default function App() {
     const fileInputRef = useRef(null);
     const containerRef = useRef(null);
     const fallbackToLocalhostRef = useRef(false);
+    const wsHostRef = useRef(wsHost);
     const feedbackTimeoutRef = useRef(null);
     const chatHandlerRef = useRef(null);
     const phraseDictionary = useRef(new Set(FALLBACK_PHRASES_EN));
@@ -162,12 +164,30 @@ export default function App() {
         playerQueueRef.current = playerQueue;
         scrambleWordRef.current = scrambleWord;
         scrambleWinnerRef.current = scrambleWinner;
+        wsHostRef.current = wsHost;
     }, [
         players, currentTurnIndex, turnDuration, usedWords, syllableMap, isMuted,
         cityMetadata, challengeQueue, language, gameMode, currentWord, targetRhyme,
-        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner
+        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner, wsHost
     ]);
 
+
+    const handleWsHostChange = (e) => {
+        const val = e.target.value.trim();
+        setWsHost(val);
+        wsHostRef.current = val;
+        localStorage.setItem("word_chain_ws_host", val);
+    };
+
+    const handleReconnectWebSocket = () => {
+        if (wsRef.current) {
+            wsRef.current.onclose = null;
+            wsRef.current.close();
+        }
+        setConnectionStatus("disconnected");
+        fallbackToLocalhostRef.current = false;
+        setTimeout(connectWebSocket, 500);
+    };
 
     const handleMiniGameDragStart = (e) => {
         miniGameDragRef.current.isDragging = true;
@@ -596,7 +616,12 @@ export default function App() {
     };
 
     const connectWebSocket = () => {
-        const hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
+        let hostname;
+        if (wsHostRef.current && wsHostRef.current.trim()) {
+            hostname = wsHostRef.current.trim();
+        } else {
+            hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
+        }
         const url = `ws://${hostname}:62024`;
         try {
             wsRef.current = new WebSocket(url);
@@ -1996,6 +2021,27 @@ export default function App() {
                                         <div className="flex items-center gap-2"><Globe className="w-3 h-3 text-sky-400" /><span className="text-slate-300">{t("language")}</span></div>
                                         <span className="text-slate-100 group-hover:text-sky-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix"}</span>
                                     </button>
+                                    <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
+                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">WebSocket Server</div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={wsHost}
+                                                onChange={handleWsHostChange}
+                                                placeholder={window.location.hostname || "localhost"}
+                                                className="flex-1 bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono"
+                                            />
+                                            <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap">:62024</span>
+                                            <button
+                                                onClick={handleReconnectWebSocket}
+                                                className="bg-sky-900/50 hover:bg-sky-800/50 p-1.5 rounded border border-sky-800 text-sky-400 transition-colors"
+                                                title="Reconnect WebSocket"
+                                            >
+                                                <RefreshCw className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                        <div className="text-[9px] text-slate-500">Kosongkan untuk pakai hostname saat ini</div>
+                                    </div>
                                     <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
                                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Kamus (Dictionary)</div>
                                         <div className="flex items-center justify-between gap-2 text-xs">
