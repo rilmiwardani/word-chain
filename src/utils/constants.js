@@ -9,7 +9,7 @@ const TRANSLATIONS = {
         language: "Language", end_condition: "End Condition", turn_time: "Turn Time",
         players: "Players", load_json: "Load JSON", add_host: "+Host", add_bot: "+Bot",
         mode: "Mode", start_game: "START GAME", reset_game: "RESET GAME", simulation: "Simulation",
-        footer: "Use !join to play â€¢ !unjoin to leave â€¢ !surrend to give up",
+        footer: "Use !join to play • !unjoin to leave • !surrend to give up",
         supporter: "Supporter", sent: "sent", log_invalid: "invalid word",
         log_used: "already used", log_bad_link: "bad link", log_correct: "Correct!",
         log_eliminated: "eliminated!", log_joined: "joined!", log_stumped: "is stumped!",
@@ -36,7 +36,7 @@ const TRANSLATIONS = {
         language: "Bahasa", end_condition: "End Condition", turn_time: "Waktu Giliran",
         players: "Pemain", load_json: "Muat JSON", add_host: "+Host", add_bot: "+Bot",
         mode: "Mode", start_game: "MULAI GAME", reset_game: "RESET GAME", simulation: "Simulasi",
-        footer: "Ketik !join (main) â€¢ !unjoin (keluar) â€¢ !surrend (nyerah)",
+        footer: "Ketik !join (main) • !unjoin (keluar) • !surrend (nyerah)",
         supporter: "Pendukung", sent: "mengirim", log_invalid: "tidak ada di kamus",
         log_used: "sudah dipakai", log_bad_link: "tidak nyambung", log_correct: "Benar!",
         log_eliminated: "tereliminasi!", log_joined: "bergabung!", log_stumped: "bingung!",
@@ -173,39 +173,39 @@ const FALLBACK_CITIES = [
 
 const DYNAMIC_CHALLENGES = [
     // Tier 1 (Mudah)
-    { id: "MIN_5", label: "ðŸ“ Min 5 Letters", labelID: "ðŸ“ Min 5 Huruf", check: (w) => w.length >= 5, tier: 1 },
-    { id: "MAX_5", label: "ðŸ“ Max 5 Letters", labelID: "ðŸ“ Maks 5 Huruf", check: (w) => w.length <= 5, tier: 1 },
-    { id: "ODD", label: "1ï¸âƒ£3ï¸âƒ£5ï¸âƒ£ Odd Length", labelID: "1ï¸âƒ£3ï¸âƒ£5ï¸âƒ£ Panjang Ganjil", check: (w) => w.length % 2 !== 0, tier: 1 },
-    { id: "EVEN", label: "2ï¸âƒ£4ï¸âƒ£6ï¸âƒ£ Even Length", labelID: "2ï¸âƒ£4ï¸âƒ£6ï¸âƒ£ Panjang Genap", check: (w) => w.length % 2 === 0, tier: 1 },
-    { id: "EXACT_4", label: "ðŸ“ Exactly 4 Letters", labelID: "ðŸ“ Tepat 4 Huruf", check: (w) => w.length === 4, tier: 1 },
+    { id: "MIN_5", label: "📏 Min 5 Letters", labelID: "📏 Min 5 Huruf", check: (w) => w.length >= 5, tier: 1 },
+    { id: "MAX_5", label: "📏 Max 5 Letters", labelID: "📏 Maks 5 Huruf", check: (w) => w.length <= 5, tier: 1 },
+    { id: "ODD", label: "1️⃣3️⃣5️⃣ Odd Length", labelID: "1️⃣3️⃣5️⃣ Panjang Ganjil", check: (w) => w.length % 2 !== 0, tier: 1 },
+    { id: "EVEN", label: "2️⃣4ï¸âƒ£6️⃣ Even Length", labelID: "2️⃣4ï¸âƒ£6️⃣ Panjang Genap", check: (w) => w.length % 2 === 0, tier: 1 },
+    { id: "EXACT_4", label: "📏 Exactly 4 Letters", labelID: "📏 Tepat 4 Huruf", check: (w) => w.length === 4, tier: 1 },
 
     // Tier 2 (Menengah)
-    { id: "HAS_DOUBLE", label: "ðŸ‘¯ Double Letters", labelID: "ðŸ‘¯ Ada Huruf Ganda", check: (w) => /(.)\1/.test(w), tier: 2 },
-    { id: "END_VOWEL", label: "ðŸ”¤ End: Vowel", labelID: "ðŸ”¤ Akhir: Vokal", check: (w) => /[aeiou]$/i.test(w), tier: 2 },
-    { id: "END_CONS", label: "ðŸ”¤ End: Consonant", labelID: "ðŸ”¤ Akhir: Konsonan", check: (w) => /[^aeiou]$/i.test(w), tier: 2 },
-    { id: "NO_S_R", label: "ðŸš« No 'S' or 'R'", labelID: "ðŸš« Tanpa 'S' atau 'R'", check: (w) => !/[sr]/i.test(w), tier: 2 },
-    { id: "EXACT_6", label: "ðŸ“ Exactly 6 Letters", labelID: "ðŸ“ Tepat 6 Huruf", check: (w) => w.length === 6, tier: 2 },
-    { id: "START_END_CONS", label: "ðŸ§± Consonant Ends", labelID: "ðŸ§± Awal & Akhir Konsonan", check: (w) => w.length > 1 && /^[^aeiou].*[^aeiou]$/i.test(w), tier: 2 },
-    { id: "HAS_CONSECUTIVE_VOWELS", label: "ðŸ…°ï¸ðŸ…¾ï¸ Consecutive Vowels", labelID: "ðŸ…°ï¸ðŸ…¾ï¸ Vokal Beruntun", check: (w) => /[aeiou]{2}/i.test(w), tier: 2 },
+    { id: "HAS_DOUBLE", label: "👯 Double Letters", labelID: "👯 Ada Huruf Ganda", check: (w) => /(.)\1/.test(w), tier: 2 },
+    { id: "END_VOWEL", label: "🔤 End: Vowel", labelID: "🔤 Akhir: Vokal", check: (w) => /[aeiou]$/i.test(w), tier: 2 },
+    { id: "END_CONS", label: "🔤 End: Consonant", labelID: "🔤 Akhir: Konsonan", check: (w) => /[^aeiou]$/i.test(w), tier: 2 },
+    { id: "NO_S_R", label: "🚫 No 'S' or 'R'", labelID: "🚫 Tanpa 'S' atau 'R'", check: (w) => !/[sr]/i.test(w), tier: 2 },
+    { id: "EXACT_6", label: "📏 Exactly 6 Letters", labelID: "📏 Tepat 6 Huruf", check: (w) => w.length === 6, tier: 2 },
+    { id: "START_END_CONS", label: "🧱 Consonant Ends", labelID: "🧱 Awal & Akhir Konsonan", check: (w) => w.length > 1 && /^[^aeiou].*[^aeiou]$/i.test(w), tier: 2 },
+    { id: "HAS_CONSECUTIVE_VOWELS", label: "🅰️🅾️ Consecutive Vowels", labelID: "🅰️🅾️ Vokal Beruntun", check: (w) => /[aeiou]{2}/i.test(w), tier: 2 },
 
     // Tier 3 (Sulit)
-    { id: "NO_A_I", label: "ðŸš« No 'A' or 'I'", labelID: "ðŸš« Tanpa 'A' atau 'I'", check: (w) => !/[ai]/i.test(w), tier: 3 },
-    { id: "NO_E_O", label: "ðŸš« No 'E' or 'O'", labelID: "ðŸš« Tanpa 'E' atau 'O'", check: (w) => !/[eo]/i.test(w), tier: 3 },
-    { id: "MAX_1_VOWEL", label: "1ï¸âƒ£ Max 1 Vowel", labelID: "1ï¸âƒ£ Maks 1 Vokal", check: (w) => (w.match(/[aeiou]/gi) || []).length <= 1, tier: 3 },
-    { id: "MUST_3_VOWELS", label: "ðŸ”¤ Min 3 Vowels", labelID: "ðŸ”¤ Min 3 Vokal", check: (w) => (w.match(/[aeiou]/gi) || []).length >= 3, tier: 3 },
-    { id: "MIN_7", label: "ðŸ“ Min 7 Letters", labelID: "ðŸ“ Min 7 Huruf", check: (w) => w.length >= 7, tier: 3 },
-    { id: "EXACT_2_VOWELS", label: "2ï¸âƒ£ Exactly 2 Vowels", labelID: "2ï¸âƒ£ Tepat 2 Vokal", check: (w) => (w.match(/[aeiou]/gi) || []).length === 2, tier: 3 },
-    { id: "NO_E", label: "ðŸš« No 'E' (Hard)", labelID: "ðŸš« Tanpa Huruf 'E'", check: (w) => !/e/i.test(w), tier: 3 },
-    { id: "NO_A", label: "ðŸš« No 'A' (Hard)", labelID: "ðŸš« Tanpa Huruf 'A'", check: (w) => !/a/i.test(w), tier: 3 },
+    { id: "NO_A_I", label: "🚫 No 'A' or 'I'", labelID: "🚫 Tanpa 'A' atau 'I'", check: (w) => !/[ai]/i.test(w), tier: 3 },
+    { id: "NO_E_O", label: "🚫 No 'E' or 'O'", labelID: "🚫 Tanpa 'E' atau 'O'", check: (w) => !/[eo]/i.test(w), tier: 3 },
+    { id: "MAX_1_VOWEL", label: "1️⃣ Max 1 Vowel", labelID: "1️⃣ Maks 1 Vokal", check: (w) => (w.match(/[aeiou]/gi) || []).length <= 1, tier: 3 },
+    { id: "MUST_3_VOWELS", label: "🔤 Min 3 Vowels", labelID: "🔤 Min 3 Vokal", check: (w) => (w.match(/[aeiou]/gi) || []).length >= 3, tier: 3 },
+    { id: "MIN_7", label: "📏 Min 7 Letters", labelID: "📏 Min 7 Huruf", check: (w) => w.length >= 7, tier: 3 },
+    { id: "EXACT_2_VOWELS", label: "2️⃣ Exactly 2 Vowels", labelID: "2️⃣ Tepat 2 Vokal", check: (w) => (w.match(/[aeiou]/gi) || []).length === 2, tier: 3 },
+    { id: "NO_E", label: "🚫 No 'E' (Hard)", labelID: "🚫 Tanpa Huruf 'E'", check: (w) => !/e/i.test(w), tier: 3 },
+    { id: "NO_A", label: "🚫 No 'A' (Hard)", labelID: "🚫 Tanpa Huruf 'A'", check: (w) => !/a/i.test(w), tier: 3 },
 
     // Tier 4 (Ekstrem / Chaos)
-    { id: "NO_VOWELS", label: "ðŸ’€ No Vowels (Abbr)", labelID: "ðŸ’€ Tanpa Vokal (Singkatan)", check: (w) => !/[aeiou]/i.test(w), tier: 4 },
-    { id: "SAME_START_END", label: "ðŸ”„ Start = End", labelID: "ðŸ”„ Awal = Akhir", check: (w) => w.length > 1 && w[0].toLowerCase() === w[w.length - 1].toLowerCase(), tier: 4 },
-    { id: "UNIQUE", label: "ðŸŒŸ Unique Letters Only", labelID: "ðŸŒŸ Huruf Unik Saja", check: (w) => new Set(w).size === w.length, tier: 4 },
-    { id: "SECOND_VOWEL", label: "ðŸ”¤ 2nd Letter: Vowel", labelID: "ðŸ”¤ Huruf Ke-2: Vokal", check: (w) => w.length > 1 && /[aeiou]/.test(w[1]), tier: 4 },
-    { id: "CONTAINS_Y_Z_X", label: "ðŸ”  Contains Y, Z, or X", labelID: "ðŸ”  Mengandung Y, Z, atau X", check: (w) => /[yzx]/i.test(w), tier: 4 },
-    { id: "HAS_CONSECUTIVE_CONS", label: "ðŸ§± 3+ Consonants in Row", labelID: "ðŸ§± 3+ Konsonan Beruntun", check: (w) => /[^aeiou]{3}/i.test(w), tier: 4 },
-    { id: "MIDDLE_VOWEL", label: "ðŸŽ¯ Middle Letter is Vowel", labelID: "ðŸŽ¯ Huruf Tengah Vokal", check: (w) => w.length % 2 !== 0 && /[aeiou]/i.test(w[Math.floor(w.length / 2)]), tier: 4 }
+    { id: "NO_VOWELS", label: "💀 No Vowels (Abbr)", labelID: "💀 Tanpa Vokal (Singkatan)", check: (w) => !/[aeiou]/i.test(w), tier: 4 },
+    { id: "SAME_START_END", label: "🔄 Start = End", labelID: "🔄 Awal = Akhir", check: (w) => w.length > 1 && w[0].toLowerCase() === w[w.length - 1].toLowerCase(), tier: 4 },
+    { id: "UNIQUE", label: "🌟 Unique Letters Only", labelID: "🌟 Huruf Unik Saja", check: (w) => new Set(w).size === w.length, tier: 4 },
+    { id: "SECOND_VOWEL", label: "🔤 2nd Letter: Vowel", labelID: "🔤 Huruf Ke-2: Vokal", check: (w) => w.length > 1 && /[aeiou]/.test(w[1]), tier: 4 },
+    { id: "CONTAINS_Y_Z_X", label: "🔠 Contains Y, Z, or X", labelID: "🔠 Mengandung Y, Z, atau X", check: (w) => /[yzx]/i.test(w), tier: 4 },
+    { id: "HAS_CONSECUTIVE_CONS", label: "🧱 3+ Consonants in Row", labelID: "🧱 3+ Konsonan Beruntun", check: (w) => /[^aeiou]{3}/i.test(w), tier: 4 },
+    { id: "MIDDLE_VOWEL", label: "🎯 Middle Letter is Vowel", labelID: "🎯 Huruf Tengah Vokal", check: (w) => w.length % 2 !== 0 && /[aeiou]/i.test(w[Math.floor(w.length / 2)]), tier: 4 }
 ];
 
 const BOT_PROFILES = [
