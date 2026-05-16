@@ -352,6 +352,7 @@ async function connectToTikTok(uniqueId) {
     // If sessionId is provided, use authenticated connection (reads underage accounts)
     if (tiktokSessionId) {
       connOptions.sessionId = tiktokSessionId;
+      connOptions.ttTargetIdc = "alisg"; // Required by tiktok-live-connector when sessionId is set
       console.log(`[TikTok] Using authenticated session (sessionId set) ✅`);
     } else {
       console.log(`[TikTok] ⚠️  No sessionId — underage account comments may not be visible.`);
