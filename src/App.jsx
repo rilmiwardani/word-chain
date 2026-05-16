@@ -48,6 +48,7 @@ export default function App() {
     const [allStats, setAllStats] = useState([]);
     const [activeChallenge, setActiveChallenge] = useState(null);
     const [turnCount, setTurnCount] = useState(0);
+    const turnCountRef = useRef(0);
     const [challengeQueue, setChallengeQueue] = useState([]);
     const [turnKey, setTurnKey] = useState(0);
 
@@ -756,9 +757,43 @@ export default function App() {
         playSound("win");
     }
 
-    function advanceTurn(currentPlayersList, startIndex, steps = 1) {
+    function advanceTurn(currentPlayersList, startIndex, steps = 1, currentWordOverride = null) {
         const len = currentPlayersList.length;
         if (len === 0) return;
+
+        const activeCount = currentPlayersList.filter(p => !p.isEliminated).length;
+        turnCountRef.current += 1;
+        
+        if (turnCountRef.current >= Math.max(1, activeCount)) {
+            turnCountRef.current = 0;
+            const wordToUse = currentWordOverride !== null ? currentWordOverride : (currentWordRef.current || "");
+            
+            if (gameModeRef.current === "DYNAMIC" && gameStateRef.current !== "ENDED") {
+                const suffix = wordToUse.slice(-overlapLengthRef.current).toLowerCase();
+                const { selected, newQueue } = getNextChallenge(challengeQueueRef.current, suffix);
+                setActiveChallenge(selected);
+                activeChallengeRef.current = selected;
+                setChallengeQueue(newQueue);
+                challengeQueueRef.current = newQueue;
+                const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
+                addLog("System", `🚨 ${t("log_rule_change")}: ${label} 🚨`);
+                playSound("tick");
+            }
+
+            if (overlapModeRef.current === "SEQUENTIAL" && gameModeRef.current !== "FILL_BLANK") {
+                let nextSeq = overlapLengthRef.current + 1;
+                if (nextSeq > 4) nextSeq = 2; // Siklus 2 -> 3 -> 4 -> 2
+                setOverlapLength(nextSeq);
+                overlapLengthRef.current = nextSeq;
+                addLog("System", `🔄 Ronde Baru! Syarat Overlap: ${nextSeq} Huruf`);
+                playSound("notification");
+            }
+
+            if (gameModeRef.current === "RHYME") {
+                setTimeout(changeRhymeTarget, 800);
+            }
+        }
+
         let nextIndex = startIndex; let stepsTaken = 0; let attempts = 0;
         const direction = isReversedRef.current ? -1 : 1;
         while (stepsTaken < steps && attempts < len * 2) {
@@ -1195,42 +1230,9 @@ export default function App() {
             lastSuccessfulPlayerIdRef.current = modifiedPlayers[playerIndex].uniqueId;
 
             if (!gameEnded) {
-                const activePlayersCount = modifiedPlayers.filter(pl => !pl.isEliminated).length;
-                const isRoundFinished = (turnCount + 1) >= Math.max(1, activePlayersCount);
-
-                if (isRoundFinished) {
-                    if (gameModeRef.current === "DYNAMIC" && gameStateRef.current !== "ENDED") {
-                        const suffix = word.slice(-overlapLengthRef.current).toLowerCase();
-                        const { selected, newQueue } = getNextChallenge(challengeQueueRef.current, suffix);
-                        setActiveChallenge(selected);
-                        activeChallengeRef.current = selected;
-                        setChallengeQueue(newQueue);
-                        challengeQueueRef.current = newQueue;
-                        const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
-                        addLog("System", `🚨 ${t("log_rule_change")}: ${label} 🚨`);
-                        playSound("tick");
-                    }
-
-                    if (overlapModeRef.current === "SEQUENTIAL" && gameModeRef.current !== "FILL_BLANK") {
-                        let nextSeq = overlapLengthRef.current + 1;
-                        if (nextSeq > 4) nextSeq = 2; // Siklus 2 -> 3 -> 4 -> 2
-                        setOverlapLength(nextSeq);
-                        overlapLengthRef.current = nextSeq;
-                        addLog("System", `🔄 Ronde Baru! Syarat Overlap: ${nextSeq} Huruf`);
-                        playSound("notification");
-                    }
-
-                    if (gameModeRef.current === "RHYME") {
-                        setTimeout(changeRhymeTarget, 800);
-                    }
-
-                    setTurnCount(0);
-                } else {
-                    setTurnCount(turnCount + 1);
-                }
-
                 setCurrentWord(nextWord);
-                advanceTurn(modifiedPlayers, playerIndex, stepsToAdvance);
+                currentWordRef.current = nextWord;
+                advanceTurn(modifiedPlayers, playerIndex, stepsToAdvance, nextWord);
             } else {
                 setCurrentWord(nextWord);
                 handleWin(winnersToDeclare);
@@ -1427,7 +1429,7 @@ export default function App() {
         setPlayers((prev) => prev.map((p) => ({ ...p, isEliminated: false, score: 0, turnCount: 0, sessionKills: 0 })));
         setUsedWords(new Set()); setCurrentWord(""); setTargetRhyme(""); setGlobalTimer(null);
         setRoundStarterId(null); lastSuccessfulPlayerIdRef.current = null; setTimer(turnDuration);
-        bombNextRef.current = false; setIsReversed(false); addLog("System", t("log_reset"));
+        bombNextRef.current = false; setIsReversed(false); turnCountRef.current = 0; addLog("System", t("log_reset"));
     }
 
     function togglePause() {
@@ -1469,7 +1471,7 @@ export default function App() {
         setPlayerQueue([]); playerQueueRef.current = [];
         usedWordsRef.current = new Set(); setCurrentWord(""); setTargetRhyme(""); setGlobalTimer(null);
         setRoundStarterId(null); lastSuccessfulPlayerIdRef.current = null; setTimer(turnDuration);
-        setTurnCount(0); setActiveChallenge(null); setChallengeQueue([]); quitHistoryRef.current = {};
+        setTurnCount(0); turnCountRef.current = 0; setActiveChallenge(null); setChallengeQueue([]); quitHistoryRef.current = {};
         bombNextRef.current = false; setIsReversed(false); addLog("System", t("log_lobby_cleared")); playSound("eliminate");
         setWaitingCountdown(null);
     }
