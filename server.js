@@ -353,6 +353,7 @@ async function connectToTikTok(uniqueId) {
     if (tiktokSessionId) {
       connOptions.sessionId = tiktokSessionId;
       connOptions.ttTargetIdc = "alisg"; // Required by tiktok-live-connector when sessionId is set
+      connOptions.authenticateWs = true; // MUST be true so WebSocket receives restricted messages
       console.log(`[TikTok] Using authenticated session (sessionId set) ✅`);
     } else {
       console.log(`[TikTok] ⚠️  No sessionId — underage account comments may not be visible.`);
