@@ -583,10 +583,10 @@ export default function App() {
 
 
     useEffect(() => {
-        fetch("/dictionary.json")
-            .then((res) => { if (!res.ok) throw new Error("Not found"); return res.json(); })
-            .then((data) => {
-                const rawWords = Object.keys(data);
+        fetch("/dictionary.txt")
+            .then((res) => { if (!res.ok) throw new Error("Not found"); return res.text(); })
+            .then((text) => {
+                const rawWords = text.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0);
                 const cleanedWords = rawWords.filter((w) => !w.includes(" ")).map((w) => normalizeWord(w)).filter((w) => w.length > 0);
                 const newDict = new Set(cleanedWords);
                 setDictionary(newDict);
@@ -1571,7 +1571,7 @@ export default function App() {
                 let rawEn = FALLBACK_DICTIONARY_EN; let rawId = new Set(Object.keys(FALLBACK_DICTIONARY_ID_DATA));
                 let pSet = new Set([...FALLBACK_PHRASES_EN, ...FALLBACK_PHRASES_ID]);
                 let mixSMap = {};
-                try { const resEn = await fetch("/dictionary.json"); if (resEn.ok) rawEn = new Set((Array.isArray(await resEn.clone().json()) ? await resEn.json() : Object.keys(await resEn.json())).map(normalizeWord).filter(w => w.length > 0)); } catch (e) { }
+                try { const resEn = await fetch("/dictionary.txt"); if (resEn.ok) { const txt = await resEn.text(); rawEn = new Set(txt.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0 && !w.includes(" ")).map(normalizeWord).filter(w => w.length > 0)); } } catch (e) { }
                 try {
                     const resId = await fetch("/kamus.json");
                     if (resId.ok) {
@@ -1610,12 +1610,13 @@ export default function App() {
             loadMix();
         } else {
             if (!forceReload) addLog("System", "Switching to English...");
-            fetch("/dictionary.json").then((res) => res.json()).then((data) => {
-                let rawWords = Array.isArray(data) ? data : Object.keys(data); let phraseSet = new Set(FALLBACK_PHRASES_EN);
+            fetch("/dictionary.txt").then((res) => { if (!res.ok) throw new Error(); return res.text(); }).then((text) => {
+                const rawWords = text.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0);
+                let phraseSet = new Set(FALLBACK_PHRASES_EN);
                 const cleanedWords = rawWords.filter((w) => { if (w.includes(" ")) { phraseSet.add(w.toLowerCase()); return false; } return true; }).map(normalizeWord).filter(w => w.length > 0);
                 const newDict = new Set(cleanedWords);
-                setDictionary(newDict); setSyllableMap({}); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Dictionary.json (${cleanedWords.length})`);
-                dictionaryCache.current.EN = { dict: newDict, syl: {}, phrases: phraseSet, info: `Dictionary.json (${cleanedWords.length})` };
+                setDictionary(newDict); setSyllableMap({}); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Dictionary.txt (${cleanedWords.length})`);
+                dictionaryCache.current.EN = { dict: newDict, syl: {}, phrases: phraseSet, info: `Dictionary.txt (${cleanedWords.length})` };
             }).catch(() => {
                 setDictionary(FALLBACK_DICTIONARY_EN); setSyllableMap({}); phraseDictionary.current = new Set(FALLBACK_PHRASES_EN);
                 setDictLoadedInfo("Default (EN)"); dictionaryCache.current.EN = { dict: FALLBACK_DICTIONARY_EN, syl: {}, phrases: new Set(FALLBACK_PHRASES_EN), info: "Default (EN)" };
