@@ -13,6 +13,7 @@ import { TRANSLATIONS, TIER_LEVELS, getPlayerTier, FALLBACK_DICTIONARY_EN, FALLB
 // ==========================================
 import { PlayerTimer, GlobalTimer } from "./components/Timers";
 import { getIndonesianOverlapSuffix, getSuffixOrRule, getRecoverySuffix, getRuleDisplay, getDisplayParts, validateConnection } from "./utils/gameLogic";
+import MusicPlayer from "./components/MusicPlayer";
 // 3. MAIN COMPONENT
 // ==========================================
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
 
     const [actionCardsEnabled, setActionCardsEnabled] = useState(false);
     const [pointMode, setPointMode] = useState("OFF"); // OFF, LENGTH, SCRABBLE, VOWELS
+    const [musicState, setMusicState] = useState(null);
 
     const [isReversed, setIsReversed] = useState(false);
     const [overlapLength, setOverlapLength] = useState(1);
@@ -47,6 +49,7 @@ export default function App() {
     const [activeChallenge, setActiveChallenge] = useState(null);
     const [turnCount, setTurnCount] = useState(0);
     const [challengeQueue, setChallengeQueue] = useState([]);
+    const [turnKey, setTurnKey] = useState(0);
 
     const [gameDuration, setGameDuration] = useState(60);
     const [targetScore, setTargetScore] = useState(50);
@@ -57,6 +60,7 @@ export default function App() {
 
     const [dictionary, setDictionary] = useState(FALLBACK_DICTIONARY_EN);
     const [syllableMap, setSyllableMap] = useState({});
+    const [tiktokUsername, setTiktokUsername] = useState("");
     const [cityMetadata, setCityMetadata] = useState({});
     const [logs, setLogs] = useState([]);
     const [activeEffects, setActiveEffects] = useState([]);
@@ -652,6 +656,9 @@ export default function App() {
                         addLog("System", `Terkoneksi ke TikTok Live! 🟢`);
                         playSound("notification");
                     }
+                    if (eventName === "music_state") {
+                        setMusicState(data);
+                    }
                     if (eventName === "tiktok_disconnected") {
                         setConnectionStatus("ws_only");
                         addLog("System", `Terputus dari TikTok Live 🔴`);
@@ -760,6 +767,7 @@ export default function App() {
             attempts++;
         }
         setCurrentTurnIndex(nextIndex);
+        setTurnKey(k => k + 1);
     }
 
     function handleTimeout() {
@@ -971,17 +979,17 @@ export default function App() {
             if (idx !== -1) playerIndex = idx;
         }
         if (gameModeRef.current !== "PHRASE_CHAIN" && !dictionary.has(word)) {
-            addLog("Game", `âŒ "${word}" ${t("log_invalid")}.`);
+            addLog("Game", `❌ "${word}" ${t("log_invalid")}.`);
             playSound("wrong"); triggerTableEffect("error"); showFeedback(`${word} ${t("log_invalid")}`, "error");
             return;
         }
         if (usedWordsRef.current.has(word)) {
-            addLog("Game", `âŒ "${word}" ${t("log_used")}.`);
+            addLog("Game", `❌ "${word}" ${t("log_used")}.`);
             playSound("wrong"); triggerTableEffect("warning"); showFeedback(`${word} ${t("log_used")}`, "warning");
             return;
         }
         if (maxWordLengthRef.current > 0 && word.length > maxWordLengthRef.current) {
-            addLog("Game", `âŒ "${word}" kepanjangan (Maks ${maxWordLengthRef.current}).`);
+            addLog("Game", `❌ "${word}" kepanjangan (Maks ${maxWordLengthRef.current}).`);
             playSound("wrong"); triggerTableEffect("error"); showFeedback(`Maksimal ${maxWordLengthRef.current} huruf`, "error");
             return;
         }
@@ -1090,11 +1098,17 @@ export default function App() {
                         nextIdx = (nextIdx + direction + len) % len;
                         attempts++;
                     }
-                    modifiedPlayers[nextIdx] = {
-                        ...modifiedPlayers[nextIdx],
-                        score: Math.max(0, (modifiedPlayers[nextIdx].score || 0) - 5)
-                    };
-                    addLog("Action", `💀 ${modifiedPlayers[nextIdx].nickname} -5 POIN!`);
+                    if (isScoreMode()) {
+                        modifiedPlayers[nextIdx] = {
+                            ...modifiedPlayers[nextIdx],
+                            score: Math.max(0, (modifiedPlayers[nextIdx].score || 0) - 5)
+                        };
+                        addLog("Action", `💀 ${modifiedPlayers[nextIdx].nickname} -5 POIN!`);
+                    } else {
+                        // In non-score mode, PO acts as a half-time bomb
+                        applyBomb = true;
+                        addLog("Action", `💀 RACUN! ${modifiedPlayers[nextIdx].nickname} waktu dipotong!`);
+                    }
                     triggerTableEffect("error");
                     playSound("wrong");
                 }
@@ -1109,9 +1123,9 @@ export default function App() {
             }
 
             if (gameModeRef.current === "CITIES") {
-                addLog("Game", `âœ… ${word.toUpperCase()} ${cityMetadataRef.current[word] ? `(${cityMetadataRef.current[word]}) ` : ""}${pts}`);
+                addLog("Game", `✅ ${word.toUpperCase()} ${cityMetadataRef.current[word] ? `(${cityMetadataRef.current[word]}) ` : ""}${pts}`);
             } else if (gameModeRef.current === "PHRASE_CHAIN") {
-                addLog("Game", `âœ… ${prevWord.toUpperCase()} -> ${word.toUpperCase()}${pts}`);
+                addLog("Game", `✅ ${prevWord.toUpperCase()} -> ${word.toUpperCase()}${pts}`);
                 if (!wordStartsPhrase(word)) {
                     const recovery = findRecoveryWord(word);
                     if (recovery) {
@@ -1124,20 +1138,20 @@ export default function App() {
                     }
                 }
             } else if (gameModeRef.current === "RHYME") {
-                addLog("Game", `âœ… ${word.toUpperCase()} (...${targetRhymeRef.current.toUpperCase()})${pts}`);
+                addLog("Game", `✅ ${word.toUpperCase()} (...${targetRhymeRef.current.toUpperCase()})${pts}`);
             } else if (gameModeRef.current === "WRAP_AROUND") {
-                addLog("Game", `âœ… ${word.toUpperCase()} (${word.slice(0, overlapLengthRef.current).toUpperCase()}...${word.slice(-overlapLengthRef.current).toUpperCase()})${pts}`);
+                addLog("Game", `✅ ${word.toUpperCase()} (${word.slice(0, overlapLengthRef.current).toUpperCase()}...${word.slice(-overlapLengthRef.current).toUpperCase()})${pts}`);
             } else if (gameModeRef.current === "MIRROR") {
-                addLog("Game", `âœ… ${word.toUpperCase()} (End: ${word.slice(-overlapLengthRef.current).toUpperCase()})${pts}`);
+                addLog("Game", `✅ ${word.toUpperCase()} (End: ${word.slice(-overlapLengthRef.current).toUpperCase()})${pts}`);
             } else if (gameModeRef.current === "STEP_UP") {
-                addLog("Game", `âœ… ${word.toUpperCase()} (Len: ${word.length}) ⟡️ Next: ${word.length >= 10 ? "Reset" : word.length + 1}${pts}`);
+                addLog("Game", `✅ ${word.toUpperCase()} (Len: ${word.length}) ⟡️ Next: ${word.length >= 10 ? "Reset" : word.length + 1}${pts}`);
             } else if (gameModeRef.current === "FILL_BLANK") {
-                addLog("Game", `âœ… ${word.toUpperCase()} (+${pointsAwarded})`);
+                addLog("Game", `✅ ${word.toUpperCase()} (+${pointsAwarded})`);
             } else {
                 if (isScoreMode()) {
-                    addLog("Game", `âœ… ${word.toUpperCase()} +${pointsAwarded} ${t("log_pts")}!`);
+                    addLog("Game", `✅ ${word.toUpperCase()} +${pointsAwarded} ${t("log_pts")}!`);
                 } else {
-                    addLog("Game", `âœ… ${t("log_correct")} "${word.toUpperCase()}"`);
+                    addLog("Game", `✅ ${t("log_correct")} "${word.toUpperCase()}"`);
                 }
             }
 
@@ -1235,7 +1249,7 @@ export default function App() {
                     }
                 }
             }
-            addLog("Game", `âŒ "${word}" ${msg}.`);
+            addLog("Game", `❌ "${word}" ${msg}.`);
             playSound("wrong"); triggerTableEffect("error"); showFeedback(`${word} ${msg}`, "error");
         }
     }
@@ -2042,6 +2056,35 @@ export default function App() {
                                         </div>
                                         <div className="text-[9px] text-slate-500">Kosongkan untuk pakai hostname saat ini</div>
                                     </div>
+                                    
+                                    <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
+                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                                            TikTok Live Connection
+                                            {connectionStatus === "tiktok_ready" && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-slate-400 font-mono text-sm">@</span>
+                                            <input
+                                                type="text"
+                                                value={tiktokUsername}
+                                                onChange={(e) => setTiktokUsername(e.target.value)}
+                                                placeholder="username"
+                                                className="flex-1 bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && tiktokUsername.trim()) {
+                                                        wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim() } }));
+                                                        addLog("System", `Menyambungkan ke @${tiktokUsername.trim()}...`);
+                                                    }
+                                                }}
+                                                className="bg-emerald-900/50 hover:bg-emerald-800/50 px-3 py-1.5 rounded border border-emerald-800 text-emerald-400 transition-colors text-xs font-bold"
+                                            >
+                                                Connect
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
                                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Kamus (Dictionary)</div>
                                         <div className="flex items-center justify-between gap-2 text-xs">
@@ -2193,11 +2236,11 @@ export default function App() {
                                                             </div>
                                                             <h3 className="font-black text-sky-400 tracking-widest uppercase mb-2 sm:mb-4 whitespace-nowrap w-full px-2" style={{ fontSize: `clamp(12px, 60vw / ${Math.max(6, currentShowcase.word.length)}, 32px)` }}>{currentShowcase.word}</h3>
                                                             <div className="relative w-full px-4 py-2 sm:px-6 sm:py-3 bg-slate-900 rounded-xl border border-slate-800 shadow-sm">
-                                                                <span className="absolute -top-3 -left-2 text-3xl text-sky-500/50 font-serif">"</span>
-                                                                <p className="text-[10px] sm:text-sm text-slate-300 italic line-clamp-3 sm:line-clamp-4 leading-relaxed font-serif relative z-10">
+                                                                <span className="absolute -top-3 -left-2 text-3xl text-sky-500/50 font-black">"</span>
+                                                                <p className="text-[10px] sm:text-sm text-slate-300 italic line-clamp-3 sm:line-clamp-4 leading-relaxed relative z-10">
                                                                     {currentShowcase.def}
                                                                 </p>
-                                                                <span className="absolute -bottom-5 -right-2 text-3xl text-sky-500/50 font-serif">"</span>
+                                                                <span className="absolute -bottom-5 -right-2 text-3xl text-sky-500/50 font-black">"</span>
                                                             </div>
                                                             <div className="mt-4 flex flex-col items-center justify-center animate-pulse bg-indigo-950/50 border border-indigo-800 rounded-full px-5 py-1.5 shadow-sm">
                                                                 <span className="text-[9px] text-indigo-400 uppercase tracking-widest leading-none mb-0.5">{t("starting_in")}</span>
@@ -2438,7 +2481,7 @@ export default function App() {
                                     {isStarter && !player.isEliminated && (
                                         <div className="absolute -top-1 -left-2 bg-sky-600 border border-slate-900 text-white p-1.5 rounded-full shadow-sm z-40 animate-pulse" title="First Player (Round Starter)"><Flag className="w-3 h-3 fill-white" /></div>
                                     )}
-                                    <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={currentWord} />
+                                    <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
                                     {player.isEliminated && <div className="absolute inset-0 flex items-center justify-center z-20"><X className="w-8 h-8 text-slate-500 drop-shadow-md" /></div>}
                                 </div>
                                 <div className="mt-[-2px] flex flex-col items-center z-40 relative w-full">
@@ -2561,7 +2604,7 @@ export default function App() {
                                                 <div key={idx} className="bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700 flex items-center gap-2 shadow-sm hover:scale-105 transition-transform">
                                                     <div className="relative">
                                                         <img src={killer.avatarUrl} alt="killer" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-sky-800 object-cover bg-slate-700" />
-                                                        <div className="absolute -bottom-1 -right-1 text-[8px] bg-sky-500 text-white rounded-full px-1 shadow-sm">â­</div>
+                                                        <div className="absolute -bottom-1 -right-1 text-[8px] bg-sky-500 text-white rounded-full px-1 shadow-sm">⭐</div>
                                                     </div>
                                                     <div className="text-left leading-tight">
                                                         <p className="text-[10px] sm:text-xs font-bold text-slate-200 truncate max-w-[80px]">{killer.nickname}</p>
@@ -2876,6 +2919,10 @@ export default function App() {
             100% { transform: translateX(100%); }
         }
       `}</style>
+            
+            {/* --- MUSIC PLAYER OVERLAY --- */}
+            <MusicPlayer musicState={musicState} wsRef={wsRef} />
+
         </div>
     );
 }

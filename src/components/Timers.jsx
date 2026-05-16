@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 // 2.5 TIMERS (TO PREVENT APP RE-RENDER)
 // ==========================================
 const PlayerTimer = ({ isTurn, turnDuration, onTimeout, playSound, bombNext, onBombApplied, resetKey }) => {
-    const [time, setTime] = useState(bombNext ? 10 : turnDuration);
+    const [time, setTime] = useState(turnDuration);
     const hasTimedOutRef = useRef(false);
+    const lastResetKeyRef = useRef(null);
 
     // Keep callbacks fresh without re-creating intervals
     const onTimeoutRef = useRef(onTimeout);
@@ -13,16 +14,31 @@ const PlayerTimer = ({ isTurn, turnDuration, onTimeout, playSound, bombNext, onB
     useEffect(() => { playSoundRef.current = playSound; }, [playSound]);
     useEffect(() => { onBombAppliedRef.current = onBombApplied; }, [onBombApplied]);
 
-    const resetTimer = useCallback(() => {
-        hasTimedOutRef.current = false;
-        setTime(bombNext ? 10 : turnDuration);
-        if (bombNext) onBombAppliedRef.current();
-    }, [bombNext, turnDuration]);
-
+    // Reset timer on turn start — uses a key check to run exactly once per turn
     useEffect(() => {
         if (!isTurn) return;
-        resetTimer();
-    }, [isTurn, resetKey, resetTimer]);
+        // Only reset if resetKey actually changed (prevents re-fires from other dep changes)
+        if (lastResetKeyRef.current === resetKey) return;
+        lastResetKeyRef.current = resetKey;
+
+        hasTimedOutRef.current = false;
+        if (bombNext) {
+            setTime(10);
+            // Defer the callback so it doesn't cause a re-render during this effect
+            Promise.resolve().then(() => {
+                onBombAppliedRef.current();
+            });
+        } else {
+            setTime(turnDuration);
+        }
+    });
+
+    // Clear lastResetKey when no longer our turn
+    useEffect(() => {
+        if (!isTurn) {
+            lastResetKeyRef.current = null;
+        }
+    }, [isTurn]);
 
     useEffect(() => {
         if (!isTurn) return;

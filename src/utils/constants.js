@@ -176,7 +176,7 @@ const DYNAMIC_CHALLENGES = [
     { id: "MIN_5", label: "📏 Min 5 Letters", labelID: "📏 Min 5 Huruf", check: (w) => w.length >= 5, tier: 1 },
     { id: "MAX_5", label: "📏 Max 5 Letters", labelID: "📏 Maks 5 Huruf", check: (w) => w.length <= 5, tier: 1 },
     { id: "ODD", label: "1️⃣3️⃣5️⃣ Odd Length", labelID: "1️⃣3️⃣5️⃣ Panjang Ganjil", check: (w) => w.length % 2 !== 0, tier: 1 },
-    { id: "EVEN", label: "2️⃣4ï¸âƒ£6️⃣ Even Length", labelID: "2️⃣4ï¸âƒ£6️⃣ Panjang Genap", check: (w) => w.length % 2 === 0, tier: 1 },
+    { id: "EVEN", label: "2️⃣4️⃣6️⃣ Even Length", labelID: "2️⃣4️⃣6️⃣ Panjang Genap", check: (w) => w.length % 2 === 0, tier: 1 },
     { id: "EXACT_4", label: "📏 Exactly 4 Letters", labelID: "📏 Tepat 4 Huruf", check: (w) => w.length === 4, tier: 1 },
 
     // Tier 2 (Menengah)
