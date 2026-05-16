@@ -2526,6 +2526,12 @@ export default function App() {
                         </div>
                     )}
 
+                    {/* COMMAND FOOTER - Posisi di bawah meja/avatar */}
+                    <div className="absolute -bottom-24 sm:-bottom-32 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none z-[60]">
+                        <div className="bg-slate-900/60 backdrop-blur-sm px-4 py-1.5 rounded-full shadow-lg border border-slate-700/50 tracking-wide text-center text-slate-300 text-[10px] sm:text-xs">
+                            {t("footer")}
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2700,7 +2706,7 @@ export default function App() {
                     })}
             </div>
 
-            <div className="absolute bottom-2 sm:bottom-4 text-center w-full text-slate-500 text-[8px] sm:text-[10px] pointer-events-none z-40">{t("footer")}</div>
+            {/* Old footer position removed */}
 
 
             {/* --- SCRAMBLE MINIGAME OVERLAY --- */}
