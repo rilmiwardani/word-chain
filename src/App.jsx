@@ -1504,7 +1504,16 @@ export default function App() {
                 setDictionary(dictionaryCache.current.CITIES.dict); setCityMetadata(dictionaryCache.current.CITIES.meta);
                 setDictLoadedInfo(dictionaryCache.current.CITIES.info); addLog("System", "Loaded Cities (Cached)");
             } else {
-                loadCitiesData(FALLBACK_CITIES);
+                fetch("/cities.json")
+                    .then((res) => { if (!res.ok) throw new Error("cities.json not found"); return res.json(); })
+                    .then((data) => {
+                        if (Array.isArray(data)) loadCitiesData(data);
+                        else throw new Error("Invalid format");
+                    })
+                    .catch(() => {
+                        addLog("System", "cities.json gagal dimuat, pakai fallback.");
+                        loadCitiesData(FALLBACK_CITIES);
+                    });
             }
         } else {
             toggleLanguage(true);
