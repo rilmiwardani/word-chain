@@ -11,6 +11,7 @@ const MusicPlayer = ({ musicState, wsRef }) => {
     const playerRef = useRef(null);
     const containerRef = useRef(null);
     const prevQueueRef = useRef(queue);
+    const currentVideoIdRef = useRef(null);
 
     useEffect(() => {
         // Load YouTube IFrame API
@@ -68,12 +69,17 @@ const MusicPlayer = ({ musicState, wsRef }) => {
     useEffect(() => {
         if (playerReady && playerRef.current && playerRef.current.loadVideoById) {
             if (current && current.videoId) {
-                playerRef.current.loadVideoById(current.videoId);
+                // Only load if it's a DIFFERENT video ID to prevent restarting
+                if (currentVideoIdRef.current !== current.videoId) {
+                    playerRef.current.loadVideoById(current.videoId);
+                    currentVideoIdRef.current = current.videoId;
+                }
             } else {
                 playerRef.current.stopVideo();
+                currentVideoIdRef.current = null;
             }
         }
-    }, [current, playerReady]);
+    }, [current?.videoId, playerReady]);
 
     useEffect(() => {
         if (playerReady && playerRef.current && playerRef.current.mute) {
