@@ -46,6 +46,9 @@ let connectionState = {
   error: null,
 };
 
+// TikTok session cookie for authenticated access (reads underage account comments)
+let tiktokSessionId = process.env.TIKTOK_SESSION_ID || null;
+
 // Event counters for dashboard
 let eventStats = {
   chat: 0,
@@ -126,7 +129,13 @@ wss.on("connection", (ws) => {
         advanceMusicQueue();
       }
       if (event === "connect_tiktok" && data?.uniqueId) {
+        if (data.sessionId) tiktokSessionId = data.sessionId;
         connectToTikTok(data.uniqueId);
+      }
+      if (event === "set_session_id") {
+        tiktokSessionId = data?.sessionId || null;
+        console.log(`[WS Bridge] Session ID ${tiktokSessionId ? 'set ✅' : 'cleared'}`);
+        ws.send(JSON.stringify({ event: "session_id_updated", data: { hasSession: !!tiktokSessionId } }));
       }
     } catch(e) {}
   });
@@ -327,7 +336,7 @@ async function connectToTikTok(uniqueId) {
   console.log(`\n[TikTok] Connecting to @${uniqueId}...`);
 
   try {
-    tiktokConnection = new WebcastPushConnection(uniqueId, {
+    const connOptions = {
       processInitialData: true,
       enableExtendedGiftInfo: true,
       enableWebsocketUpgrade: true,
@@ -336,7 +345,17 @@ async function connectToTikTok(uniqueId) {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       },
-    });
+    };
+
+    // If sessionId is provided, use authenticated connection (reads underage accounts)
+    if (tiktokSessionId) {
+      connOptions.sessionId = tiktokSessionId;
+      console.log(`[TikTok] Using authenticated session (sessionId set) ✅`);
+    } else {
+      console.log(`[TikTok] ⚠️  No sessionId — underage account comments may not be visible.`);
+    }
+
+    tiktokConnection = new WebcastPushConnection(uniqueId, connOptions);
 
     const state = await tiktokConnection.connect();
 

@@ -62,6 +62,7 @@ export default function App() {
     const [dictionary, setDictionary] = useState(FALLBACK_DICTIONARY_EN);
     const [syllableMap, setSyllableMap] = useState({});
     const [tiktokUsername, setTiktokUsername] = useState("");
+    const [tiktokSessionId, setTiktokSessionId] = useState(() => localStorage.getItem("tiktok_session_id") || "");
     const [cityMetadata, setCityMetadata] = useState({});
     const [logs, setLogs] = useState([]);
     const [activeEffects, setActiveEffects] = useState([]);
@@ -2086,8 +2087,8 @@ export default function App() {
                                             <button
                                                 onClick={() => {
                                                     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && tiktokUsername.trim()) {
-                                                        wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim() } }));
-                                                        addLog("System", `Menyambungkan ke @${tiktokUsername.trim()}...`);
+                                                        wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim(), sessionId: tiktokSessionId.trim() || undefined } }));
+                                                        addLog("System", `Menyambungkan ke @${tiktokUsername.trim()}${tiktokSessionId ? ' (dengan session)' : ''}...`);
                                                     }
                                                 }}
                                                 className="bg-emerald-900/50 hover:bg-emerald-800/50 px-3 py-1.5 rounded border border-emerald-800 text-emerald-400 transition-colors text-xs font-bold"
@@ -2095,6 +2096,24 @@ export default function App() {
                                                 Connect
                                             </button>
                                         </div>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                            <input
+                                                type="password"
+                                                value={tiktokSessionId}
+                                                onChange={(e) => {
+                                                    setTiktokSessionId(e.target.value);
+                                                    localStorage.setItem("tiktok_session_id", e.target.value);
+                                                }}
+                                                placeholder="sessionid cookie (opsional)"
+                                                className="flex-1 bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono"
+                                            />
+                                            {tiktokSessionId && (
+                                                <button onClick={() => { setTiktokSessionId(""); localStorage.removeItem("tiktok_session_id"); }} className="text-slate-500 hover:text-red-400 p-1.5">
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="text-[9px] text-amber-600/70 leading-tight mt-0.5">⚠️ Session cookie diperlukan agar komentar akun di bawah umur terbaca.</div>
                                     </div>
 
                                     <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
