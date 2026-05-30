@@ -90,6 +90,7 @@ export default function App() {
 
     const [miniGamePos, setMiniGamePos] = useState({ x: null, y: null });
     const [miniGameScale, setMiniGameScale] = useState(1);
+    const [showMiniGame, setShowMiniGame] = useState(true);
 
 
     // === REFS ===
@@ -139,6 +140,7 @@ export default function App() {
     const activeChallengeRef = useRef(activeChallenge);
     const autoRestartEnabledRef = useRef(autoRestartEnabled);
     const playerQueueRef = useRef(playerQueue);
+    const lastPatternTypeRef = useRef(null);
     const playedWordsHistoryRef = useRef([]);
 
     const scrambleWordRef = useRef(scrambleWord);
@@ -859,7 +861,7 @@ export default function App() {
 
         let patternToTest = startWord;
         if (gameModeRef.current === "FILL_BLANK" && !startWord.includes("...")) {
-            patternToTest = generatePattern(startWord, dictionary, usedWordsRef.current).display;
+            patternToTest = generatePattern(startWord, dictionary, usedWordsRef.current, lastPatternTypeRef.current).display;
         }
 
         let found = false;
@@ -879,7 +881,7 @@ export default function App() {
 
         let patternToTest = startWord;
         if (gameModeRef.current === "FILL_BLANK" && !startWord.includes("...")) {
-            patternToTest = generatePattern(startWord, dictionary, usedWordsRef.current).display;
+            patternToTest = generatePattern(startWord, dictionary, usedWordsRef.current, lastPatternTypeRef.current).display;
         }
 
         let count = 0;
@@ -1155,7 +1157,9 @@ export default function App() {
             let pts = isScoreMode() ? ` (+${pointsAwarded})` : "";
 
             if (gameModeRef.current === "FILL_BLANK") {
-                nextWord = generatePattern(word, dictionary, usedWordsRef.current).display;
+                const pat = generatePattern(word, dictionary, usedWordsRef.current, lastPatternTypeRef.current);
+                nextWord = pat.display;
+                lastPatternTypeRef.current = pat.type;
             }
 
             if (gameModeRef.current === "CITIES") {
@@ -1182,7 +1186,7 @@ export default function App() {
             } else if (gameModeRef.current === "STEP_UP") {
                 addLog("Game", `✅ ${word.toUpperCase()} (Len: ${word.length}) ⟡️ Next: ${word.length >= 10 ? "Reset" : word.length + 1}${pts}`);
             } else if (gameModeRef.current === "FILL_BLANK") {
-                addLog("Game", `✅ ${word.toUpperCase()} (+${pointsAwarded})`);
+                addLog("Game", `✅ ${word.toUpperCase()}${pts}`);
             } else {
                 if (isScoreMode()) {
                     addLog("Game", `✅ ${word.toUpperCase()} +${pointsAwarded} ${t("log_pts")}!`);
@@ -1369,9 +1373,11 @@ export default function App() {
         if (gameModeRef.current === "RHYME") {
             setTargetRhyme(rhymeTargetsRef.current.length > 0 ? rhymeTargetsRef.current[Math.floor(Math.random() * rhymeTargetsRef.current.length)] : "ing");
         } else if (gameModeRef.current === "FILL_BLANK") {
+            lastPatternTypeRef.current = null;
             const baseW = getNewRandomWord(selectedChallenge);
-            const pat = generatePattern(baseW, dictionary, new Set());
+            const pat = generatePattern(baseW, dictionary, new Set(), lastPatternTypeRef.current);
             randomStart = pat.display;
+            lastPatternTypeRef.current = pat.type;
         } else {
             randomStart = getNewRandomWord(selectedChallenge);
         }
@@ -1431,6 +1437,7 @@ export default function App() {
         setUsedWords(new Set()); setCurrentWord(""); setTargetRhyme(""); setGlobalTimer(null);
         setRoundStarterId(null); lastSuccessfulPlayerIdRef.current = null; setTimer(turnDuration);
         bombNextRef.current = false; setIsReversed(false); turnCountRef.current = 0; addLog("System", t("log_reset"));
+        lastPatternTypeRef.current = null;
     }
 
     function togglePause() {
@@ -1475,6 +1482,7 @@ export default function App() {
         setTurnCount(0); turnCountRef.current = 0; setActiveChallenge(null); setChallengeQueue([]); quitHistoryRef.current = {};
         bombNextRef.current = false; setIsReversed(false); addLog("System", t("log_lobby_cleared")); playSound("eliminate");
         setWaitingCountdown(null);
+        lastPatternTypeRef.current = null;
     }
 
 
@@ -2047,6 +2055,10 @@ export default function App() {
                                     <button onClick={() => toggleLanguage()} className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-2 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group">
                                         <div className="flex items-center gap-2"><Globe className="w-3 h-3 text-sky-400" /><span className="text-slate-300">{t("language")}</span></div>
                                         <span className="text-slate-100 group-hover:text-sky-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix"}</span>
+                                    </button>
+                                    <button onClick={() => setShowMiniGame(!showMiniGame)} className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-2 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group">
+                                        <div className="flex items-center gap-2"><Gamepad2 className="w-3 h-3 text-purple-400" /><span className="text-slate-300">Minigame Overlay</span></div>
+                                        <span className="text-slate-100 group-hover:text-purple-300">{showMiniGame ? "On" : "Off"}</span>
                                     </button>
                                     <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
                                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">WebSocket Server</div>
@@ -2741,7 +2753,7 @@ export default function App() {
 
 
             {/* --- SCRAMBLE MINIGAME OVERLAY --- */}
-            {scrambleWord && (
+            {scrambleWord && showMiniGame && (
                 <div
                     ref={miniGameOverlayRef}
                     className={`z-[90] flex pointer-events-none animate-in slide-in-from-right fade-in duration-500 ${miniGamePos.x !== null ? 'fixed' : 'absolute bottom-24 sm:bottom-32 right-2 sm:right-4'}`}

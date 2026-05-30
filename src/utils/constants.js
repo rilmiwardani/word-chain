@@ -233,9 +233,15 @@ const normalizeWord = (word) => {
     return word.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s]/g, "").trim();
 };
 
-function generatePattern(baseWord, dict, currentUsed) {
-    const types = ["PREFIX", "SUFFIX", "WRAP", "MIDDLE"];
-    types.sort(() => Math.random() - 0.5);
+function generatePattern(baseWord, dict, currentUsed, lastType = null) {
+    let types = ["PREFIX", "SUFFIX", "WRAP", "MIDDLE"];
+    if (lastType) {
+        types = types.filter(t => t !== lastType);
+        types.sort(() => Math.random() - 0.5);
+        types.push(lastType);
+    } else {
+        types.sort(() => Math.random() - 0.5);
+    }
 
     for (const type of types) {
         let patternStr = "";
