@@ -1774,27 +1774,34 @@ export default function App() {
         }
 
         if (isWord500Active && cleanWordCheck.length === word500TargetRef.current.length) {
-            const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
-            const newGuess = {
-                word: cleanWordCheck.toUpperCase(),
-                green, yellow, red,
-                nickname,
-                profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
-            };
-            setWord500Guesses(prev => [...prev, newGuess]);
+            // Prevent double inputs from the same user
+            const isDuplicate = word500GuessesRef.current.length > 0 && 
+                                word500GuessesRef.current[word500GuessesRef.current.length - 1].word === cleanWordCheck.toUpperCase() &&
+                                word500GuessesRef.current[word500GuessesRef.current.length - 1].nickname === nickname;
             
-            if (green === word500TargetRef.current.length) {
-                setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
-                playSound("win");
-                triggerTableEffect("success");
-                addLog("MiniGame", `🎉 ${nickname} memenangkan Word500: ${word500TargetRef.current}!`);
-                setTimeout(() => {
-                    startNewWord500();
-                }, 5000);
-            } else {
-                playSound("tick");
+            if (!isDuplicate) {
+                const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
+                const newGuess = {
+                    word: cleanWordCheck.toUpperCase(),
+                    green, yellow, red,
+                    nickname,
+                    profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
+                };
+                setWord500Guesses(prev => [...prev, newGuess]);
+                
+                if (green === word500TargetRef.current.length) {
+                    setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
+                    playSound("win");
+                    triggerTableEffect("success");
+                    addLog("MiniGame", `🎉 ${nickname} memenangkan Word500: ${word500TargetRef.current}!`);
+                    setTimeout(() => {
+                        startNewWord500();
+                    }, 5000);
+                } else {
+                    playSound("tick");
+                }
             }
-            return;
+            // Removed return; so the input can also be processed for Sambung Kata
         }
 
         if (isCurrentPlayerTurn) {
@@ -1847,8 +1854,7 @@ export default function App() {
             } else {
                 playSound("tick");
             }
-            setManualInput("");
-            return;
+            // Removed return; so the input can also be processed for Sambung Kata
         }
 
         const currentPlayer = playersRef.current[turnIndexRef.current];
