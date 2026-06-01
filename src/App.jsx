@@ -1599,6 +1599,16 @@ export default function App() {
             setLanguage(targetLang);
         }
 
+        if (gameMode === "CITIES") {
+            if (!forceReload) {
+                setGameState("WAITING"); setPlayers((prev) => prev.map((p) => ({ ...p, isEliminated: false, score: 0, turnCount: 0, sessionKills: 0 })));
+                setUsedWords(new Set()); setCurrentWord(""); setTargetRhyme(""); setGlobalTimer(null);
+                setRoundStarterId(null); lastSuccessfulPlayerIdRef.current = null; setTurnCount(0);
+                setActiveChallenge(null); setChallengeQueue([]); setTimer(turnDuration); addLog("System", "Language changed! (City mode kept)");
+            }
+            return;
+        }
+
         if (targetLang === "ID") {
             if (!forceReload) addLog("System", "Switching to Indonesian...");
 
