@@ -1774,21 +1774,6 @@ export default function App() {
         }
 
         if (isWord500Active && cleanWordCheck.length === word500TargetRef.current.length) {
-            // HARD MODE LOGIC
-            const pastGuesses = word500GuessesRef.current;
-            let isValid = true;
-            for (const past of pastGuesses) {
-                const sim = checkWord500Guess(past.word, cleanWordCheck);
-                if (sim.green !== past.green || sim.yellow !== past.yellow || sim.red !== past.red) {
-                    isValid = false;
-                    break;
-                }
-            }
-
-            if (!isValid) {
-                return; // Silently drop the guess since it contradicts past clues
-            }
-
             const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
             const newGuess = {
                 word: cleanWordCheck.toUpperCase(),
@@ -1842,23 +1827,6 @@ export default function App() {
         }
 
         if (activeMinigameRef.current === "WORD500" && word500TargetRef.current && cleanWordCheck.length === word500TargetRef.current.length && !word500WinnerRef.current) {
-            // HARD MODE LOGIC FOR HOST
-            const pastGuesses = word500GuessesRef.current;
-            let isValid = true;
-            for (const past of pastGuesses) {
-                const sim = checkWord500Guess(past.word, cleanWordCheck);
-                if (sim.green !== past.green || sim.yellow !== past.yellow || sim.red !== past.red) {
-                    isValid = false;
-                    break;
-                }
-            }
-
-            if (!isValid) {
-                showFeedback("Kata tidak cocok dengan clue sebelumnya!", "warning");
-                setManualInput("");
-                return;
-            }
-
             const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
             const newGuess = {
                 word: cleanWordCheck.toUpperCase(),
