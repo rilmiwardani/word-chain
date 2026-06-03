@@ -2976,75 +2976,97 @@ export default function App() {
                     style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
                 >
                     <div
-                        className="bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-xl pointer-events-auto flex flex-col p-2 w-max max-w-[90vw]"
+                        className="bg-slate-900/90 backdrop-blur-md rounded-lg border border-slate-700/50 shadow-xl pointer-events-auto flex flex-col p-1.5 w-max max-w-[90vw]"
                         style={{
                             transform: `scale(${miniGameScale})`,
                             transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
                             transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)'
                         }}
                     >
-                        <div className="flex items-center justify-between mb-2 pb-1 border-b border-slate-700/50 cursor-move touch-none" onMouseDown={handleMiniGameDragStart} onTouchStart={handleMiniGameDragStart}>
-                            <div className="flex items-center gap-2">
-                                <GripHorizontal className="w-4 h-4 text-slate-500" />
-                                <span className="text-xs font-bold text-sky-400">Word500</span>
-                                <span className="text-[10px] text-slate-500 font-mono ml-1">{word500Target.length} Huruf</span>
+                        <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-700/50 cursor-move touch-none" onMouseDown={handleMiniGameDragStart} onTouchStart={handleMiniGameDragStart}>
+                            <div className="flex items-center gap-1.5">
+                                <GripHorizontal className="w-3.5 h-3.5 text-slate-600" />
+                                <span className="text-[11px] font-bold text-sky-400 tracking-wide">Word500</span>
+                                <span className="text-[9px] text-slate-600 font-mono">{word500Target.length}L</span>
+                                {!word500Winner && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
+                                        onTouchEnd={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
+                                        title="Spill Jawaban"
+                                        className="ml-0.5 text-slate-600 hover:text-amber-400 transition-colors p-0.5 rounded hover:bg-slate-800 active:scale-90"
+                                    >
+                                        <Sparkles className="w-3 h-3" />
+                                    </button>
+                                )}
                             </div>
-                            <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-2">
-                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }} className="text-slate-500 hover:text-white p-0.5 rounded-md hover:bg-slate-800 transition-colors" disabled={miniGameScale <= 0.5}><Minus className="w-3 h-3" /></button>
-                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(1.5, p + 0.25)); }} className="text-slate-500 hover:text-white p-0.5 rounded-md hover:bg-slate-800 transition-colors" disabled={miniGameScale >= 1.5}><Plus className="w-3 h-3" /></button>
+                            <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.5}><Minus className="w-2.5 h-2.5" /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(1.5, p + 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 1.5}><Plus className="w-2.5 h-2.5" /></button>
                             </div>
                         </div>
 
                         {word500Winner && (
-                            <div className="flex items-center gap-2 mb-2 bg-emerald-950/50 border border-emerald-800/50 p-1.5 rounded-lg animate-in fade-in">
-                                <img src={word500Winner.profilePictureUrl} className="w-6 h-6 rounded-full border border-emerald-500 object-cover bg-slate-800" alt="winner" />
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-emerald-100 max-w-[120px] truncate">{word500Winner.nickname}</span>
-                                    <span className="text-[9px] text-emerald-400 font-bold">MENANG!</span>
-                                </div>
+                            <div className="flex items-center gap-1.5 mb-1.5 bg-emerald-950/50 border border-emerald-800/50 px-2 py-1 rounded-lg animate-in fade-in">
+                                <img src={word500Winner.profilePictureUrl} className="w-5 h-5 rounded-full border border-emerald-500 object-cover bg-slate-800" alt="winner" />
+                                <span className="text-[10px] font-bold text-emerald-300 max-w-[100px] truncate">{word500Winner.nickname}</span>
+                                <span className="text-[8px] font-black text-emerald-400 bg-emerald-900/50 px-1 rounded">MENANG!</span>
                             </div>
                         )}
 
-                        <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto custom-scrollbar pr-1 w-full" style={{ scrollBehavior: 'smooth' }}>
+                        <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto custom-scrollbar pr-0.5 w-full" style={{ scrollBehavior: 'smooth' }}>
                             {word500Guesses.length === 0 ? (
-                                <div className="text-[10px] text-slate-500 italic text-center py-2 min-w-[180px]">Ketik kata {word500Target.length} huruf!</div>
-                            ) : (
-                                word500Guesses.slice(-3).map((g, i) => (
-                                    <div key={i} className="flex items-center gap-2 animate-in slide-in-from-right fade-in duration-200">
-                                        <div className="flex gap-0.5">
+                                <div className="text-[9px] text-slate-600 italic text-center py-1.5 min-w-[160px]">Ketik kata {word500Target.length} huruf!</div>
+                            ) : (() => {
+                                const latestGuess = word500Guesses[word500Guesses.length - 1];
+                                const prevGuesses = word500Guesses.slice(0, -1);
+                                const bestGuesses = [...prevGuesses]
+                                    .sort((a, b) => b.green - a.green || b.yellow - a.yellow)
+                                    .slice(0, 2);
+                                const displayRows = [
+                                    { guess: latestGuess, isLatest: true },
+                                    ...bestGuesses.map(g => ({ guess: g, isLatest: false }))
+                                ];
+                                const renderRow = (g, isLatest, idx) => (
+                                    <div key={`${isLatest ? 'latest' : 'best'}-${idx}`} className={`flex items-center gap-1 animate-in slide-in-from-right fade-in duration-200 rounded-[3px] ${isLatest ? 'bg-sky-950/40 ring-1 ring-sky-800/50 px-0.5' : ''}`}>
+                                        {/* Label */}
+                                        <div className="flex-shrink-0 w-3 flex items-center justify-center">
+                                            {isLatest
+                                                ? <div className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" title="Terbaru" />
+                                                : idx === 1
+                                                    ? <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" title="Terbaik" />
+                                                    : <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+                                            }
+                                        </div>
+                                        {/* Avatar kecil */}
+                                        <div className="flex-shrink-0">
+                                            {g.profilePictureUrl ? (
+                                                <img src={g.profilePictureUrl} className="w-4 h-4 rounded-full border border-slate-600 object-cover bg-slate-800" alt={g.nickname} title={g.nickname} />
+                                            ) : (
+                                                <div className="w-4 h-4 rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center text-[7px] font-bold text-slate-400" title={g.nickname}>{g.nickname.substring(0, 1).toUpperCase()}</div>
+                                            )}
+                                        </div>
+                                        {/* Tile huruf */}
+                                        <div className="flex gap-px">
                                             {g.word.split('').map((char, j) => (
-                                                <div key={j} className="w-5 h-6 shrink-0 bg-slate-800 border border-slate-600 rounded-sm flex items-center justify-center font-bold text-xs shadow-sm text-slate-200 uppercase">
+                                                <div key={j} className={`w-4 h-5 shrink-0 border rounded-[2px] flex items-center justify-center font-bold text-[9px] uppercase ${isLatest ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                                                     {char}
                                                 </div>
                                             ))}
                                         </div>
-                                        <div className="flex gap-0.5 ml-1 border-l border-slate-700/50 pl-1.5">
-                                            <div className="w-5 h-6 shrink-0 bg-emerald-600 border border-emerald-500 rounded-sm flex items-center justify-center font-bold text-xs shadow-sm text-white">{g.green}</div>
-                                            <div className="w-5 h-6 shrink-0 bg-amber-500 border border-amber-400 rounded-sm flex items-center justify-center font-bold text-xs shadow-sm text-white">{g.yellow}</div>
-                                            <div className="w-5 h-6 shrink-0 bg-rose-500 border border-rose-400 rounded-sm flex items-center justify-center font-bold text-xs shadow-sm text-white">{g.red}</div>
-                                        </div>
-                                        <div className="ml-1 pl-1 border-l border-slate-700/50 flex-shrink-0">
-                                            {g.profilePictureUrl ? (
-                                                <img src={g.profilePictureUrl} className="w-6 h-6 rounded border border-slate-600 object-cover bg-slate-800 shadow-sm" alt={g.nickname} title={g.nickname} />
-                                            ) : (
-                                                <div className="w-6 h-6 rounded border border-slate-600 bg-slate-800 shadow-sm flex items-center justify-center text-[10px] font-bold text-slate-400" title={g.nickname}>{g.nickname.substring(0, 2).toUpperCase()}</div>
-                                            )}
+                                        {/* Skor */}
+                                        <div className="flex gap-px ml-0.5">
+                                            <div className="w-4 h-5 shrink-0 bg-emerald-700 border border-emerald-600 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.green}</div>
+                                            <div className="w-4 h-5 shrink-0 bg-amber-600 border border-amber-500 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.yellow}</div>
+                                            <div className="w-4 h-5 shrink-0 bg-rose-700 border border-rose-600 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.red}</div>
                                         </div>
                                     </div>
-                                ))
-                            )}
+                                );
+                                return displayRows.map(({ guess, isLatest }, idx) => renderRow(guess, isLatest, idx));
+                            })()}
                             <div ref={word500EndRef} />
                         </div>
                         
-                        {!word500Winner && (
-                            <button
-                                onClick={handleRevealWord500}
-                                onTouchEnd={handleRevealWord500}
-                                className="mt-2 text-[10px] text-slate-500 hover:text-amber-400 transition-colors self-center flex items-center gap-1 py-1 px-2 rounded hover:bg-slate-800"
-                            >
-                                <Sparkles className="w-3 h-3" /> Spill Jawaban
-                            </button>
-                        )}
+
                     </div>
                 </div>
             )}
