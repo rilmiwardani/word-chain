@@ -205,7 +205,7 @@ const DYNAMIC_CHALLENGES = [
     { id: "SECOND_VOWEL", label: "🔤 2nd Letter: Vowel", labelID: "🔤 Huruf Ke-2: Vokal", check: (w) => w.length > 1 && /[aeiou]/.test(w[1]), tier: 4 },
     { id: "CONTAINS_Y_Z_X", label: "🔠 Contains Y, Z, or X", labelID: "🔠 Mengandung Y, Z, atau X", check: (w) => /[yzx]/i.test(w), tier: 4 },
     { id: "HAS_CONSECUTIVE_CONS", label: "🧱 3+ Consonants in Row", labelID: "🧱 3+ Konsonan Beruntun", check: (w) => /[^aeiou]{3}/i.test(w), tier: 4 },
-    { id: "MIDDLE_VOWEL", label: "🎯 Middle Letter is Vowel", labelID: "🎯 Huruf Tengah Vokal", check: (w) => w.length % 2 !== 0 && /[aeiou]/i.test(w[Math.floor(w.length / 2)]), tier: 4 }
+    { id: "MIDDLE_VOWEL", label: "🎯 Middle Letter is Vowel", labelID: "🎯 Huruf Tengah Vokal", check: (w) => w.length >= 3 && /[aeiou]/i.test(w[Math.floor(w.length / 2)]), tier: 4 }
 ];
 
 const BOT_PROFILES = [
@@ -234,63 +234,94 @@ const normalizeWord = (word) => {
 };
 
 function generatePattern(baseWord, dict, currentUsed, lastType = null) {
-    let types = ["PREFIX", "SUFFIX", "WRAP", "MIDDLE"];
+    const w = baseWord.toLowerCase();
+    const wLen = w.length;
+
+    // Helper: cek apakah pattern punya cukup jawaban di kamus
+    const hasEnoughMatches = (isValidMatch) => {
+        let matches = 0;
+        for (const word of dict) {
+            if (!currentUsed.has(word) && word !== w && isValidMatch(word)) {
+                matches++;
+                if (matches > 1) return true;
+            }
+        }
+        return false;
+    };
+
+    // Helper: panjang random dengan distribusi berbobot (lebih sering pendek, kadang panjang)
+    const randLen = (min, max) => {
+        // Distribusi: 50% min, 30% min+1, 20% sisanya
+        const range = max - min;
+        if (range <= 0) return min;
+        const r = Math.random();
+        if (r < 0.50) return min;
+        if (r < 0.80) return Math.min(min + 1, max);
+        return min + Math.floor(Math.random() * (range + 1));
+    };
+
+    let types = ["PREFIX", "SUFFIX", "WRAP", "MIDDLE", "SUFFIX", "PREFIX"]; // weight lebih ke prefix/suffix
     if (lastType) {
         types = types.filter(t => t !== lastType);
-        types.sort(() => Math.random() - 0.5);
-        types.push(lastType);
-    } else {
-        types.sort(() => Math.random() - 0.5);
     }
+    types.sort(() => Math.random() - 0.5);
 
     for (const type of types) {
-        let patternStr = "";
-        let isValidMatch = (w) => false;
+        // Tiap tipe dicoba beberapa kali dengan parameter berbeda
+        const attempts = type === "MIDDLE" ? 4 : 3;
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            let patternStr = "";
+            let isValidMatch = null;
 
-        if (type === "MIDDLE" && baseWord.length >= 5) {
-            const len = 2;
-            const maxStart = baseWord.length - len - 1;
-            const startIndex = Math.floor(Math.random() * maxStart) + 1;
-            const mid = baseWord.slice(startIndex, startIndex + len).toLowerCase();
-            patternStr = `...${mid}...`;
-            isValidMatch = (w) => w.includes(mid) && !w.startsWith(mid) && !w.endsWith(mid);
-        }
-        else if (type === "PREFIX" && baseWord.length >= 3) {
-            const len = Math.min(baseWord.length - 1, Math.floor(Math.random() * 2) + 2);
-            const prefix = baseWord.slice(0, len).toLowerCase();
-            patternStr = `${prefix}...`;
-            isValidMatch = (w) => w.startsWith(prefix) && w.length > prefix.length;
-        }
-        else if (type === "SUFFIX" && baseWord.length >= 3) {
-            const len = Math.min(baseWord.length - 1, Math.floor(Math.random() * 2) + 2);
-            const suffix = baseWord.slice(-len).toLowerCase();
-            patternStr = `...${suffix}`;
-            isValidMatch = (w) => w.endsWith(suffix) && w.length > suffix.length;
-        }
-        else if (type === "WRAP" && baseWord.length >= 4) {
-            const preLen = Math.floor(Math.random() * 2) + 1;
-            const sufLen = 1;
-            const prefix = baseWord.slice(0, preLen).toLowerCase();
-            const suffix = baseWord.slice(-sufLen).toLowerCase();
-            patternStr = `${prefix}...${suffix}`;
-            isValidMatch = (w) => w.startsWith(prefix) && w.endsWith(suffix) && w.length > (preLen + sufLen);
-        }
-
-        if (!patternStr) continue;
-
-        let matches = 0;
-        for (const w of dict) {
-            if (!currentUsed.has(w) && w !== baseWord) {
-                if (isValidMatch(w)) matches++;
+            if (type === "MIDDLE" && wLen >= 5) {
+                // Panjang tengah: 2-3 huruf (min 2 agar tidak terlalu mudah)
+                const midLen = Math.min(wLen - 2, Math.max(2, Math.floor(Math.random() * 2) + 2));
+                const maxStart = wLen - midLen - 1;
+                if (maxStart < 1) continue;
+                const startIdx = Math.floor(Math.random() * maxStart) + 1;
+                const mid = w.slice(startIdx, startIdx + midLen);
+                patternStr = `...${mid}...`;
+                isValidMatch = (word) => word.includes(mid) && !word.startsWith(mid) && !word.endsWith(mid) && word.length > mid.length + 1;
             }
-            if (matches > 1) break;
-        }
+            else if (type === "PREFIX" && wLen >= 4) {
+                // Min 2 huruf agar tidak terlalu mudah
+                const maxPLen = Math.min(wLen - 1, 4);
+                const pLen = randLen(2, maxPLen);
+                const prefix = w.slice(0, pLen);
+                patternStr = `${prefix}...`;
+                isValidMatch = (word) => word.startsWith(prefix) && word.length > prefix.length;
+            }
+            else if (type === "SUFFIX" && wLen >= 4) {
+                // Min 2 huruf agar tidak terlalu mudah
+                const maxSLen = Math.min(wLen - 1, 4);
+                const sLen = randLen(2, maxSLen);
+                const suffix = w.slice(-sLen);
+                patternStr = `...${suffix}`;
+                isValidMatch = (word) => word.endsWith(suffix) && word.length > suffix.length;
+            }
+            else if (type === "WRAP" && wLen >= 4) {
+                const preLen = randLen(1, Math.min(2, Math.floor(wLen / 2)));
+                const sufLen = randLen(1, Math.min(2, Math.floor(wLen / 2)));
+                if (preLen + sufLen >= wLen) continue;
+                const prefix = w.slice(0, preLen);
+                const suffix = w.slice(-sufLen);
+                // Hindari prefix === suffix yang bisa membingungkan
+                if (prefix === suffix) continue;
+                patternStr = `${prefix}...${suffix}`;
+                isValidMatch = (word) => word.startsWith(prefix) && word.endsWith(suffix) && word.length > preLen + sufLen;
+            }
 
-        if (matches > 1) return { display: patternStr, type };
+            if (!patternStr || !isValidMatch) continue;
+            if (hasEnoughMatches(isValidMatch)) {
+                return { display: patternStr, type };
+            }
+        }
     }
 
-    return { display: `${baseWord.slice(-1).toLowerCase()}...`, type: "PREFIX" };
+    // Fallback: ambil 1 huruf akhir sebagai awalan
+    return { display: `${w.slice(-1)}...`, type: "PREFIX" };
 }
+
 
 const getEnglishSyllableSuffix = (word) => {
     if (!word) return "";

@@ -14,6 +14,25 @@ import { TRANSLATIONS, TIER_LEVELS, getPlayerTier, FALLBACK_DICTIONARY_EN, FALLB
 import { PlayerTimer, GlobalTimer } from "./components/Timers";
 import { getIndonesianOverlapSuffix, getSuffixOrRule, getRecoverySuffix, getRuleDisplay, getDisplayParts, validateConnection } from "./utils/gameLogic";
 import MusicPlayer from "./components/MusicPlayer";
+
+const TABLE_THEMES = {
+    midnight: "border-slate-800 bg-slate-900 shadow-2xl shadow-black/20",
+    emerald: "border-emerald-800 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-800 to-emerald-950 shadow-2xl shadow-emerald-900/20",
+    crimson: "border-rose-800 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-rose-800 to-rose-950 shadow-2xl shadow-rose-900/20",
+    cyber: "border-indigo-700 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-fuchsia-900 via-indigo-950 to-slate-950 shadow-2xl shadow-indigo-900/40",
+    ocean: "border-sky-800 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-sky-800 via-cyan-900 to-blue-950 shadow-2xl shadow-sky-900/30",
+    wood: "border-amber-900 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-800 to-stone-900 shadow-2xl shadow-amber-950/40"
+};
+
+const THEME_LABELS = {
+    midnight: "Midnight (Default)",
+    emerald: "Emerald Table",
+    crimson: "Crimson Red",
+    cyber: "Cyberpunk",
+    ocean: "Ocean Blue",
+    wood: "Classic Wood"
+};
+
 // 3. MAIN COMPONENT
 // ==========================================
 export default function App() {
@@ -77,6 +96,11 @@ export default function App() {
     const [settingsTab, setSettingsTab] = useState("rules");
     const [wsHost, setWsHost] = useState(() => localStorage.getItem("word_chain_ws_host") || "");
     const [dictLoadedInfo, setDictLoadedInfo] = useState("Default (EN)");
+    const [tableTheme, setTableTheme] = useState(() => localStorage.getItem("sk_tableTheme") || "midnight");
+
+    useEffect(() => {
+        localStorage.setItem("sk_tableTheme", tableTheme);
+    }, [tableTheme]);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -154,6 +178,9 @@ export default function App() {
     const word500WinnerRef = useRef(word500Winner);
     const word500GuessesRef = useRef(word500Guesses);
     const word500EndRef = useRef(null);
+    const kamusTambahanRef = useRef(new Set());
+    // Session-level tracker: rule tidak diulang sampai semua 22 jenis habis
+    const sessionUsedChallengeIdsRef = useRef(new Set());
 
     const miniGameDragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
     const miniGameOverlayRef = useRef(null);
@@ -377,6 +404,21 @@ export default function App() {
     }, [word500Guesses, activeMinigame]);
 
     useEffect(() => {
+        // Load kamus_tambahan.txt (ID) ke ref terpisah untuk validasi Word500
+        fetch("/kamus_tambahan.txt")
+            .then(res => {
+                if (!res.ok) throw new Error("kamus_tambahan.txt tidak ditemukan");
+                return res.text();
+            })
+            .then(text => {
+                const words = text.split(/\r?\n/)
+                    .map(w => w.trim().toLowerCase())
+                    .filter(w => w.length >= 3 && !w.includes(" "));
+                kamusTambahanRef.current = new Set(words);
+                addLog("System", `Kamus tambahan ID dimuat: ${words.length} kata`);
+            })
+            .catch(() => { addLog("System", "kamus_tambahan.txt tidak ditemukan, validasi ID dinonaktifkan"); });
+
         fetch("/minigame.txt")
             .then(res => {
                 if (!res.ok) throw new Error("File minigame.txt tidak ditemukan");
@@ -669,14 +711,31 @@ export default function App() {
     const triggerVisualEffect = (type, uniqueId, data) => {
         if (type === "like") {
             const now = Date.now();
-            if (now - lastLikeTimeRef.current < 200) return; // Limit to max 5 like animations per second
+            if (now - lastLikeTimeRef.current < 200) return;
             lastLikeTimeRef.current = now;
         }
 
         const id = `${type}-${Date.now()}-${Math.random()}`;
+
+        // Pre-generate semua nilai random di sini agar stabil saat render
+        let extraData = {};
+        if (type === 'like') {
+            const count = data.count || 1;
+            extraData.hearts = Array.from({ length: count }).map((_, i) => ({
+                tx: (Math.random() - 0.5) * 70,
+                ty: -(Math.random() * 60 + 40),
+                tx2: (Math.random() - 0.5) * 90,
+                ty2: -(Math.random() * 100 + 70),
+                rotate: (Math.random() - 0.5) * 40,
+                delay: i * 0.08 + Math.random() * 0.15,
+                size: Math.random() < 0.5 ? 'w-4 h-4' : Math.random() < 0.7 ? 'w-3 h-3' : 'w-5 h-5',
+                color: ['text-rose-400 fill-rose-400', 'text-pink-400 fill-pink-400', 'text-red-400 fill-red-400', 'text-rose-300 fill-rose-300'][Math.floor(Math.random() * 4)],
+                duration: 1.4 + Math.random() * 0.5,
+            }));
+        }
+
         setActiveEffects(prev => {
-            // Keep maximum of 15 effects on screen to prevent massive DOM lag
-            const newEffects = [...prev, { id, type, uniqueId, ...data }];
+            const newEffects = [...prev, { id, type, uniqueId, ...data, ...extraData }];
             if (newEffects.length > 15) newEffects.shift();
             return newEffects;
         });
@@ -768,12 +827,21 @@ export default function App() {
 
     const generateChallengeQueue = () => {
         const shuffle = (arr) => [...arr].sort(() => Math.random() - 0.5);
-        return [
-            ...shuffle(DYNAMIC_CHALLENGES.filter((c) => c.tier === 1)),
-            ...shuffle(DYNAMIC_CHALLENGES.filter((c) => c.tier === 2)),
-            ...shuffle(DYNAMIC_CHALLENGES.filter((c) => c.tier === 3)),
-            ...shuffle(DYNAMIC_CHALLENGES.filter((c) => c.tier === 4))
-        ];
+        const usedIds = sessionUsedChallengeIdsRef.current;
+        const total = DYNAMIC_CHALLENGES.length;
+
+        // Jika semua rule sudah pernah tampil, reset sesi dan log notifikasi
+        if (usedIds.size >= total) {
+            usedIds.clear();
+            addLog("System", `🔁 Semua ${total} aturan sudah tampil! Siklus dimulai ulang.`);
+        }
+
+        // Saring hanya rule yang BELUM dipakai di sesi ini
+        const unused = DYNAMIC_CHALLENGES.filter(c => !usedIds.has(c.id));
+
+        // Urutkan per tier lalu shuffle dalam tier, sama seperti sebelumnya
+        const byTier = (tier) => shuffle(unused.filter(c => c.tier === tier));
+        return [...byTier(1), ...byTier(2), ...byTier(3), ...byTier(4)];
     };
 
     const getNextChallenge = (queue, currentSuffix) => {
@@ -797,9 +865,18 @@ export default function App() {
                 if (forbiddenChars.some((char) => currentSuffix.includes(char))) isSafe = false;
             }
 
-            if (isSafe) return { selected: tempQueue.splice(i, 1)[0], newQueue: tempQueue };
+            if (isSafe) {
+                const selected = tempQueue.splice(i, 1)[0];
+                // Catat ke session tracker agar tidak muncul lagi sampai semua habis
+                sessionUsedChallengeIdsRef.current.add(selected.id);
+                return { selected, newQueue: tempQueue };
+            }
         }
-        return { selected: tempQueue.shift(), newQueue: tempQueue };
+        // Tidak ada challenge yang aman dari queue saat ini — generate ulang dari awal
+        const freshQueue = generateChallengeQueue();
+        const fallback = freshQueue.shift();
+        if (fallback) sessionUsedChallengeIdsRef.current.add(fallback.id);
+        return { selected: fallback, newQueue: freshQueue };
     };
 
     function getLogicOptions() {
@@ -807,7 +884,7 @@ export default function App() {
             gameMode: gameModeRef.current || gameMode,
             overlapLength: overlapLengthRef.current || overlapLength,
             targetRhyme: targetRhymeRef.current || targetRhyme,
-            language: language,
+            language: languageRef.current || language,
             syllableMap: syllableMapRef.current || syllableMap,
             phraseDictionary: phraseDictionary.current || phraseDictionary,
             activeChallenge: activeChallengeRef.current || activeChallenge,
@@ -906,13 +983,24 @@ export default function App() {
             const winners = sorted.filter(p => (p.score || 0) === (sorted[0].score || 0));
             if (winners.length > 0) handleWin(winners); else { setGameState("ENDED"); playSound("win"); }
         } else if (activePlayers.length <= 1) {
-            if (activePlayers.length === 1) handleWin([activePlayers[0]]);
+            if (activePlayers.length === 1) {
+                // Cek: jika tidak ada yang pernah menjawab benar, pemain terakhir menang tanpa usaha → SERI
+                if (lastSuccessfulPlayerIdRef.current === null) {
+                    addLog("System", `⚠️ Tidak ada yang berhasil menjawab! Permainan berakhir SERI.`);
+                    showFeedback("Tidak ada pemenang! SERI!", "warning");
+                    setGameState("ENDED");
+                    playSound("win");
+                } else {
+                    handleWin([activePlayers[0]]);
+                }
+            }
             else { setGameState("ENDED"); playSound("win"); }
         } else {
             if (gameModeRef.current === "RHYME") {
                 setTimeout(changeRhymeTarget, 500);
             }
             setTurnCount(0);
+            turnCountRef.current = 0; // Fix: reset ref sebelum advanceTurn, agar rotasi rule tidak meleset
             advanceTurn(newPlayers, currentIndex, 1);
         }
     }
@@ -1032,14 +1120,32 @@ export default function App() {
             const winners = sorted.filter(p => (p.score || 0) === (sorted[0].score || 0));
             if (winners.length > 0) handleWin(winners); else { setGameState("ENDED"); playSound("win"); }
         } else if (activePlayers.length <= 1) {
-            if (activePlayers.length === 1) handleWin([activePlayers[0]]);
+            if (activePlayers.length === 1) {
+                // Cek: jika tidak ada yang pernah menjawab benar, pemain terakhir menang tanpa usaha → SERI
+                if (lastSuccessfulPlayerIdRef.current === null) {
+                    addLog("System", `⚠️ Tidak ada yang berhasil menjawab! Permainan berakhir SERI.`);
+                    showFeedback("Tidak ada pemenang! SERI!", "warning");
+                    setGameState("ENDED");
+                    playSound("win");
+                } else {
+                    handleWin([activePlayers[0]]);
+                }
+            }
             else { setGameState("ENDED"); playSound("win"); }
         } else if (isActivePlayer) {
             if (gameModeRef.current === "RHYME") {
                 setTimeout(changeRhymeTarget, 500);
             }
             setTurnCount(0);
+            turnCountRef.current = 0; // Fix: reset ref sebelum advanceTurn, agar rotasi rule tidak meleset
             advanceTurn(newPlayers, pIndex, 1);
+        } else {
+            // Pemain mati bukan saat gilirannya: clamp turnCountRef agar tidak overshoot
+            // karena activeCount sekarang berkurang 1
+            const newActiveCount = newPlayers.filter(p => !p.isEliminated).length;
+            if (turnCountRef.current >= newActiveCount) {
+                turnCountRef.current = Math.max(0, newActiveCount - 1);
+            }
         }
     }
 
@@ -1428,8 +1534,10 @@ export default function App() {
             selectedChallenge = selected;
             setActiveChallenge(selected);
             activeChallengeRef.current = selected;
-            setChallengeQueue(newQueue); setTurnCount(0);
-            const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
+            setChallengeQueue(newQueue);
+            setTurnCount(0);
+            turnCountRef.current = 0; // Fix: reset ref juga, bukan hanya state
+            const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected?.labelID ? selected.labelID : selected?.label;
             addLog("System", `Mode: DYNAMIC CHAOS! \nRule: ${label}`);
         }
 
@@ -1605,6 +1713,17 @@ export default function App() {
                 setUsedWords(new Set()); setCurrentWord(""); setTargetRhyme(""); setGlobalTimer(null);
                 setRoundStarterId(null); lastSuccessfulPlayerIdRef.current = null; setTurnCount(0);
                 setActiveChallenge(null); setChallengeQueue([]); setTimer(turnDuration); addLog("System", "Language changed! (City mode kept)");
+            }
+            // Fix: selalu restore dictionary ke cities agar tidak tertimpa oleh kamus bahasa
+            if (dictionaryCache.current.CITIES) {
+                setDictionary(dictionaryCache.current.CITIES.dict);
+                setCityMetadata(dictionaryCache.current.CITIES.meta);
+                setDictLoadedInfo(dictionaryCache.current.CITIES.info);
+            } else {
+                fetch("/cities.json")
+                    .then((res) => { if (!res.ok) throw new Error("cities.json not found"); return res.json(); })
+                    .then((data) => { if (Array.isArray(data)) loadCitiesData(data); else throw new Error("Invalid format"); })
+                    .catch(() => { loadCitiesData(FALLBACK_CITIES); });
             }
             return;
         }
@@ -1784,6 +1903,17 @@ export default function App() {
         }
 
         if (isWord500Active && cleanWordCheck.length === word500TargetRef.current.length) {
+            // Validasi kamus: cek di dictionary.txt (EN via dictionaryCache) ATAU kamus_tambahan.txt (ID)
+            const activeDict = dictionaryCache.current[languageRef.current]?.dict || dictionaryCache.current.EN?.dict;
+            const isInDict = activeDict?.has(cleanWordCheck.toLowerCase()) || false;
+            const isInKamus = kamusTambahanRef.current.has(cleanWordCheck.toLowerCase());
+            const isKnownWord = isInDict || isInKamus;
+
+            if (!isKnownWord) {
+                // Kata tidak dikenal — abaikan tanpa feedback agar tidak spam
+                return;
+            }
+
             // Prevent double inputs from the same user
             const isDuplicate = word500GuessesRef.current.length > 0 && 
                                 word500GuessesRef.current[word500GuessesRef.current.length - 1].word === cleanWordCheck.toUpperCase() &&
@@ -1844,25 +1974,33 @@ export default function App() {
         }
 
         if (activeMinigameRef.current === "WORD500" && word500TargetRef.current && cleanWordCheck.length === word500TargetRef.current.length && !word500WinnerRef.current) {
-            const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
-            const newGuess = {
-                word: cleanWordCheck.toUpperCase(),
-                green, yellow, red,
-                nickname: "HOST (You)",
-                profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`
-            };
-            setWord500Guesses(prev => [...prev, newGuess]);
-            
-            if (green === word500TargetRef.current.length) {
-                setWord500Winner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
-                playSound("win");
-                triggerTableEffect("success");
-                addLog("MiniGame", `🎉 HOST memenangkan Word500: ${word500TargetRef.current}!`);
-                setTimeout(() => {
-                    startNewWord500();
-                }, 5000);
+            // Validasi kamus untuk HOST: cek di dictionary.txt (EN via dictionaryCache) ATAU kamus_tambahan.txt (ID)
+            const activeDictHost = dictionaryCache.current[languageRef.current]?.dict || dictionaryCache.current.EN?.dict;
+            const isInDictHost = activeDictHost?.has(cleanWordCheck.toLowerCase()) || false;
+            const isInKamusHost = kamusTambahanRef.current.has(cleanWordCheck.toLowerCase());
+            if (!isInDictHost && !isInKamusHost) {
+                showFeedback(`"${cleanWordCheck.toUpperCase()}" tidak ada di kamus!`, "warning");
             } else {
-                playSound("tick");
+                const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
+                const newGuess = {
+                    word: cleanWordCheck.toUpperCase(),
+                    green, yellow, red,
+                    nickname: "HOST (You)",
+                    profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`
+                };
+                setWord500Guesses(prev => [...prev, newGuess]);
+                
+                if (green === word500TargetRef.current.length) {
+                    setWord500Winner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
+                    playSound("win");
+                    triggerTableEffect("success");
+                    addLog("MiniGame", `🎉 HOST memenangkan Word500: ${word500TargetRef.current}!`);
+                    setTimeout(() => {
+                        startNewWord500();
+                    }, 5000);
+                } else {
+                    playSound("tick");
+                }
             }
             // Removed return; so the input can also be processed for Sambung Kata
         }
@@ -1989,7 +2127,7 @@ export default function App() {
             case "warning": return "border-amber-500/30 bg-amber-950/50";
             case "success": return "border-emerald-500/30 bg-emerald-950/50";
             case "info": return "border-sky-500/30 bg-sky-950/50 animate-pulse";
-            default: return "border-slate-800 bg-slate-900 shadow-2xl shadow-black/20";
+            default: return TABLE_THEMES[tableTheme] || TABLE_THEMES.midnight;
         }
     };
 
@@ -2010,6 +2148,8 @@ export default function App() {
     // ==========================================
     return (
         <div ref={containerRef} className="min-h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative">
+            {/* Background Pattern Overlay - Subtle subtle texture */}
+            <div className="absolute inset-0 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-[0.03]"></div>
             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 pointer-events-none">
                 <h1 className="text-xl sm:text-3xl font-black text-sky-400 drop-shadow-sm">SAMBUNG KATA</h1>
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 mt-1">
@@ -2194,6 +2334,18 @@ export default function App() {
                                                 <button onClick={() => {setActiveMinigame("WORD500");}} className={`px-2 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORD500" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>WORD500</button>
                                             </div>
                                         </div>
+                                    </div>
+                                    <div className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-2 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group mt-2">
+                                        <div className="flex items-center gap-2"><Sparkles className="w-3 h-3 text-amber-400" /><span className="text-slate-300">Tema Meja</span></div>
+                                        <select
+                                            value={tableTheme}
+                                            onChange={(e) => setTableTheme(e.target.value)}
+                                            className="bg-slate-900 text-slate-200 border border-slate-700 rounded px-2 py-1 text-[10px] font-bold outline-none focus:border-sky-500 transition-colors cursor-pointer"
+                                        >
+                                            {Object.keys(TABLE_THEMES).map(themeKey => (
+                                                <option key={themeKey} value={themeKey}>{THEME_LABELS[themeKey]}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
                                         <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">WebSocket Server</div>
@@ -2380,7 +2532,7 @@ export default function App() {
 
             <div className="transform scale-[0.85] -translate-y-12 sm:translate-y-0 sm:scale-100 transition-transform duration-300">
                 <div className="relative w-[360px] h-[360px] sm:w-[500px] sm:h-[500px] flex items-center justify-center">
-                    <div className={`absolute inset-0 rounded-full border-[8px] bg-slate-900 transition-all duration-300 flex items-center justify-center overflow-hidden shadow-xl ${getTableStatusClass()} ${tableStatus === 'success' ? 'scale-105' : 'scale-100'}`}>
+                    <div className={`absolute inset-0 rounded-full border-[8px] transition-all duration-500 flex items-center justify-center overflow-hidden ${getTableStatusClass()} ${tableStatus === 'success' ? 'scale-105' : 'scale-100'}`}>
                         {gameState === "PAUSED" && (
                             <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
                                 <Pause className="w-16 h-16 sm:w-20 sm:h-20 text-amber-400 mb-2 animate-pulse" />
@@ -2503,7 +2655,7 @@ export default function App() {
                                     </div>
 
                                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
-                                        {gameMode === "RHYME" ? t("rhyme_target") : "SAMBUNG KATA BERIKUT"}
+                                        {gameMode === "RHYME" ? t("rhyme_target") : gameMode === "FILL_BLANK" ? "LENGKAPI KATA BERIKUT" : "SAMBUNG KATA BERIKUT"}
                                     </p>
 
                                     <h2 className="font-black flex justify-center transition-all duration-300 px-2 my-1 w-full overflow-hidden" style={{ fontSize: `clamp(10px, 55vw / ${Math.max(6, currentWord?.length || 6)}, 28px)` }}>
@@ -2615,18 +2767,23 @@ export default function App() {
                                 <div className="absolute inset-0 pointer-events-none z-[150]">
                                     {activeEffects.filter(e => e.uniqueId === player.uniqueId).map(effect => {
                                         if (effect.type === 'like') {
-                                            return Array.from({ length: effect.count }).map((_, i) => {
-                                                const tx = (Math.random() - 0.5) * 60;
-                                                const ty = (Math.random() - 0.5) * 80 - 20;
-                                                const delay = Math.random() * 0.4;
-                                                return (
-                                                    <Heart
-                                                        key={`${effect.id}-${i}`}
-                                                        className="absolute top-1/2 left-1/2 text-rose-500 fill-rose-500 drop-shadow-sm w-4 h-4 animate-flurry-heart"
-                                                        style={{ '--tx': `${tx}px`, '--ty': `${ty}px`, animationDelay: `${delay}s`, opacity: 0, marginTop: '-10px', transform: 'translate(-50%, -50%)' }}
-                                                    />
-                                                );
-                                            });
+                                            return (effect.hearts || []).map((h, i) => (
+                                                <Heart
+                                                    key={`${effect.id}-${i}`}
+                                                    className={`absolute top-1/2 left-1/2 ${h.size} ${h.color} drop-shadow-md animate-flurry-heart`}
+                                                    style={{
+                                                        '--tx': `${h.tx}px`,
+                                                        '--ty': `${h.ty}px`,
+                                                        '--tx2': `${h.tx2}px`,
+                                                        '--ty2': `${h.ty2}px`,
+                                                        '--rot': `${h.rotate}deg`,
+                                                        animationDelay: `${h.delay}s`,
+                                                        animationDuration: `${h.duration}s`,
+                                                        opacity: 0,
+                                                        transform: 'translate(-50%, -50%)'
+                                                    }}
+                                                />
+                                            ));
                                         }
                                         if (effect.type === 'gift') {
                                             return (
@@ -3169,13 +3326,15 @@ export default function App() {
         
         /* Animasi Flurry Heart / Likes */
         @keyframes flurry-heart {
-            0% { opacity: 0; transform: translate(-50%, -50%) scale(0); }
-            20% { opacity: 1; transform: translate(calc(-50% + (var(--tx) * 0.5)), calc(-50% + (var(--ty) * 0.5))) scale(1); }
-            80% { opacity: 1; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.8); }
-            100% { opacity: 0; transform: translate(calc(-50% + (var(--tx) * 1.5)), calc(-50% + (var(--ty) * 1.5) - 10px)) scale(0); }
+            0%   { opacity: 0;   transform: translate(-50%, -50%) scale(0.2) rotate(0deg); }
+            10%  { opacity: 1;   transform: translate(calc(-50% + var(--tx) * 0.2), calc(-50% + var(--ty) * 0.2)) scale(1.3) rotate(calc(var(--rot) * 0.3)); }
+            30%  { opacity: 1;   transform: translate(calc(-50% + var(--tx) * 0.5), calc(-50% + var(--ty) * 0.5)) scale(1) rotate(calc(var(--rot) * 0.6)); }
+            55%  { opacity: 0.9; transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.9) rotate(var(--rot)); }
+            80%  { opacity: 0.5; transform: translate(calc(-50% + var(--tx2) * 0.8), calc(-50% + var(--ty2) * 0.8)) scale(0.7) rotate(calc(var(--rot) * 1.4)); }
+            100% { opacity: 0;   transform: translate(calc(-50% + var(--tx2)), calc(-50% + var(--ty2))) scale(0.3) rotate(calc(var(--rot) * 1.8)); }
         }
         .animate-flurry-heart {
-            animation: flurry-heart 1.5s ease-out forwards;
+            animation: flurry-heart var(--dur, 1.6s) cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
         }
 
         /* Animasi Flurry Gift */

@@ -50,7 +50,7 @@ const MusicPlayer = ({ musicState, wsRef }) => {
                     setPlayerReady(true);
                     if (isMuted) event.target.mute();
                     else event.target.unMute();
-                    event.target.setVolume(50);
+                    event.target.setVolume(100);
                 },
                 onStateChange: (event) => {
                     // YT.PlayerState.ENDED == 0
@@ -87,7 +87,7 @@ const MusicPlayer = ({ musicState, wsRef }) => {
                 playerRef.current.mute();
             } else {
                 playerRef.current.unMute();
-                playerRef.current.setVolume(50);
+                playerRef.current.setVolume(100);
             }
         }
     }, [isMuted, playerReady]);
