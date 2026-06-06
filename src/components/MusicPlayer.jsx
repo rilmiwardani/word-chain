@@ -55,12 +55,12 @@ const MusicPlayer = ({ musicState, wsRef }) => {
                 onStateChange: (event) => {
                     // YT.PlayerState.ENDED == 0
                     if (event.data === 0) {
-                        handleSkip();
+                        handleSkipWithRetry();
                     }
                 },
                 onError: (e) => {
                     console.error("YT Player Error:", e);
-                    handleSkip();
+                    handleSkipWithRetry();
                 }
             }
         });
@@ -95,6 +95,18 @@ const MusicPlayer = ({ musicState, wsRef }) => {
     const handleSkip = () => {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ event: 'music_skip' }));
+            return true;
+        }
+        return false;
+    };
+
+    // Retry skip up to 3x with 500ms delay if WS is temporarily disconnected
+    const handleSkipWithRetry = (attempt = 0) => {
+        if (handleSkip()) return;
+        if (attempt < 3) {
+            setTimeout(() => handleSkipWithRetry(attempt + 1), 500);
+        } else {
+            console.warn('[MusicPlayer] WS unavailable after retries, song ended without skip signal');
         }
     };
 
@@ -103,6 +115,8 @@ const MusicPlayer = ({ musicState, wsRef }) => {
     };
 
     // Track queue changes to show toast and play SFX
+    // Note: SFX uses Web Audio API which can cause browser audio ducking on YouTube.
+    // Volume is intentionally kept very low (0.04) to minimise the ducking effect.
     useEffect(() => {
         if (queue.length > prevQueueRef.current.length) {
             const addedItems = queue.slice(prevQueueRef.current.length);

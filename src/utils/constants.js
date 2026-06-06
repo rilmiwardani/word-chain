@@ -444,36 +444,36 @@ const SoundManager = {
     play: (effect) => {
         switch (effect) {
             case "join":
-                SoundManager.playTone(600, "sine", 0.1, 0.1);
-                setTimeout(() => SoundManager.playTone(800, "sine", 0.1, 0.1), 100);
+                SoundManager.playTone(600, "sine", 0.1, 0.04);
+                setTimeout(() => SoundManager.playTone(800, "sine", 0.1, 0.04), 100);
                 break;
             case "correct":
-                SoundManager.playTone(523.25, "triangle", 0.1, 0.1);
-                setTimeout(() => SoundManager.playTone(659.25, "triangle", 0.1, 0.1), 100);
-                setTimeout(() => SoundManager.playTone(783.99, "triangle", 0.3, 0.1), 200);
+                SoundManager.playTone(523.25, "triangle", 0.1, 0.04);
+                setTimeout(() => SoundManager.playTone(659.25, "triangle", 0.1, 0.04), 100);
+                setTimeout(() => SoundManager.playTone(783.99, "triangle", 0.3, 0.04), 200);
                 break;
             case "wrong":
-                SoundManager.playTone(150, "sawtooth", 0.3, 0.1);
-                setTimeout(() => SoundManager.playTone(100, "sawtooth", 0.3, 0.1), 150);
+                SoundManager.playTone(150, "sawtooth", 0.3, 0.04);
+                setTimeout(() => SoundManager.playTone(100, "sawtooth", 0.3, 0.04), 150);
                 break;
             case "eliminate":
-                SoundManager.playTone(400, "sawtooth", 0.5, 0.1, 100);
+                SoundManager.playTone(400, "sawtooth", 0.5, 0.04, 100);
                 break;
             case "tick":
-                SoundManager.playTone(800, "square", 0.05, 0.05);
+                SoundManager.playTone(800, "square", 0.05, 0.03);
                 break;
             case "start":
-                SoundManager.playTone(440, "sine", 0.1, 0.1);
-                setTimeout(() => SoundManager.playTone(880, "sine", 0.4, 0.1), 200);
+                SoundManager.playTone(440, "sine", 0.1, 0.04);
+                setTimeout(() => SoundManager.playTone(880, "sine", 0.4, 0.04), 200);
                 break;
             case "win":
                 [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5].forEach((freq, i) => {
-                    setTimeout(() => SoundManager.playTone(freq, "square", 0.2, 0.1), i * 150);
+                    setTimeout(() => SoundManager.playTone(freq, "square", 0.2, 0.04), i * 150);
                 });
                 break;
             case "notification":
-                SoundManager.playTone(600, "sine", 0.1, 0.1);
-                setTimeout(() => SoundManager.playTone(1200, "sine", 0.2, 0.1), 100);
+                SoundManager.playTone(600, "sine", 0.1, 0.04);
+                setTimeout(() => SoundManager.playTone(1200, "sine", 0.2, 0.04), 100);
                 break;
             default: break;
         }

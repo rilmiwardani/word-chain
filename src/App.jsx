@@ -116,6 +116,7 @@ export default function App() {
     const [word500Target, setWord500Target] = useState("");
     const [word500Guesses, setWord500Guesses] = useState([]);
     const [word500Winner, setWord500Winner] = useState(null);
+    const [word500FlipPhase, setWord500FlipPhase] = useState(null); // null | "flipping" | "winner"
 
     const [miniGamePos, setMiniGamePos] = useState({ x: null, y: null });
     const [miniGameScale, setMiniGameScale] = useState(1);
@@ -844,7 +845,9 @@ export default function App() {
         return [...byTier(1), ...byTier(2), ...byTier(3), ...byTier(4)];
     };
 
-    const getNextChallenge = (queue, currentSuffix) => {
+    const getNextChallenge = (queue, currentSuffix, nextOverlapLength) => {
+        // nextOverlapLength = the overlap that will be active when the next word is played
+        const effectiveOverlap = nextOverlapLength ?? currentSuffix.length;
         let tempQueue = [...queue];
         if (tempQueue.length === 0) tempQueue = generateChallengeQueue();
         for (let i = 0; i < tempQueue.length; i++) {
@@ -856,7 +859,15 @@ export default function App() {
             else if (challenge.id === "EXACT_2_VOWELS" && (currentSuffix.match(/[aeiou]/gi) || []).length > 2) isSafe = false;
             else if (challenge.id === "UNIQUE" && new Set(currentSuffix).size !== currentSuffix.length) isSafe = false;
             else if (challenge.id === "START_END_CONS" && /[aeiou]/i.test(currentSuffix[0])) isSafe = false;
-            else if (challenge.id === "SECOND_VOWEL" && currentSuffix.length >= 2 && !/[aeiou]/i.test(currentSuffix[1])) isSafe = false;
+            else if (challenge.id === "SECOND_VOWEL") {
+                // If overlap >= 2, the 2nd letter of every next word is already fixed (= suffix[1]).
+                // If that fixed letter is a consonant, SECOND_VOWEL is impossible.
+                if (effectiveOverlap >= 2) {
+                    const fixedSecondChar = currentSuffix.length >= 2 ? currentSuffix[1] : null;
+                    if (fixedSecondChar && !/[aeiou]/i.test(fixedSecondChar)) isSafe = false;
+                }
+                // If overlap == 1, suffix[0] is the first letter — 2nd letter is free, so always safe.
+            }
             else if (challenge.id === "EXACT_4" && currentSuffix.length >= 4) isSafe = false;
             else if (challenge.id === "MAX_5" && currentSuffix.length >= 5) isSafe = false;
             else if (challenge.id === "EXACT_6" && currentSuffix.length >= 6) isSafe = false;
@@ -910,10 +921,23 @@ export default function App() {
         if (turnCountRef.current >= Math.max(1, activeCount)) {
             turnCountRef.current = 0;
             const wordToUse = currentWordOverride !== null ? currentWordOverride : (currentWordRef.current || "");
-            
+
+            // ── IMPORTANT: update overlap FIRST so challenge selection uses the correct new overlap ──
+            let nextOverlapForChallenge = overlapLengthRef.current;
+            if (overlapModeRef.current === "SEQUENTIAL" && gameModeRef.current !== "FILL_BLANK") {
+                let nextSeq = overlapLengthRef.current + 1;
+                if (nextSeq > 4) nextSeq = 2; // Siklus 2 -> 3 -> 4 -> 2
+                setOverlapLength(nextSeq);
+                overlapLengthRef.current = nextSeq;
+                nextOverlapForChallenge = nextSeq;
+                addLog("System", `🔄 Ronde Baru! Syarat Overlap: ${nextSeq} Huruf`);
+                playSound("notification");
+            }
+
             if (gameModeRef.current === "DYNAMIC" && gameStateRef.current !== "ENDED") {
-                const suffix = wordToUse.slice(-overlapLengthRef.current).toLowerCase();
-                const { selected, newQueue } = getNextChallenge(challengeQueueRef.current, suffix);
+                // Use the NEXT overlap (already updated above) so safety check is accurate
+                const suffix = wordToUse.slice(-nextOverlapForChallenge).toLowerCase();
+                const { selected, newQueue } = getNextChallenge(challengeQueueRef.current, suffix, nextOverlapForChallenge);
                 setActiveChallenge(selected);
                 activeChallengeRef.current = selected;
                 setChallengeQueue(newQueue);
@@ -921,15 +945,6 @@ export default function App() {
                 const label = (languageRef.current === "ID" || languageRef.current === "MIX") && selected.labelID ? selected.labelID : selected.label;
                 addLog("System", `🚨 ${t("log_rule_change")}: ${label} 🚨`);
                 playSound("tick");
-            }
-
-            if (overlapModeRef.current === "SEQUENTIAL" && gameModeRef.current !== "FILL_BLANK") {
-                let nextSeq = overlapLengthRef.current + 1;
-                if (nextSeq > 4) nextSeq = 2; // Siklus 2 -> 3 -> 4 -> 2
-                setOverlapLength(nextSeq);
-                overlapLengthRef.current = nextSeq;
-                addLog("System", `🔄 Ronde Baru! Syarat Overlap: ${nextSeq} Huruf`);
-                playSound("notification");
             }
 
             if (gameModeRef.current === "RHYME") {
@@ -999,8 +1014,11 @@ export default function App() {
             if (gameModeRef.current === "RHYME") {
                 setTimeout(changeRhymeTarget, 500);
             }
-            setTurnCount(0);
-            turnCountRef.current = 0; // Fix: reset ref sebelum advanceTurn, agar rotasi rule tidak meleset
+            // Clamp turnCountRef to the new active count - 1 instead of resetting to 0.
+            // Hard-resetting would wipe round progress and cause rule changes at wrong times
+            // in DYNAMIC mode (turnCount would immediately hit the smaller activeCount threshold).
+            const newActiveCount = activePlayers.length;
+            turnCountRef.current = Math.min(turnCountRef.current, Math.max(0, newActiveCount - 1));
             advanceTurn(newPlayers, currentIndex, 1);
         }
     }
@@ -1136,8 +1154,9 @@ export default function App() {
             if (gameModeRef.current === "RHYME") {
                 setTimeout(changeRhymeTarget, 500);
             }
-            setTurnCount(0);
-            turnCountRef.current = 0; // Fix: reset ref sebelum advanceTurn, agar rotasi rule tidak meleset
+            // Clamp, don't reset — preserve round progress
+            const newActiveCount = activePlayers.length;
+            turnCountRef.current = Math.min(turnCountRef.current, Math.max(0, newActiveCount - 1));
             advanceTurn(newPlayers, pIndex, 1);
         } else {
             // Pemain mati bukan saat gilirannya: clamp turnCountRef agar tidak overshoot
@@ -1931,12 +1950,11 @@ export default function App() {
                 
                 if (green === word500TargetRef.current.length) {
                     setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
-                    playSound("win");
-                    triggerTableEffect("success");
                     addLog("MiniGame", `🎉 ${nickname} memenangkan Word500: ${word500TargetRef.current}!`);
-                    setTimeout(() => {
-                        startNewWord500();
-                    }, 5000);
+                    // Show correct answer row first, then flip after 800ms
+                    setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                    setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
+                    setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
                 } else {
                     playSound("tick");
                 }
@@ -1992,12 +2010,11 @@ export default function App() {
                 
                 if (green === word500TargetRef.current.length) {
                     setWord500Winner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
-                    playSound("win");
-                    triggerTableEffect("success");
                     addLog("MiniGame", `🎉 HOST memenangkan Word500: ${word500TargetRef.current}!`);
-                    setTimeout(() => {
-                        startNewWord500();
-                    }, 5000);
+                    // Show correct answer row first, then flip after 800ms
+                    setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                    setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
+                    setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
                 } else {
                     playSound("tick");
                 }
@@ -3133,97 +3150,179 @@ export default function App() {
                     style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
                 >
                     <div
-                        className="bg-slate-900/90 backdrop-blur-md rounded-lg border border-slate-700/50 shadow-xl pointer-events-auto flex flex-col p-1.5 w-max max-w-[90vw]"
+                        className="pointer-events-auto"
                         style={{
                             transform: `scale(${miniGameScale})`,
                             transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
                             transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)'
                         }}
                     >
-                        <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-700/50 cursor-move touch-none" onMouseDown={handleMiniGameDragStart} onTouchStart={handleMiniGameDragStart}>
-                            <div className="flex items-center gap-1.5">
-                                <GripHorizontal className="w-3.5 h-3.5 text-slate-600" />
-                                <span className="text-[11px] font-bold text-sky-400 tracking-wide">Word500</span>
-                                <span className="text-[9px] text-slate-600 font-mono">{word500Target.length}L</span>
-                                {!word500Winner && (
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
-                                        onTouchEnd={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
-                                        title="Spill Jawaban"
-                                        className="ml-0.5 text-slate-600 hover:text-amber-400 transition-colors p-0.5 rounded hover:bg-slate-800 active:scale-90"
-                                    >
-                                        <Sparkles className="w-3 h-3" />
-                                    </button>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.5}><Minus className="w-2.5 h-2.5" /></button>
-                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(1.5, p + 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 1.5}><Plus className="w-2.5 h-2.5" /></button>
-                            </div>
-                        </div>
-
-                        {word500Winner && (
-                            <div className="flex items-center gap-1.5 mb-1.5 bg-emerald-950/50 border border-emerald-800/50 px-2 py-1 rounded-lg animate-in fade-in">
-                                <img src={word500Winner.profilePictureUrl} className="w-5 h-5 rounded-full border border-emerald-500 object-cover bg-slate-800" alt="winner" />
-                                <span className="text-[10px] font-bold text-emerald-300 max-w-[100px] truncate">{word500Winner.nickname}</span>
-                                <span className="text-[8px] font-black text-emerald-400 bg-emerald-900/50 px-1 rounded">MENANG!</span>
-                            </div>
-                        )}
-
-                        <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto custom-scrollbar pr-0.5 w-full" style={{ scrollBehavior: 'smooth' }}>
-                            {word500Guesses.length === 0 ? (
-                                <div className="text-[9px] text-slate-600 italic text-center py-1.5 min-w-[160px]">Ketik kata {word500Target.length} huruf!</div>
-                            ) : (() => {
-                                const latestGuess = word500Guesses[word500Guesses.length - 1];
-                                const prevGuesses = word500Guesses.slice(0, -1);
-                                const bestGuesses = [...prevGuesses]
-                                    .sort((a, b) => b.green - a.green || b.yellow - a.yellow)
-                                    .slice(0, 2);
-                                const displayRows = [
-                                    { guess: latestGuess, isLatest: true },
-                                    ...bestGuesses.map(g => ({ guess: g, isLatest: false }))
-                                ];
-                                const renderRow = (g, isLatest, idx) => (
-                                    <div key={`${isLatest ? 'latest' : 'best'}-${idx}`} className={`flex items-center gap-1 animate-in slide-in-from-right fade-in duration-200 rounded-[3px] ${isLatest ? 'bg-sky-950/40 ring-1 ring-sky-800/50 px-0.5' : ''}`}>
-                                        {/* Label */}
-                                        <div className="flex-shrink-0 w-3 flex items-center justify-center">
-                                            {isLatest
-                                                ? <div className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" title="Terbaru" />
-                                                : idx === 1
-                                                    ? <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" title="Terbaik" />
-                                                    : <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
-                                            }
-                                        </div>
-                                        {/* Avatar kecil */}
-                                        <div className="flex-shrink-0">
-                                            {g.profilePictureUrl ? (
-                                                <img src={g.profilePictureUrl} className="w-4 h-4 rounded-full border border-slate-600 object-cover bg-slate-800" alt={g.nickname} title={g.nickname} />
-                                            ) : (
-                                                <div className="w-4 h-4 rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center text-[7px] font-bold text-slate-400" title={g.nickname}>{g.nickname.substring(0, 1).toUpperCase()}</div>
+                        {/* 3D flip container */}
+                        <div
+                            style={{
+                                perspective: '600px',
+                                width: 'max-content',
+                                maxWidth: '90vw',
+                            }}
+                        >
+                            <div
+                                style={{
+                                    position: 'relative',
+                                    transformStyle: 'preserve-3d',
+                                    transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                                    transform: word500FlipPhase === 'flipping' || word500FlipPhase === 'winner' ? 'rotateY(-180deg)' : 'rotateY(0deg)',
+                                    minWidth: '210px',
+                                }}
+                            >
+                                {/* ══ FRONT FACE — Guess Rows ══ */}
+                                <div
+                                    className="bg-slate-900/90 backdrop-blur-md rounded-lg border border-slate-700/50 shadow-xl flex flex-col p-1.5 w-max max-w-[90vw]"
+                                    style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+                                >
+                                    {/* Header */}
+                                    <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-slate-700/50 cursor-move touch-none" onMouseDown={handleMiniGameDragStart} onTouchStart={handleMiniGameDragStart}>
+                                        <div className="flex items-center gap-1.5">
+                                            <GripHorizontal className="w-3.5 h-3.5 text-slate-600" />
+                                            <span className="text-[11px] font-bold text-sky-400 tracking-wide">Word500</span>
+                                            <span className="text-[9px] text-slate-600 font-mono">{word500Target.length}L</span>
+                                            {!word500Winner && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
+                                                    onTouchEnd={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
+                                                    title="Spill Jawaban"
+                                                    className="ml-0.5 text-slate-600 hover:text-amber-400 transition-colors p-0.5 rounded hover:bg-slate-800 active:scale-90"
+                                                >
+                                                    <Sparkles className="w-3 h-3" />
+                                                </button>
                                             )}
                                         </div>
-                                        {/* Tile huruf */}
-                                        <div className="flex gap-px">
-                                            {g.word.split('').map((char, j) => (
-                                                <div key={j} className={`w-4 h-5 shrink-0 border rounded-[2px] flex items-center justify-center font-bold text-[9px] uppercase ${isLatest ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
-                                                    {char}
-                                                </div>
-                                            ))}
-                                        </div>
-                                        {/* Skor */}
-                                        <div className="flex gap-px ml-0.5">
-                                            <div className="w-4 h-5 shrink-0 bg-emerald-700 border border-emerald-600 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.green}</div>
-                                            <div className="w-4 h-5 shrink-0 bg-amber-600 border border-amber-500 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.yellow}</div>
-                                            <div className="w-4 h-5 shrink-0 bg-rose-700 border border-rose-600 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.red}</div>
+                                        <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                            <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.5}><Minus className="w-2.5 h-2.5" /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(1.5, p + 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 1.5}><Plus className="w-2.5 h-2.5" /></button>
                                         </div>
                                     </div>
-                                );
-                                return displayRows.map(({ guess, isLatest }, idx) => renderRow(guess, isLatest, idx));
-                            })()}
-                            <div ref={word500EndRef} />
-                        </div>
-                        
 
+                                    {/* Guess rows */}
+                                    <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto custom-scrollbar pr-0.5 w-full" style={{ scrollBehavior: 'smooth' }}>
+                                        {word500Guesses.length === 0 ? (
+                                            <div className="text-[9px] text-slate-600 italic text-center py-1.5 min-w-[160px]">Ketik kata {word500Target.length} huruf!</div>
+                                        ) : (() => {
+                                            const latestGuess = word500Guesses[word500Guesses.length - 1];
+                                            const prevGuesses = word500Guesses.slice(0, -1);
+                                            const bestGuesses = [...prevGuesses]
+                                                .sort((a, b) => b.green - a.green || b.yellow - a.yellow)
+                                                .slice(0, 2);
+                                            const displayRows = [
+                                                { guess: latestGuess, isLatest: true },
+                                                ...bestGuesses.map(g => ({ guess: g, isLatest: false }))
+                                            ];
+                                            const isWinRow = latestGuess?.green === word500Target.length;
+                                            const renderRow = (g, isLatest, idx) => (
+                                                <div key={`${isLatest ? 'latest' : 'best'}-${idx}`} className={`flex items-center gap-1 animate-in slide-in-from-right fade-in duration-200 rounded-[3px] ${
+                                                    isLatest && isWinRow
+                                                        ? 'bg-emerald-950/60 ring-1 ring-emerald-600/60 px-0.5'
+                                                        : isLatest ? 'bg-sky-950/40 ring-1 ring-sky-800/50 px-0.5' : ''
+                                                }`}>
+                                                    <div className="flex-shrink-0 w-3 flex items-center justify-center">
+                                                        {isLatest && isWinRow
+                                                            ? <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" title="BENAR!" />
+                                                            : isLatest
+                                                                ? <div className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" title="Terbaru" />
+                                                                : idx === 1
+                                                                    ? <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" title="Terbaik" />
+                                                                    : <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+                                                        }
+                                                    </div>
+                                                    <div className="flex-shrink-0">
+                                                        {g.profilePictureUrl ? (
+                                                            <img src={g.profilePictureUrl} className="w-4 h-4 rounded-full border border-slate-600 object-cover bg-slate-800" alt={g.nickname} title={g.nickname} />
+                                                        ) : (
+                                                            <div className="w-4 h-4 rounded-full border border-slate-600 bg-slate-800 flex items-center justify-center text-[7px] font-bold text-slate-400" title={g.nickname}>{g.nickname.substring(0, 1).toUpperCase()}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex gap-px">
+                                                        {g.word.split('').map((char, j) => (
+                                                            <div key={j} className={`w-4 h-5 shrink-0 border rounded-[2px] flex items-center justify-center font-bold text-[9px] uppercase transition-colors duration-300 ${
+                                                                isLatest && isWinRow
+                                                                    ? 'bg-emerald-700 border-emerald-500 text-white'
+                                                                    : isLatest ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-slate-800 border-slate-700 text-slate-300'
+                                                            }`}>
+                                                                {char}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div className="flex gap-px ml-0.5">
+                                                        <div className="w-4 h-5 shrink-0 bg-emerald-700 border border-emerald-600 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.green}</div>
+                                                        <div className="w-4 h-5 shrink-0 bg-amber-600 border border-amber-500 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.yellow}</div>
+                                                        <div className="w-4 h-5 shrink-0 bg-rose-700 border border-rose-600 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.red}</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                            return displayRows.map(({ guess, isLatest }, idx) => renderRow(guess, isLatest, idx));
+                                        })()}
+                                        <div ref={word500EndRef} />
+                                    </div>
+                                </div>
+
+                                {/* ══ BACK FACE — Winner Reveal ══ */}
+                                <div
+                                    className="absolute inset-0 bg-slate-900/95 backdrop-blur-md rounded-lg border border-emerald-600/60 shadow-2xl flex flex-col items-center justify-center gap-2 p-3 overflow-hidden"
+                                    style={{
+                                        backfaceVisibility: 'hidden',
+                                        WebkitBackfaceVisibility: 'hidden',
+                                        transform: 'rotateY(180deg)',
+                                        minWidth: '210px',
+                                        minHeight: '80px',
+                                    }}
+                                >
+                                    {/* Sparkle particles */}
+                                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-lg">
+                                        {[...Array(8)].map((_, i) => (
+                                            <div
+                                                key={i}
+                                                className="absolute w-1 h-1 rounded-full animate-ping"
+                                                style={{
+                                                    left: `${10 + (i * 11)}%`,
+                                                    top: `${20 + (i % 3) * 30}%`,
+                                                    backgroundColor: ['#34d399','#fbbf24','#60a5fa','#f472b6'][i % 4],
+                                                    animationDelay: `${i * 0.15}s`,
+                                                    animationDuration: '1s',
+                                                    opacity: word500FlipPhase === 'winner' ? 1 : 0,
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+
+                                    {word500Winner && (
+                                        <>
+                                            <div className="relative">
+                                                <div className="absolute -inset-1.5 rounded-full bg-emerald-400/20 animate-ping" />
+                                                <img
+                                                    src={word500Winner.profilePictureUrl}
+                                                    className="relative w-9 h-9 rounded-full border-2 border-emerald-400 object-cover bg-slate-800 shadow-lg shadow-emerald-900/50"
+                                                    alt={word500Winner.nickname}
+                                                />
+                                            </div>
+                                            <div className="flex flex-col items-center gap-0.5 text-center">
+                                                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">PEMENANG!</span>
+                                                <span className="text-[11px] font-bold text-white max-w-[140px] truncate">{word500Winner.nickname}</span>
+                                                <div className="flex gap-px mt-1">
+                                                    {word500Target.split('').map((char, i) => (
+                                                        <div
+                                                            key={i}
+                                                            className="w-5 h-6 shrink-0 bg-emerald-700 border border-emerald-500 rounded-[3px] flex items-center justify-center font-black text-[10px] text-white shadow-sm"
+                                                            style={{ animationDelay: `${i * 60}ms` }}
+                                                        >
+                                                            {char.toUpperCase()}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
@@ -3313,6 +3412,12 @@ export default function App() {
             )}
 
             <style>{`
+        @keyframes word500-tile-pop {
+            0%   { transform: scaleY(0); opacity: 0; }
+            50%  { transform: scaleY(1.15); opacity: 1; }
+            100% { transform: scaleY(1); opacity: 1; }
+        }
+        .animate-word500-tile { animation: word500-tile-pop 0.3s ease-out forwards; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
