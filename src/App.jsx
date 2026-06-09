@@ -120,6 +120,7 @@ export default function App() {
 
     const [miniGamePos, setMiniGamePos] = useState({ x: null, y: null });
     const [miniGameScale, setMiniGameScale] = useState(1);
+    const [mainTableOffset, setMainTableOffset] = useState({ x: 0, y: 0 });
 
 
     // === REFS ===
@@ -183,6 +184,9 @@ export default function App() {
     // Session-level tracker: rule tidak diulang sampai semua 22 jenis habis
     const sessionUsedChallengeIdsRef = useRef(new Set());
 
+    const mainTableDragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+    const mainTableRef = useRef(null);
+
     const miniGameDragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
     const miniGameOverlayRef = useRef(null);
     const miniGameWordsRef = useRef(["KUCING", "ANJING", "SEPATU", "BENDERA", "PELANGI", "GARUDA", "KAMERA", "PENSIL", "LEMARI", "KERTAS", "BONEKA", "PANGGUNG", "KACAMATA", "BINGKAI", "LUKISAN", "DOMPET", "BANTAL", "GULING", "SELIMUT", "KASUR"]);
@@ -239,6 +243,15 @@ export default function App() {
         setTimeout(connectWebSocket, 500);
     };
 
+    const handleMainTableDragStart = (e) => {
+        if (e.target.closest('button') || e.target.closest('input')) return;
+        mainTableDragRef.current.isDragging = true;
+        mainTableDragRef.current.startX = e.clientX || (e.touches && e.touches[0].clientX);
+        mainTableDragRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY);
+        mainTableDragRef.current.initialX = mainTableOffset.x;
+        mainTableDragRef.current.initialY = mainTableOffset.y;
+    };
+
     const handleMiniGameDragStart = (e) => {
         miniGameDragRef.current.isDragging = true;
         miniGameDragRef.current.startX = e.clientX || (e.touches && e.touches[0].clientX);
@@ -269,29 +282,43 @@ export default function App() {
 
     useEffect(() => {
         const handleMouseMove = (e) => {
-            if (!miniGameDragRef.current.isDragging) return;
-            if (e.cancelable && e.type === 'touchmove') e.preventDefault();
-
-            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
-            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
-            if (clientX === undefined) return;
-
-            const dx = clientX - miniGameDragRef.current.startX;
-            const dy = clientY - miniGameDragRef.current.startY;
-
-            let newX = miniGameDragRef.current.initialX + dx;
-            let newY = miniGameDragRef.current.initialY + dy;
-
-            newX = Math.max(0, Math.min(window.innerWidth - 100, newX));
-            newY = Math.max(0, Math.min(window.innerHeight - 50, newY));
-
-            // Direct DOM update - avoids React re-render on every mousemove
-            if (miniGameOverlayRef.current) {
-                miniGameOverlayRef.current.style.left = newX + 'px';
-                miniGameOverlayRef.current.style.top = newY + 'px';
+            if (miniGameDragRef.current.isDragging) {
+                if (e.cancelable && e.type === 'touchmove') e.preventDefault();
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                if (clientX !== undefined) {
+                    const dx = clientX - miniGameDragRef.current.startX;
+                    const dy = clientY - miniGameDragRef.current.startY;
+                    let newX = miniGameDragRef.current.initialX + dx;
+                    let newY = miniGameDragRef.current.initialY + dy;
+                    newX = Math.max(0, Math.min(window.innerWidth - 100, newX));
+                    newY = Math.max(0, Math.min(window.innerHeight - 50, newY));
+                    if (miniGameOverlayRef.current) {
+                        miniGameOverlayRef.current.style.left = newX + 'px';
+                        miniGameOverlayRef.current.style.top = newY + 'px';
+                    }
+                    miniGameDragRef.current.lastX = newX;
+                    miniGameDragRef.current.lastY = newY;
+                }
             }
-            miniGameDragRef.current.lastX = newX;
-            miniGameDragRef.current.lastY = newY;
+
+            if (mainTableDragRef.current.isDragging) {
+                if (e.cancelable && e.type === 'touchmove') e.preventDefault();
+                const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+                const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                if (clientX !== undefined) {
+                    const dx = clientX - mainTableDragRef.current.startX;
+                    const dy = clientY - mainTableDragRef.current.startY;
+                    const newX = mainTableDragRef.current.initialX + dx;
+                    const newY = mainTableDragRef.current.initialY + dy;
+                    if (mainTableRef.current) {
+                        mainTableRef.current.style.left = `${newX}px`;
+                        mainTableRef.current.style.top = `${newY}px`;
+                    }
+                    mainTableDragRef.current.lastX = newX;
+                    mainTableDragRef.current.lastY = newY;
+                }
+            }
         };
 
         const handleMouseUp = () => {
@@ -299,6 +326,12 @@ export default function App() {
                 miniGameDragRef.current.isDragging = false;
                 if (miniGameDragRef.current.lastX !== undefined) {
                     setMiniGamePos({ x: miniGameDragRef.current.lastX, y: miniGameDragRef.current.lastY });
+                }
+            }
+            if (mainTableDragRef.current.isDragging) {
+                mainTableDragRef.current.isDragging = false;
+                if (mainTableDragRef.current.lastX !== undefined) {
+                    setMainTableOffset({ x: mainTableDragRef.current.lastX, y: mainTableDragRef.current.lastY });
                 }
             }
         };
@@ -2547,7 +2580,13 @@ export default function App() {
             )}
 
 
-            <div className="transform scale-[0.85] -translate-y-12 sm:translate-y-0 sm:scale-100 transition-transform duration-300">
+            <div 
+                ref={mainTableRef}
+                onMouseDown={handleMainTableDragStart}
+                onTouchStart={handleMainTableDragStart}
+                style={{ position: 'relative', left: `${mainTableOffset.x}px`, top: `${mainTableOffset.y}px` }}
+                className="cursor-move transform scale-[0.85] -translate-y-12 sm:translate-y-0 sm:scale-100 transition-transform duration-300 z-10"
+            >
                 <div className="relative w-[360px] h-[360px] sm:w-[500px] sm:h-[500px] flex items-center justify-center">
                     <div className={`absolute inset-0 rounded-full border-[8px] transition-all duration-500 flex items-center justify-center overflow-hidden ${getTableStatusClass()} ${tableStatus === 'success' ? 'scale-105' : 'scale-100'}`}>
                         {gameState === "PAUSED" && (
