@@ -2652,9 +2652,9 @@ export default function App() {
                                     )}
                                 </div>
                             ) : gameState === "ENDED" ? (
-                                <div className="animate-bounce">
-                                    <p className="text-xl font-bold text-amber-400">{t("game_over")}</p>
-                                    <button onClick={() => { setRestartCountdown(null); processQueue(); startGame(); }} className="mt-2 bg-emerald-600 text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-sm hover:bg-emerald-500 transition-colors">{t("new_game")}</button>
+                                <div className="animate-in zoom-in fade-in duration-700 flex flex-col items-center">
+                                    <p className="text-2xl font-black text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.6)] uppercase tracking-widest mb-2">{t("game_over")}</p>
+                                    <button onClick={() => { setRestartCountdown(null); processQueue(); startGame(); }} className="bg-emerald-600 text-white px-5 py-2 rounded-full text-sm font-bold shadow-sm hover:bg-emerald-500 transition-colors animate-pulse">{t("new_game")}</button>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center">
@@ -2964,27 +2964,31 @@ export default function App() {
             )}
 
             {gameState === "ENDED" && getWinners().length > 0 && (
-                <div className="absolute inset-0 z-[400] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-500 p-4">
+                <div className="absolute inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-1000 p-4">
                     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                        {[...Array(20)].map((_, i) => (
-                            <div key={i} className="absolute animate-ping" style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, animationDuration: `${1 + Math.random()}s`, animationDelay: `${Math.random()}s`, backgroundColor: ["#FCD34D", "#6EE7B7", "#7DD3FC", "#F9A8D4"][Math.floor(Math.random() * 4)], width: "8px", height: "8px", borderRadius: "50%" }}></div>
+                        {[...Array(30)].map((_, i) => (
+                            <div key={i} className="absolute animate-pulse" style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, animationDuration: `${2 + Math.random() * 3}s`, animationDelay: `${Math.random() * 2}s`, backgroundColor: ["#FCD34D", "#F59E0B", "#D97706"][Math.floor(Math.random() * 3)], width: `${Math.random() * 4 + 2}px`, height: `${Math.random() * 4 + 2}px`, borderRadius: "50%", boxShadow: "0 0 10px rgba(251,191,36,0.5)" }}></div>
                         ))}
                     </div>
-                    <div className="relative bg-slate-900 border border-slate-800 shadow-2xl rounded-3xl p-6 sm:p-8 max-w-3xl w-full flex flex-col items-center transform transition-all animate-in zoom-in-90 duration-300">
-                        <div className="flex items-center justify-center gap-3 sm:gap-4 mb-6">
-                            <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-amber-400 drop-shadow-sm animate-bounce" />
-                            <h2 className="text-3xl sm:text-4xl font-black text-slate-100">{getWinners().length > 1 ? t("draw") : t("winner")}</h2>
-                            <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-amber-400 drop-shadow-sm animate-bounce" />
+                    <div className="relative bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] rounded-[2.5rem] p-8 sm:p-10 max-w-3xl w-full flex flex-col items-center transform transition-all animate-in slide-in-from-bottom-12 fade-in zoom-in-95 duration-1000 ease-out">
+                        <div className="relative flex flex-col items-center justify-center mb-8 w-full">
+                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-amber-500/20 blur-[60px] rounded-full pointer-events-none"></div>
+                            <Trophy className="w-16 h-16 sm:w-20 sm:h-20 text-amber-400 drop-shadow-[0_0_25px_rgba(251,191,36,0.6)] mb-4 animate-in zoom-in fade-in duration-700 delay-200 fill-amber-500/20" />
+                            <h2 className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 drop-shadow-sm uppercase tracking-widest animate-in slide-in-from-bottom-4 fade-in duration-700 delay-300 relative z-10">
+                                {getWinners().length > 1 ? t("draw") : t("winner")}
+                            </h2>
+                            <div className="h-px w-3/4 bg-gradient-to-r from-transparent via-slate-600 to-transparent mt-6 animate-in fade-in duration-1000 delay-500"></div>
                         </div>
-                        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mb-6 w-full max-h-[35vh] overflow-y-auto custom-scrollbar">
+                        <div className="flex flex-wrap justify-center gap-4 sm:gap-6 mb-8 w-full max-h-[35vh] overflow-y-auto custom-scrollbar">
                             {getWinners().map((winner, idx) => (
-                                <div key={idx} className="flex flex-col items-center bg-slate-800/50 p-3 rounded-2xl border border-slate-700 min-w-[110px] sm:min-w-[130px] animate-in zoom-in duration-300" style={{ animationDelay: `${idx * 100}ms` }}>
-                                    <div className="relative mb-2 group">
-                                        <img src={winner.avatarUrl} alt="Winner" className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-full border-4 border-amber-400 shadow-md object-cover bg-slate-800" />
-                                        {getWinners().length > 1 && <div className="absolute -bottom-1 -right-1 bg-amber-500 text-white font-bold px-1.5 py-0.5 rounded-full text-[10px] shadow-sm">#{idx + 1}</div>}
+                                <div key={idx} className="flex flex-col items-center bg-slate-800/40 p-4 rounded-3xl border border-slate-700/50 min-w-[120px] sm:min-w-[140px] animate-in zoom-in fade-in duration-700 fill-mode-backwards" style={{ animationDelay: `${500 + idx * 150}ms` }}>
+                                    <div className="relative mb-3 group">
+                                        <div className="absolute -inset-1 bg-amber-500/30 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                                        <img src={winner.avatarUrl} alt="Winner" className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full border-[3px] border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)] object-cover bg-slate-800" />
+                                        {getWinners().length > 1 && <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white font-black px-2 py-0.5 rounded-full text-[11px] shadow-lg border border-amber-300">#{idx + 1}</div>}
                                     </div>
-                                    <p className="text-sm sm:text-base font-bold text-slate-200 truncate max-w-[100px]">{winner.nickname}</p>
-                                    {pointMode !== "OFF" && <p className="text-xs sm:text-sm font-mono text-emerald-400 font-bold mt-0.5">{winner.score} {t("log_pts")}</p>}
+                                    <p className="text-base sm:text-lg font-bold text-white truncate max-w-[110px] sm:max-w-[120px]">{winner.nickname}</p>
+                                    {pointMode !== "OFF" && <p className="text-sm sm:text-base font-mono text-emerald-400 font-bold mt-1">{winner.score} <span className="text-[10px] opacity-70">PTS</span></p>}
                                 </div>
                             ))}
                         </div>
@@ -3511,7 +3515,7 @@ export default function App() {
       `}</style>
             
             {/* --- MUSIC PLAYER OVERLAY --- */}
-            <MusicPlayer musicState={musicState} wsRef={wsRef} />
+            <MusicPlayer musicState={musicState} wsRef={wsRef} isKeyboardOpen={showVirtualKeyboard} />
 
         </div>
     );

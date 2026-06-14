@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Music, SkipForward, Volume2, VolumeX, ListMusic, X } from 'lucide-react';
 import { SoundManager } from '../utils/constants';
 
-const MusicPlayer = ({ musicState, wsRef }) => {
+const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen }) => {
     const { current, queue } = musicState || { current: null, queue: [] };
     const [isMuted, setIsMuted] = useState(false);
     const [playerReady, setPlayerReady] = useState(false);
@@ -146,7 +146,7 @@ const MusicPlayer = ({ musicState, wsRef }) => {
             </div>
 
             {/* TOAST NOTIFICATION FOR NEW REQUESTS */}
-            <div className={`fixed bottom-[6.5rem] right-4 z-[110] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${toast ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95 pointer-events-none'}`}>
+            <div className={`fixed ${isKeyboardOpen ? 'bottom-[370px]' : 'bottom-[6.5rem]'} right-4 z-[110] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${toast ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95 pointer-events-none'}`}>
                 {toast && (
                     <div className="bg-gradient-to-r from-sky-900/95 to-slate-900/95 border border-sky-500/40 p-2.5 rounded-2xl shadow-[0_0_20px_rgba(14,165,233,0.2)] backdrop-blur-md flex items-center gap-3 w-72">
                         <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-inner">
@@ -170,7 +170,7 @@ const MusicPlayer = ({ musicState, wsRef }) => {
 
             {/* UI Overlay - Conditionally rendered when there is a current song */}
             {current && (
-                <div className={`fixed bottom-4 right-4 z-[100] [perspective:1000px] transition-all duration-500 ${isFlipped ? 'w-72 h-52' : 'w-72 h-20'}`}>
+                <div className={`fixed ${isKeyboardOpen ? 'bottom-[290px]' : 'bottom-4'} right-4 z-[100] [perspective:1000px] transition-all duration-500 ${isFlipped ? 'w-72 h-52' : 'w-72 h-20'}`}>
                     <div className={`w-full h-full relative transition-all duration-700 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(-180deg)]' : ''}`}>
                         
                         {/* FRONT FACE - CURRENT SONG */}
