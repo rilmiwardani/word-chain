@@ -6,7 +6,7 @@ import {
     MoveUpRight, Plus, RefreshCw, Repeat2, Send, Settings,
     Star, Target, TrendingUp as TrendingUpIcon, Trophy, Unlink,
     User, Users, Volume2, VolumeX, X, Sparkles, MessageSquare, MessageSquareOff,
-    Pause, Play
+    Pause, Play, Music
 } from "lucide-react";
 
 import { TRANSLATIONS, TIER_LEVELS, getPlayerTier, FALLBACK_DICTIONARY_EN, FALLBACK_PHRASES_ID, FALLBACK_PHRASES_EN, FALLBACK_DICTIONARY_ID_DATA, FALLBACK_CITIES, DYNAMIC_CHALLENGES, BOT_PROFILES, getRandomColor, getAvatarUrl, normalizeWord, generatePattern, getEnglishSyllableSuffix, StatsManager, SoundManager } from "./utils/constants";
@@ -51,6 +51,7 @@ export default function App() {
     const [actionCardsEnabled, setActionCardsEnabled] = useState(false);
     const [pointMode, setPointMode] = useState("OFF"); // OFF, LENGTH, SCRABBLE, VOWELS
     const [musicState, setMusicState] = useState(null);
+    const [musicOverlayStyle, setMusicOverlayStyle] = useState("thumbnail");
 
     const [isReversed, setIsReversed] = useState(false);
     const [overlapLength, setOverlapLength] = useState(1);
@@ -2008,7 +2009,29 @@ export default function App() {
         if (e && e.preventDefault) e.preventDefault();
         if (!manualInput.trim()) return;
 
-        const lower = manualInput.trim().toLowerCase();
+        const rawInput = manualInput.trim();
+        const lowerRaw = rawInput.toLowerCase();
+
+        // --- Host Music Commands ---
+        if (lowerRaw.startsWith("!play ")) {
+            const query = rawInput.substring(6).trim();
+            if (query && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ event: 'host_music_request', data: { query } }));
+                showFeedback(`Mencari musik: ${query}`, "info");
+            }
+            setManualInput("");
+            return;
+        }
+        if (lowerRaw === "!skip") {
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ event: 'music_skip' }));
+                showFeedback("Melewati musik", "info");
+            }
+            setManualInput("");
+            return;
+        }
+
+        const lower = lowerRaw;
         const cleanWordCheck = normalizeWord(lower);
 
         if (activeMinigameRef.current === "ANAGRAM" && scrambleWordRef.current && cleanWordCheck === scrambleWordRef.current.toLowerCase() && !scrambleWinnerRef.current) {
@@ -2382,6 +2405,15 @@ export default function App() {
                                                 <button onClick={() => {setActiveMinigame("OFF");}} className={`px-2 py-1 rounded text-[10px] transition-colors ${activeMinigame === "OFF" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>OFF</button>
                                                 <button onClick={() => {setActiveMinigame("ANAGRAM");}} className={`px-2 py-1 rounded text-[10px] transition-colors ${activeMinigame === "ANAGRAM" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>ANAGRAM</button>
                                                 <button onClick={() => {setActiveMinigame("WORD500");}} className={`px-2 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORD500" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>WORD500</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
+                                        <div className="flex items-center justify-between text-xs font-bold">
+                                            <div className="flex items-center gap-2"><Music className="w-3 h-3 text-sky-400" /><span className="text-slate-300">Tampilan Musik</span></div>
+                                            <div className="flex gap-1 bg-slate-900 rounded p-0.5 border border-slate-800">
+                                                <button onClick={() => setMusicOverlayStyle("thumbnail")} className={`px-2 py-1 rounded text-[10px] transition-colors ${musicOverlayStyle === "thumbnail" ? "bg-sky-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>Standar</button>
+                                                <button onClick={() => setMusicOverlayStyle("video")} className={`px-2 py-1 rounded text-[10px] transition-colors ${musicOverlayStyle === "video" ? "bg-sky-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>Video Klip</button>
                                             </div>
                                         </div>
                                     </div>
@@ -2946,7 +2978,7 @@ export default function App() {
                     </button>
                     {showVirtualKeyboard && (
                         <div className="bg-slate-800/90 p-2.5 sm:p-3 rounded-2xl border border-slate-700 shadow-xl w-full sm:w-[90%] animate-in slide-in-from-bottom-10 fade-in duration-300">
-                            {["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"].map((row, i) => (
+                            {["QWERTYUIOP", "ASDFGHJKL", "!ZXCVBNM"].map((row, i) => (
                                 <div key={i} className="flex justify-center gap-1.5 sm:gap-2 mb-2 last:mb-0">
                                     {row.split("").map((char) => (
                                         <button key={char} onClick={() => setManualInput(prev => prev + char)} className="w-8 h-10 sm:w-11 sm:h-12 bg-slate-700 text-slate-200 rounded-lg font-bold text-sm sm:text-base shadow-sm active:scale-95 transition-all hover:bg-slate-600 active:bg-slate-500 border border-slate-600">{char}</button>
@@ -3515,7 +3547,7 @@ export default function App() {
       `}</style>
             
             {/* --- MUSIC PLAYER OVERLAY --- */}
-            <MusicPlayer musicState={musicState} wsRef={wsRef} isKeyboardOpen={showVirtualKeyboard} />
+            <MusicPlayer musicState={musicState} wsRef={wsRef} isKeyboardOpen={showVirtualKeyboard} overlayStyle={musicOverlayStyle} />
 
         </div>
     );

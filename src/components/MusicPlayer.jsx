@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { Music, SkipForward, Volume2, VolumeX, ListMusic, X } from 'lucide-react';
 import { SoundManager } from '../utils/constants';
 
-const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen }) => {
+const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen, overlayStyle = 'thumbnail' }) => {
     const { current, queue } = musicState || { current: null, queue: [] };
     const [isMuted, setIsMuted] = useState(false);
     const [playerReady, setPlayerReady] = useState(false);
@@ -12,6 +12,9 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen }) => {
     const containerRef = useRef(null);
     const prevQueueRef = useRef(queue);
     const currentVideoIdRef = useRef(null);
+    const [pos, setPos] = useState({ x: null, y: null });
+    const dragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+    const overlayRef = useRef(null);
 
     useEffect(() => {
         // Load YouTube IFrame API
@@ -35,15 +38,16 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen }) => {
 
     const initPlayer = () => {
         playerRef.current = new window.YT.Player('yt-player-container', {
-            height: '0',
-            width: '0',
+            height: '100%',
+            width: '100%',
             playerVars: {
                 autoplay: 1,
                 controls: 0,
                 disablekb: 1,
                 fs: 0,
                 rel: 0,
-                modestbranding: 1
+                modestbranding: 1,
+                iv_load_policy: 3
             },
             events: {
                 onReady: (event) => {
@@ -138,13 +142,56 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen }) => {
         }
     }, [toast]);
 
+    // Drag functionality
+    const handleDragStart = (e) => {
+        if (e.target.closest('button')) return;
+        dragRef.current.isDragging = true;
+        dragRef.current.startX = e.clientX || (e.touches && e.touches[0].clientX);
+        dragRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY);
+        
+        if (pos.x === null && overlayRef.current) {
+            const rect = overlayRef.current.getBoundingClientRect();
+            dragRef.current.initialX = rect.left;
+            dragRef.current.initialY = rect.top;
+            setPos({ x: rect.left, y: rect.top });
+        } else {
+            dragRef.current.initialX = pos.x;
+            dragRef.current.initialY = pos.y;
+        }
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e) => {
+            if (!dragRef.current.isDragging) return;
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            
+            const dx = clientX - dragRef.current.startX;
+            const dy = clientY - dragRef.current.startY;
+            setPos({
+                x: dragRef.current.initialX + dx,
+                y: dragRef.current.initialY + dy
+            });
+        };
+
+        const handleMouseUp = () => {
+            dragRef.current.isDragging = false;
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('touchmove', handleMouseMove, { passive: false });
+        window.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('touchend', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('touchmove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('touchend', handleMouseUp);
+        };
+    }, []);
+
     return (
         <>
-            {/* Hidden YouTube Player Container - Always rendered to prevent React DOM errors when YT API replaces it */}
-            <div style={{ display: 'none' }}>
-                <div id="yt-player-container"></div>
-            </div>
-
             {/* TOAST NOTIFICATION FOR NEW REQUESTS */}
             <div className={`fixed ${isKeyboardOpen ? 'bottom-[370px]' : 'bottom-[6.5rem]'} right-4 z-[110] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${toast ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95 pointer-events-none'}`}>
                 {toast && (
@@ -168,29 +215,51 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen }) => {
                 )}
             </div>
 
-            {/* UI Overlay - Conditionally rendered when there is a current song */}
-            {current && (
-                <div className={`fixed ${isKeyboardOpen ? 'bottom-[290px]' : 'bottom-4'} right-4 z-[100] [perspective:1000px] transition-all duration-500 ${isFlipped ? 'w-72 h-52' : 'w-72 h-20'}`}>
-                    <div className={`w-full h-full relative transition-all duration-700 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(-180deg)]' : ''}`}>
-                        
-                        {/* FRONT FACE - CURRENT SONG */}
-                        <div className="absolute inset-0 [backface-visibility:hidden] bg-slate-900/90 border border-slate-700/50 p-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3">
-                            {/* Thumbnail */}
-                            <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 shadow-inner bg-slate-800">
-                                <img src={current.thumbnail} alt="thumbnail" className="w-full h-full object-cover opacity-80" />
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+            {/* UI Overlay - Always rendered so YT API can bind, but hidden when no current song */}
+            <div 
+                ref={overlayRef}
+                onMouseDown={handleDragStart}
+                onTouchStart={handleDragStart}
+                className={`fixed z-40 [perspective:1000px] transition-all cursor-move ${dragRef.current?.isDragging ? 'duration-0' : 'duration-500'} ${isFlipped ? 'w-72 h-52' : 'w-72 h-20'} ${current ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${pos.x === null ? 'bottom-4 right-4' : ''}`}
+                style={pos.x !== null ? { left: `${pos.x}px`, top: `${pos.y}px` } : {}}
+            >
+                <div className={`w-full h-full relative transition-all duration-700 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(-180deg)]' : ''} ${!current ? 'translate-y-10' : 'translate-y-0'}`}>
+                    
+                    {/* FRONT FACE - CURRENT SONG */}
+                    <div className="absolute inset-0 [backface-visibility:hidden] bg-slate-900/90 border border-slate-700/50 p-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3">
+                        {/* Video / Thumbnail */}
+                        <div className={`relative ${overlayStyle === 'video' ? 'w-16' : 'w-12'} h-12 rounded-lg overflow-hidden shrink-0 shadow-inner bg-slate-950 border border-slate-800 transition-all duration-300`}>
+                            {/* Scaled iframe to crop out YouTube UI */}
+                            <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[250%] h-[250%] pointer-events-none transition-opacity duration-300 ${overlayStyle === 'video' ? 'opacity-100' : 'opacity-0'}`}>
+                                <div id="yt-player-container" className="w-full h-full"></div>
+                            </div>
+                            
+                            {/* Thumbnail Image */}
+                            <img 
+                                src={current?.thumbnail} 
+                                alt="thumbnail" 
+                                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${overlayStyle === 'thumbnail' || !playerReady ? 'opacity-80' : 'opacity-0'}`} 
+                            />
+
+                            {/* Overlay to block clicks and add tint */}
+                            <div className={`absolute inset-0 z-10 transition-colors duration-300 ${overlayStyle === 'thumbnail' || !playerReady ? 'bg-black/20' : 'bg-transparent'}`}></div>
+                            
+                            {(overlayStyle === 'thumbnail' || !playerReady) && (
+                                <div className={`absolute inset-0 flex items-center justify-center z-20 pointer-events-none ${!playerReady ? 'bg-slate-800/80' : ''}`}>
                                     <Music className="w-5 h-5 text-white drop-shadow-md animate-pulse" />
                                 </div>
-                            </div>
+                            )}
+                        </div>
 
                             {/* Info */}
                             <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                <p className="text-white font-semibold text-xs truncate drop-shadow-sm">{current.title}</p>
+                                <p className="text-white font-semibold text-xs truncate drop-shadow-sm">{current?.title || "Mencari musik..."}</p>
                                 <div className="flex items-center gap-1.5 mt-0.5">
-                                    <img src={current.requesterImg || "https://api.dicebear.com/9.x/fun-emoji/svg?seed=Req"} alt="" className="w-3.5 h-3.5 rounded-full bg-slate-800" />
-                                    <p className="text-sky-300 text-[10px] truncate">Req: {current.requesterName}</p>
+                                    <img src={current?.requesterImg || "https://api.dicebear.com/9.x/fun-emoji/svg?seed=Req"} alt="" className="w-3.5 h-3.5 rounded-full bg-slate-800" />
+                                    <p className="text-sky-300 text-[10px] truncate">Req: {current?.requesterName || "-"}</p>
                                 </div>
                             </div>
+
 
                             {/* Controls */}
                             <div className="flex flex-col gap-1.5 shrink-0 border-l border-slate-700/50 pl-2">
@@ -254,7 +323,6 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen }) => {
 
                     </div>
                 </div>
-            )}
         </>
     );
 };
