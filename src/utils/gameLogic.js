@@ -46,7 +46,7 @@ export function getRuleDisplay(word, options) {
     if (gameMode === "DYNAMIC") return { label: `Dynamic Chaos (${overlap})`, target, desc: activeChallenge ? `Tantangan: ${labelID(activeChallenge)}` : `Sambung kata dari huruf di atas`, action };
     if (gameMode === "RHYME") return { label: "Rhyme Rush", target: (targetRhyme || "").toUpperCase(), desc: `Cari kata yang AKHIRANNYA berbunyi ini`, action: "AKHIRAN:" };
     if (gameMode === "MIRROR") return { label: `Mirror Chain (${overlap})`, target, desc: `Kata baru harus BERAKHIRAN huruf di atas`, action: "AKHIRAN:" };
-    if (gameMode === "INFIKS") return { label: "Word Bomb (Infiks)", target: word.toUpperCase(), desc: `Ketik kata yang MENGANDUNG pola huruf di atas`, action: "MENGANDUNG:" };
+    if (gameMode === "INFIKS") return { label: "Infiks", target: word.toUpperCase(), desc: `Ketik kata yang MENGANDUNG pola huruf di atas`, action: "MENGANDUNG:" };
 
     if (gameMode === "STEP_UP") {
         const nextLen1 = Math.max(3, overlap + 1);

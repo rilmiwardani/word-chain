@@ -1963,7 +1963,7 @@ export default function App() {
             STEP_UP: `STEP UP (${ovStr})`,
             SYLLABLE: "SYLLABLE", LONGER_WORD: `LONGER (${ovStr})`,
             CITIES: `CITIES (${ovStr})`, DYNAMIC: `DYNAMIC (${ovStr})`, PHRASE_CHAIN: "PHRASE",
-            FILL_BLANK: "LENGKAPI", INFIKS: "INFIKS (BOMB)"
+            FILL_BLANK: "LENGKAPI", INFIKS: "INFIKS"
         };
         return labels[gameMode] || `LAST LETTER (${ovStr})`;
     }
@@ -2772,7 +2772,7 @@ export default function App() {
                                     </div>
 
                                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-1 flex items-center justify-center gap-2">
-                                        {gameMode === "RHYME" ? t("rhyme_target") : gameMode === "FILL_BLANK" ? "LENGKAPI KATA BERIKUT" : "SAMBUNG KATA BERIKUT"}
+                                        {gameMode === "RHYME" ? t("rhyme_target") : gameMode === "FILL_BLANK" ? "LENGKAPI KATA BERIKUT" : gameMode === "INFIKS" ? "MENGANDUNG POLA BERIKUT" : "SAMBUNG KATA BERIKUT"}
                                     </p>
 
                                     <h2 className="font-black flex justify-center transition-all duration-300 px-2 my-1 w-full overflow-hidden" style={{ fontSize: `clamp(10px, 55vw / ${Math.max(6, currentWord?.length || 6)}, 28px)` }}>
