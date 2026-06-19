@@ -1666,6 +1666,19 @@ export default function App() {
         bombNextRef.current = false; lastSuccessfulPlayerIdRef.current = null;
         setIsReversed(false);
 
+        if (gameMode === "RANDOM") {
+            const randomPool = [
+                "LAST_LETTER", "WRAP_AROUND", "STEP_UP",
+                "RHYME", "MIRROR", "PHRASE_CHAIN", "DYNAMIC", "SECOND_LETTER",
+                "SYLLABLE", "LONGER_WORD", "FILL_BLANK", "INFIKS"
+            ];
+            const chosen = randomPool[Math.floor(Math.random() * randomPool.length)];
+            gameModeRef.current = chosen;
+            addLog("System", `🎲 RANDOM MODE Terpilih: ${chosen}`);
+        } else {
+            gameModeRef.current = gameMode;
+        }
+
         let randomStart = "";
         let selectedChallenge = null;
 
@@ -1819,7 +1832,7 @@ export default function App() {
         const modes = [
             "LAST_LETTER", "WRAP_AROUND", "STEP_UP",
             "RHYME", "MIRROR", "PHRASE_CHAIN", "DYNAMIC", "SECOND_LETTER",
-            "SYLLABLE", "LONGER_WORD", "CITIES", "FILL_BLANK", "INFIKS"
+            "SYLLABLE", "LONGER_WORD", "CITIES", "FILL_BLANK", "INFIKS", "RANDOM"
         ];
         setGameMode(modes[(modes.indexOf(gameMode) + 1) % modes.length]);
     }
@@ -1993,6 +2006,7 @@ export default function App() {
     }
 
     function getModeLabel() {
+        if (gameMode === "RANDOM") return "RANDOM MODE 🎲";
         const ovStr = overlapMode === "RANDOM" ? "RND" : overlapMode === "SEQUENTIAL" ? "SEQ" : overlapLength;
         const labels = {
             LAST_LETTER: `LAST LETTER (${ovStr})`, WRAP_AROUND: `WRAP AROUND (${ovStr})`,
