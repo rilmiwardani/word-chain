@@ -493,14 +493,12 @@ function registerTikTokEvents(connection) {
 
     // Only emit for non-repeatable gifts or when repeat streak ends
     if (data.giftType === 1 && !data.repeatEnd) {
-      logEvent("gift", payload);
-      io.emit("gift", payload);
-      wsBroadcast("gift", payload);
-    } else {
-      logEvent("gift", payload);
-      io.emit("gift", payload);
-      wsBroadcast("gift", payload);
+      // Repeatable gift still streaming — don't emit until streak ends
+      return;
     }
+    logEvent("gift", payload);
+    io.emit("gift", payload);
+    wsBroadcast("gift", payload);
   });
 
   // ─── Like Messages ───
@@ -625,6 +623,7 @@ function registerTikTokEvents(connection) {
     io.emit("streamEnd", { actionId });
     io.emit("tiktokDisconnected", "tiktok.live_ended");
     io.emit("statusUpdate", getStatusPayload());
+    wsBroadcast("tiktok_disconnected", { reason: "stream_ended" });
   });
 
   // ─── WebSocket Connected ───
@@ -640,6 +639,7 @@ function registerTikTokEvents(connection) {
     connectionState.status = "disconnected";
     io.emit("tiktokDisconnected", "tiktok.disconnected");
     io.emit("statusUpdate", getStatusPayload());
+    wsBroadcast("tiktok_disconnected", { reason: "connection_lost" });
   });
 
   // ─── Error ───

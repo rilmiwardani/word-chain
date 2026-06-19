@@ -104,6 +104,13 @@ export default function App() {
     }, [tableTheme]);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
+    const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 640);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
     const [isMuted, setIsMuted] = useState(false);
     const [showLogs, setShowLogs] = useState(true);
     const [showPointGuide, setShowPointGuide] = useState(false);
@@ -136,6 +143,7 @@ export default function App() {
     const fileInputRef = useRef(null);
     const containerRef = useRef(null);
     const fallbackToLocalhostRef = useRef(false);
+    const reconnectAttemptsRef = useRef(0);
     const wsHostRef = useRef(wsHost);
     const feedbackTimeoutRef = useRef(null);
     const chatHandlerRef = useRef(null);
@@ -739,7 +747,6 @@ export default function App() {
         connectWebSocket();
         return () => {
             if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
-            clearInterval(timerRef.current);
         };
     }, []);
 
@@ -794,6 +801,7 @@ export default function App() {
                 setConnectionStatus("ws_only");
                 addLog("System", `Connected to Backend (${hostname})`);
                 fallbackToLocalhostRef.current = false;
+                reconnectAttemptsRef.current = 0;
             };
             wsRef.current.onmessage = (event) => {
                 try {
@@ -831,7 +839,9 @@ export default function App() {
                 if (!fallbackToLocalhostRef.current && window.location.hostname !== "localhost") {
                     fallbackToLocalhostRef.current = true;
                 }
-                setTimeout(connectWebSocket, 15000);
+                reconnectAttemptsRef.current += 1;
+                const delay = Math.min(reconnectAttemptsRef.current * 5000, 60000);
+                setTimeout(connectWebSocket, delay);
             };
         } catch (err) { }
     };
@@ -926,13 +936,13 @@ export default function App() {
 
     function getLogicOptions() {
         return {
-            gameMode: gameModeRef.current || gameMode,
-            overlapLength: overlapLengthRef.current || overlapLength,
-            targetRhyme: targetRhymeRef.current || targetRhyme,
-            language: languageRef.current || language,
-            syllableMap: syllableMapRef.current || syllableMap,
-            phraseDictionary: phraseDictionary.current || phraseDictionary,
-            activeChallenge: activeChallengeRef.current || activeChallenge,
+            gameMode: gameModeRef.current ?? gameMode,
+            overlapLength: overlapLengthRef.current ?? overlapLength,
+            targetRhyme: targetRhymeRef.current ?? targetRhyme,
+            language: languageRef.current ?? language,
+            syllableMap: syllableMapRef.current ?? syllableMap,
+            phraseDictionary: phraseDictionary.current ?? phraseDictionary,
+            activeChallenge: activeChallengeRef.current ?? activeChallenge,
             getEnglishSyllableSuffix: getEnglishSyllableSuffix
         };
     }
@@ -998,7 +1008,6 @@ export default function App() {
     }
 
     function handleTimeout() {
-        clearInterval(timerRef.current);
         playSound("eliminate");
         const currentPlayers = playersRef.current;
         const currentIndex = turnIndexRef.current;
@@ -1059,45 +1068,41 @@ export default function App() {
 
 
     const hasPossibleAnswer = (startWord, specificOverlap = null) => {
-        const oldOverlap = overlapLengthRef.current;
-        if (specificOverlap !== null) overlapLengthRef.current = specificOverlap;
-
         let patternToTest = startWord;
         if (gameModeRef.current === "FILL_BLANK" && !startWord.includes("...")) {
             patternToTest = generatePattern(startWord, dictionary, usedWordsRef.current, lastPatternTypeRef.current).display;
         }
+
+        const localOptions = { ...getLogicOptions(), overlapLength: specificOverlap ?? overlapLengthRef.current };
 
         let found = false;
         for (const candidate of dictionary) {
             if (usedWordsRef.current.has(candidate) || candidate === startWord) continue;
             if (maxWordLengthRef.current > 0 && candidate.length > maxWordLengthRef.current) continue;
-            if (validateConnection(patternToTest, candidate, getLogicOptions())) { found = true; break; }
+            if (validateConnection(patternToTest, candidate, localOptions)) { found = true; break; }
         }
 
-        if (specificOverlap !== null) overlapLengthRef.current = oldOverlap;
         return found;
     };
 
     const countPossibleAnswers = (startWord, specificOverlap = null) => {
-        const oldOverlap = overlapLengthRef.current;
-        if (specificOverlap !== null) overlapLengthRef.current = specificOverlap;
-
         let patternToTest = startWord;
         if (gameModeRef.current === "FILL_BLANK" && !startWord.includes("...")) {
             patternToTest = generatePattern(startWord, dictionary, usedWordsRef.current, lastPatternTypeRef.current).display;
         }
 
+        const localOptions = { ...getLogicOptions(), overlapLength: specificOverlap ?? overlapLengthRef.current };
+
         let count = 0;
         for (const candidate of dictionary) {
             if (usedWordsRef.current.has(candidate) || candidate === startWord) continue;
             if (maxWordLengthRef.current > 0 && candidate.length > maxWordLengthRef.current) continue;
-            if (validateConnection(patternToTest, candidate, getLogicOptions())) {
+            if (validateConnection(patternToTest, candidate, localOptions)) {
                 count++;
                 if (count > 1) break;
             }
         }
 
-        if (specificOverlap !== null) overlapLengthRef.current = oldOverlap;
         return count;
     };
 
@@ -1223,7 +1228,7 @@ export default function App() {
         if (targets.length > 0) {
             let newTarget = targets[Math.floor(Math.random() * targets.length)];
             if (newTarget === targetRhymeRef.current && targets.length > 1) {
-                const alt = targets.filter(t => t !== newTarget);
+                const alt = targets.filter(item => item !== newTarget);
                 newTarget = alt[Math.floor(Math.random() * alt.length)];
             }
             setTargetRhyme(newTarget);
@@ -2204,7 +2209,7 @@ export default function App() {
         }
     };
 
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    // isMobile is now a reactive state declared at the top of the component
 
     // --- LOGIKA DINAMIS RADIUS & SKALA AVATAR ---
     const baseRadius = (gameState === "WAITING" && waitingCountdown === null) ? (isMobile ? 135 : 170) : (isMobile ? 185 : 260);
