@@ -994,6 +994,13 @@ export default function App() {
             if (gameModeRef.current === "RHYME") {
                 setTimeout(changeRhymeTarget, 800);
             }
+            if (gameModeRef.current === "INFIKS") {
+                const newFragment = generateInfixFragment();
+                setCurrentWord(newFragment);
+                currentWordRef.current = newFragment;
+                addLog("System", `💣 Fragment Baru: ${newFragment.toUpperCase()}`);
+                playSound("tick");
+            }
         }
 
         let nextIndex = startIndex; let stepsTaken = 0; let attempts = 0;
@@ -1269,6 +1276,25 @@ export default function App() {
             if (pointModeRef.current !== "OFF") {
                 if (gameModeRef.current === "STEP_UP") {
                     pointsAwarded = 10;
+                } else if (gameModeRef.current === "INFIKS") {
+                    const fragment = currentWordRef.current.toLowerCase();
+                    const lowWord = word.toLowerCase();
+                    const matches = lowWord.split(fragment).length - 1;
+                    
+                    const letterCounts = {};
+                    for (let c of lowWord) {
+                        letterCounts[c] = (letterCounts[c] || 0) + 1;
+                    }
+                    
+                    let uniqueScore = 0;
+                    for (let c in letterCounts) {
+                        if (letterCounts[c] === 1) uniqueScore += 2;
+                        else if (letterCounts[c] > 2) uniqueScore -= (letterCounts[c] - 2);
+                    }
+                    
+                    const fragmentBonus = (matches > 1) ? (matches * 5) : 0;
+                    pointsAwarded = uniqueScore + fragmentBonus;
+                    if (pointsAwarded < -5) pointsAwarded = -5;
                 } else if (pointModeRef.current === "LENGTH") {
                     pointsAwarded = word.length;
                 } else if (pointModeRef.current === "SCRABBLE") {
@@ -1387,6 +1413,8 @@ export default function App() {
                 const pat = generatePattern(word, dictionary, usedWordsRef.current, lastPatternTypeRef.current);
                 nextWord = pat.display;
                 lastPatternTypeRef.current = pat.type;
+            } else if (gameModeRef.current === "INFIKS") {
+                nextWord = currentWordRef.current;
             }
 
             if (gameModeRef.current === "CITIES") {
@@ -1414,6 +1442,8 @@ export default function App() {
                 addLog("Game", `✅ ${word.toUpperCase()} (Len: ${word.length}) ⟡️ Next: ${word.length >= 10 ? "Reset" : word.length + 1}${pts}`);
             } else if (gameModeRef.current === "FILL_BLANK") {
                 addLog("Game", `✅ ${word.toUpperCase()}${pts}`);
+            } else if (gameModeRef.current === "INFIKS") {
+                addLog("Game", `✅ ${word.toUpperCase()} ${pts}`);
             } else {
                 if (isScoreMode()) {
                     addLog("Game", `✅ ${word.toUpperCase()} +${pointsAwarded} ${t("log_pts")}!`);
@@ -1576,6 +1606,29 @@ export default function App() {
         addLog("System", "Loaded World Cities!");
     };
 
+    const generateInfixFragment = () => {
+        const arr = Array.from(dictionary);
+        if (arr.length === 0) return "an";
+        for (let attempt = 0; attempt < 100; attempt++) {
+            const word = arr[Math.floor(Math.random() * arr.length)];
+            if (word.length >= 4) {
+                const len = Math.random() < 0.6 ? 2 : 3;
+                const start = Math.floor(Math.random() * (word.length - len + 1));
+                const fragment = word.slice(start, start + len).toLowerCase();
+                
+                let count = 0;
+                for (let w of arr) {
+                    if (!usedWordsRef.current.has(w) && w.includes(fragment)) {
+                        count++;
+                        if (count >= 15) break;
+                    }
+                }
+                if (count >= 15) return fragment;
+            }
+        }
+        return "an";
+    };
+
     function startGame() {
         if (playersRef.current.length < 2) return addLog("System", t("log_need_players"));
         playSound("start");
@@ -1607,6 +1660,9 @@ export default function App() {
             const pat = generatePattern(baseW, dictionary, new Set(), lastPatternTypeRef.current);
             randomStart = pat.display;
             lastPatternTypeRef.current = pat.type;
+        } else if (gameModeRef.current === "INFIKS") {
+            randomStart = generateInfixFragment();
+            setTurnCount(0);
         } else {
             randomStart = getNewRandomWord(selectedChallenge);
         }
@@ -1726,7 +1782,7 @@ export default function App() {
         const modes = [
             "LAST_LETTER", "WRAP_AROUND", "STEP_UP",
             "RHYME", "MIRROR", "PHRASE_CHAIN", "DYNAMIC", "SECOND_LETTER",
-            "SYLLABLE", "LONGER_WORD", "CITIES", "FILL_BLANK"
+            "SYLLABLE", "LONGER_WORD", "CITIES", "FILL_BLANK", "INFIKS"
         ];
         setGameMode(modes[(modes.indexOf(gameMode) + 1) % modes.length]);
     }
@@ -1907,7 +1963,7 @@ export default function App() {
             STEP_UP: `STEP UP (${ovStr})`,
             SYLLABLE: "SYLLABLE", LONGER_WORD: `LONGER (${ovStr})`,
             CITIES: `CITIES (${ovStr})`, DYNAMIC: `DYNAMIC (${ovStr})`, PHRASE_CHAIN: "PHRASE",
-            FILL_BLANK: "LENGKAPI"
+            FILL_BLANK: "LENGKAPI", INFIKS: "INFIKS (BOMB)"
         };
         return labels[gameMode] || `LAST LETTER (${ovStr})`;
     }

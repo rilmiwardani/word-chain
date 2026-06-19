@@ -46,6 +46,7 @@ export function getRuleDisplay(word, options) {
     if (gameMode === "DYNAMIC") return { label: `Dynamic Chaos (${overlap})`, target, desc: activeChallenge ? `Tantangan: ${labelID(activeChallenge)}` : `Sambung kata dari huruf di atas`, action };
     if (gameMode === "RHYME") return { label: "Rhyme Rush", target: (targetRhyme || "").toUpperCase(), desc: `Cari kata yang AKHIRANNYA berbunyi ini`, action: "AKHIRAN:" };
     if (gameMode === "MIRROR") return { label: `Mirror Chain (${overlap})`, target, desc: `Kata baru harus BERAKHIRAN huruf di atas`, action: "AKHIRAN:" };
+    if (gameMode === "INFIKS") return { label: "Word Bomb (Infiks)", target: word.toUpperCase(), desc: `Ketik kata yang MENGANDUNG pola huruf di atas`, action: "MENGANDUNG:" };
 
     if (gameMode === "STEP_UP") {
         const nextLen1 = Math.max(3, overlap + 1);
@@ -94,6 +95,7 @@ export function getDisplayParts(word, options) {
     if (gameMode === "MIRROR") return word.length < overlap ? { pre: "", high: word, post: "" } : { pre: "", high: word.slice(0, overlap), post: word.slice(overlap) };
     if (gameMode === "SECOND_LETTER") return word.length < 2 ? { pre: word, high: "", post: "" } : { pre: word.slice(0, 1), high: word.slice(1, 2), post: word.slice(2) };
     if (gameMode === "WRAP_AROUND") return { pre: word.slice(0, -overlap), high: word.slice(-overlap), post: "" };
+    if (gameMode === "INFIKS") return { pre: "", high: word, post: "" };
     const suffix = getSuffixOrRule(word, options);
     const prefixLen = Math.max(0, word.length - suffix.length);
     return { pre: word.slice(0, prefixLen), high: suffix, post: "" };
@@ -126,6 +128,7 @@ export function validateConnection(prev, next, options) {
 
     if (gameMode === "PHRASE_CHAIN") return phraseDictionary.has(`${p} ${n}`);
     if (gameMode === "WRAP_AROUND") return n !== p && n.length >= overlap * 2 && n.startsWith(p.slice(-overlap)) && n.endsWith(p.slice(0, overlap));
+    if (gameMode === "INFIKS") return n.includes(p) && n !== p;
     if (gameMode === "DYNAMIC") {
         const suffix = p.slice(-overlap);
         if (n === suffix || !n.startsWith(suffix)) return false;
