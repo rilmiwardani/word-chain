@@ -1032,6 +1032,21 @@ export default function App() {
             return pData;
         });
         setPlayers(newPlayers);
+        
+        setRoundStarterId((prevStarterId) => {
+            if (prevStarterId === playerToEliminate.uniqueId) {
+                const len = newPlayers.length;
+                let nextIdx = (currentIndex + 1) % len;
+                let attempts = 0;
+                while (newPlayers[nextIdx].isEliminated && attempts < len) {
+                    nextIdx = (nextIdx + 1) % len;
+                    attempts++;
+                }
+                return newPlayers[nextIdx]?.uniqueId || null;
+            }
+            return prevStarterId;
+        });
+
         addLog("System", `${playerToEliminate.nickname} ${t("log_eliminated")}`);
 
         const activePlayers = newPlayers.filter((p) => !p.isEliminated);
@@ -1168,6 +1183,21 @@ export default function App() {
         });
         playersRef.current = newPlayers;
         setPlayers(newPlayers);
+        
+        setRoundStarterId((prevStarterId) => {
+            if (prevStarterId === playerToSurrender.uniqueId) {
+                const len = newPlayers.length;
+                let nextIdx = (pIndex + 1) % len;
+                let attempts = 0;
+                while (newPlayers[nextIdx].isEliminated && attempts < len) {
+                    nextIdx = (nextIdx + 1) % len;
+                    attempts++;
+                }
+                return newPlayers[nextIdx]?.uniqueId || null;
+            }
+            return prevStarterId;
+        });
+
         addLog("Game", `${playerToSurrender.nickname} ${t("log_surrender")}`);
 
         const activePlayers = newPlayers.filter((p) => !p.isEliminated);
@@ -1670,8 +1700,15 @@ export default function App() {
         const initialUsed = new Set(gameModeRef.current === "FILL_BLANK" ? [] : (randomStart ? [randomStart] : []));
         setUsedWords(initialUsed); usedWordsRef.current = initialUsed;
         const updatedStatsMap = {};
-        playersRef.current.forEach((p) => { if (!p.isBot) updatedStatsMap[p.uniqueId] = StatsManager.update(p.uniqueId, false, true, p.nickname); });
-        setPlayers((prev) => prev.map((p) => ({ ...p, stats: updatedStatsMap[p.uniqueId] || p.stats, score: 0, turnCount: 0, sessionKills: 0, isEliminated: false })));
+        
+        // Shuffle players array
+        let newPlayersList = [...playersRef.current].sort(() => Math.random() - 0.5);
+        newPlayersList.forEach((p) => { if (!p.isBot) updatedStatsMap[p.uniqueId] = StatsManager.update(p.uniqueId, false, true, p.nickname); });
+        
+        newPlayersList = newPlayersList.map((p) => ({ ...p, stats: updatedStatsMap[p.uniqueId] || p.stats, score: 0, turnCount: 0, sessionKills: 0, isEliminated: false }));
+        
+        playersRef.current = newPlayersList;
+        setPlayers(newPlayersList);
         if (isScoreMode() && winConditionRef.current === "TIME") setGlobalTimer(gameDuration);
 
         if (gameModeRef.current === "RHYME") { setTurnCount(0); addLog("System", `Mode: RHYME RUSH! Target: ...${targetRhymeRef.current || ""}`); }
