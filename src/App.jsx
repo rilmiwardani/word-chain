@@ -2390,121 +2390,89 @@ export default function App() {
                             )}
                             {settingsTab === 'general' && (
                                 <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
-                                    <button onClick={() => setIsMuted(!isMuted)} className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-2 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group">
-                                        <div className="flex items-center gap-2">{isMuted ? <VolumeX className="w-3 h-3 text-red-500" /> : <Volume2 className="w-3 h-3 text-emerald-400" />}<span className="text-slate-300">{t("sound")}</span></div>
-                                        <span className="text-slate-100">{isMuted ? "Off" : "On"}</span>
-                                    </button>
-                                    <button onClick={() => toggleLanguage()} className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-2 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group">
-                                        <div className="flex items-center gap-2"><Globe className="w-3 h-3 text-sky-400" /><span className="text-slate-300">{t("language")}</span></div>
-                                        <span className="text-slate-100 group-hover:text-sky-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix"}</span>
-                                    </button>
-                                    <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2">
-                                        <div className="flex items-center justify-between text-xs font-bold">
-                                            <div className="flex items-center gap-2"><Gamepad2 className="w-3 h-3 text-purple-400" /><span className="text-slate-300">Minigame Overlay</span></div>
-                                            <div className="flex gap-1 bg-slate-900 rounded p-0.5 border border-slate-800">
-                                                <button onClick={() => {setActiveMinigame("OFF");}} className={`px-2 py-1 rounded text-[10px] transition-colors ${activeMinigame === "OFF" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>OFF</button>
-                                                <button onClick={() => {setActiveMinigame("ANAGRAM");}} className={`px-2 py-1 rounded text-[10px] transition-colors ${activeMinigame === "ANAGRAM" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>ANAGRAM</button>
-                                                <button onClick={() => {setActiveMinigame("WORD500");}} className={`px-2 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORD500" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>WORD500</button>
-                                            </div>
+                                    {/* Display Settings Group */}
+                                    <div className="w-full bg-slate-800/30 rounded border border-slate-700/50 flex flex-col divide-y divide-slate-700/50">
+                                        <button onClick={() => toggleLanguage()} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2"><Globe className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">{t("language")}</span></div>
+                                            <span className="text-slate-100 group-hover:text-sky-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix"}</span>
+                                        </button>
+                                        <div className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-amber-400" /><span className="text-slate-300">Tema Meja</span></div>
+                                            <select value={tableTheme} onChange={(e) => setTableTheme(e.target.value)} className="bg-transparent text-slate-200 text-right outline-none cursor-pointer">
+                                                {Object.keys(TABLE_THEMES).map(themeKey => ( <option key={themeKey} value={themeKey} className="bg-slate-900">{THEME_LABELS[themeKey]}</option> ))}
+                                            </select>
                                         </div>
-                                    </div>
-                                    <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
-                                        <div className="flex items-center justify-between text-xs font-bold">
-                                            <div className="flex items-center gap-2"><Music className="w-3 h-3 text-sky-400" /><span className="text-slate-300">Tampilan Musik</span></div>
-                                            <div className="flex gap-1 bg-slate-900 rounded p-0.5 border border-slate-800">
-                                                <button onClick={() => setMusicOverlayStyle("thumbnail")} className={`px-2 py-1 rounded text-[10px] transition-colors ${musicOverlayStyle === "thumbnail" ? "bg-sky-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>Standar</button>
-                                                <button onClick={() => setMusicOverlayStyle("video")} className={`px-2 py-1 rounded text-[10px] transition-colors ${musicOverlayStyle === "video" ? "bg-sky-600 text-white" : "text-slate-400 hover:bg-slate-700 hover:text-white"}`}>Video Klip</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-2 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group mt-2">
-                                        <div className="flex items-center gap-2"><Sparkles className="w-3 h-3 text-amber-400" /><span className="text-slate-300">Tema Meja</span></div>
-                                        <select
-                                            value={tableTheme}
-                                            onChange={(e) => setTableTheme(e.target.value)}
-                                            className="bg-slate-900 text-slate-200 border border-slate-700 rounded px-2 py-1 text-[10px] font-bold outline-none focus:border-sky-500 transition-colors cursor-pointer"
-                                        >
-                                            {Object.keys(TABLE_THEMES).map(themeKey => (
-                                                <option key={themeKey} value={themeKey}>{THEME_LABELS[themeKey]}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
-                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">WebSocket Server</div>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="text"
-                                                value={wsHost}
-                                                onChange={handleWsHostChange}
-                                                placeholder={window.location.hostname || "localhost"}
-                                                className="flex-1 bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono"
-                                            />
-                                            <span className="text-[10px] text-slate-500 font-mono whitespace-nowrap">:62024</span>
-                                            <button
-                                                onClick={handleReconnectWebSocket}
-                                                className="bg-sky-900/50 hover:bg-sky-800/50 p-1.5 rounded border border-sky-800 text-sky-400 transition-colors"
-                                                title="Reconnect WebSocket"
-                                            >
-                                                <RefreshCw className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-                                        <div className="text-[9px] text-slate-500">Kosongkan untuk pakai hostname saat ini</div>
-                                    </div>
-                                    
-                                    <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
-                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                                            TikTok Live Connection
-                                            {connectionStatus === "tiktok_ready" && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-slate-400 font-mono text-sm">@</span>
-                                            <input
-                                                type="text"
-                                                value={tiktokUsername}
-                                                onChange={(e) => setTiktokUsername(e.target.value)}
-                                                placeholder="username"
-                                                className="flex-1 bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 font-mono"
-                                            />
-                                            <button
-                                                onClick={() => {
-                                                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && tiktokUsername.trim()) {
-                                                        wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim(), sessionId: tiktokSessionId.trim() || undefined } }));
-                                                        addLog("System", `Menyambungkan ke @${tiktokUsername.trim()}${tiktokSessionId ? ' (dengan session)' : ''}...`);
-                                                    }
-                                                }}
-                                                className="bg-emerald-900/50 hover:bg-emerald-800/50 px-3 py-1.5 rounded border border-emerald-800 text-emerald-400 transition-colors text-xs font-bold"
-                                            >
-                                                Connect
-                                            </button>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                            <input
-                                                type="password"
-                                                value={tiktokSessionId}
-                                                onChange={(e) => {
-                                                    setTiktokSessionId(e.target.value);
-                                                    localStorage.setItem("tiktok_session_id", e.target.value);
-                                                }}
-                                                placeholder="sessionid cookie (opsional)"
-                                                className="flex-1 bg-slate-950 border border-slate-600 rounded px-2 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500 font-mono"
-                                            />
-                                            {tiktokSessionId && (
-                                                <button onClick={() => { setTiktokSessionId(""); localStorage.removeItem("tiktok_session_id"); }} className="text-slate-500 hover:text-red-400 p-1.5">
-                                                    <X className="w-3.5 h-3.5" />
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="text-[9px] text-amber-600/70 leading-tight mt-0.5">⚠️ Session cookie diperlukan agar komentar akun di bawah umur terbaca.</div>
                                     </div>
 
-                                    <div className="w-full bg-slate-800/50 p-2.5 rounded border border-slate-700 flex flex-col gap-2 mt-2">
-                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Kamus (Dictionary)</div>
-                                        <div className="flex items-center justify-between gap-2 text-xs">
-                                            <span className="truncate text-slate-300 font-mono" title={dictLoadedInfo}>{dictLoadedInfo}</span>
-                                            <button onClick={() => fileInputRef.current?.click()} className="bg-slate-700 hover:bg-slate-600 px-2.5 py-1.5 rounded flex items-center gap-1.5 transition-colors text-slate-200 border border-slate-600">
-                                                <FileJson className="w-3.5 h-3.5" /> {t("load_json")}
-                                            </button>
-                                            <input type="file" accept=".json,.txt" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                                    {/* Media & Overlay Group */}
+                                    <div className="w-full bg-slate-800/30 rounded border border-slate-700/50 flex flex-col divide-y divide-slate-700/50">
+                                        <button onClick={() => setIsMuted(!isMuted)} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2">{isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-500" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}<span className="text-slate-300">{t("sound")}</span></div>
+                                            <span className={isMuted ? "text-red-400" : "text-emerald-400"}>{isMuted ? "Off" : "On"}</span>
+                                        </button>
+                                        <div className="px-3 py-2 text-xs font-bold flex items-center justify-between">
+                                            <div className="flex items-center gap-2"><Music className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">Tampilan Musik</span></div>
+                                            <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
+                                                <button onClick={() => setMusicOverlayStyle("thumbnail")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${musicOverlayStyle === "thumbnail" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"}`}>Standar</button>
+                                                <button onClick={() => setMusicOverlayStyle("video")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${musicOverlayStyle === "video" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"}`}>Video</button>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => {
+                                            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                                                wsRef.current.send(JSON.stringify({ event: "toggle_music_requests", data: { enabled: !(musicState?.requestsEnabled ?? true) } }));
+                                            }
+                                        }} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2"><Play className="w-3.5 h-3.5 text-fuchsia-400" /><span className="text-slate-300">Request Musik</span></div>
+                                            <span className={(musicState?.requestsEnabled ?? true) ? "text-emerald-400" : "text-red-400"}>{(musicState?.requestsEnabled ?? true) ? "ON" : "OFF"}</span>
+                                        </button>
+                                        <div className="px-3 py-2 text-xs font-bold flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2"><Gamepad2 className="w-3.5 h-3.5 text-purple-400" /><span className="text-slate-300">Minigame Overlay</span></div>
+                                            <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
+                                                <button onClick={() => setActiveMinigame("OFF")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "OFF" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>OFF</button>
+                                                <button onClick={() => setActiveMinigame("ANAGRAM")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "ANAGRAM" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>ANAGRAM</button>
+                                                <button onClick={() => setActiveMinigame("WORD500")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORD500" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORD500</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Connection & Advanced */}
+                                    <div className="w-full bg-slate-800/30 rounded border border-slate-700/50 p-2.5 flex flex-col gap-3">
+                                        {/* TikTok Connection */}
+                                        <div>
+                                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                                TikTok Live
+                                                {connectionStatus === "tiktok_ready" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-slate-500 font-mono text-xs">@</span>
+                                                <input type="text" value={tiktokUsername} onChange={(e) => setTiktokUsername(e.target.value)} placeholder="username" className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500" />
+                                                <button onClick={() => {
+                                                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && tiktokUsername.trim()) {
+                                                        wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim(), sessionId: tiktokSessionId.trim() || undefined } }));
+                                                        addLog("System", `Menyambung @${tiktokUsername.trim()}...`);
+                                                    }
+                                                }} className="bg-emerald-900/40 hover:bg-emerald-800/60 px-2.5 py-1 rounded border border-emerald-800/50 text-emerald-400 transition-colors text-xs font-bold whitespace-nowrap">Conn</button>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 mt-1.5">
+                                                <input type="password" value={tiktokSessionId} onChange={(e) => { setTiktokSessionId(e.target.value); localStorage.setItem("tiktok_session_id", e.target.value); }} placeholder="sessionid (opsional)" className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500" />
+                                                {tiktokSessionId && <button onClick={() => { setTiktokSessionId(""); localStorage.removeItem("tiktok_session_id"); }} className="text-slate-500 hover:text-red-400 p-1"><X className="w-3.5 h-3.5" /></button>}
+                                            </div>
+                                        </div>
+
+                                        {/* WebSockets & Dictionary */}
+                                        <div className="flex items-center justify-between gap-2 border-t border-slate-700/50 pt-2">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                    <input type="text" value={wsHost} onChange={handleWsHostChange} placeholder={window.location.hostname || "localhost"} className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono" />
+                                                    <button onClick={handleReconnectWebSocket} className="bg-sky-900/40 hover:bg-sky-800/60 p-1 rounded border border-sky-800/50 text-sky-400 transition-colors"><RefreshCw className="w-3 h-3" /></button>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <button onClick={() => fileInputRef.current?.click()} className="bg-slate-700/50 hover:bg-slate-600/50 px-2 py-1 rounded flex items-center gap-1 transition-colors text-slate-300 border border-slate-600/50 text-[10px] font-bold whitespace-nowrap" title={dictLoadedInfo}>
+                                                    <FileJson className="w-3 h-3" /> Dict
+                                                </button>
+                                                <input type="file" accept=".json,.txt" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

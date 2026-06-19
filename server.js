@@ -73,6 +73,7 @@ let eventStats = {
 // Music queue
 let musicQueue = [];
 let currentSong = null;
+let musicRequestsEnabled = true;
 
 // Recent events log (last 100)
 let recentEvents = [];
@@ -119,7 +120,7 @@ wss.on("connection", (ws) => {
     ws.send(JSON.stringify({ event: "tiktok_connected", data: { roomId: connectionState.roomId } }));
   }
   // Send current music state
-  ws.send(JSON.stringify({ event: "music_state", data: { queue: musicQueue, current: currentSong } }));
+  ws.send(JSON.stringify({ event: "music_state", data: { queue: musicQueue, current: currentSong, requestsEnabled: musicRequestsEnabled } }));
 
   ws.on("message", async (raw) => {
     try {
@@ -129,6 +130,11 @@ wss.on("connection", (ws) => {
       }
       if (event === "music_skip") {
         advanceMusicQueue();
+      }
+      if (event === "toggle_music_requests") {
+        musicRequestsEnabled = data?.enabled ?? true;
+        console.log(`[Music] Requests Enabled: ${musicRequestsEnabled}`);
+        broadcastMusicState();
       }
       if (event === "connect_tiktok" && data?.uniqueId) {
         if (data.sessionId) tiktokSessionId = data.sessionId;
@@ -158,6 +164,20 @@ async function handleMusicSearch(query, requesterName, requesterImg) {
     const r = await ytSearch(query);
     if (r.videos.length > 0) {
       const video = r.videos[0];
+
+      // Anti-spam: Cek apakah lagu ini sudah ada di antrian atau sedang diputar
+      const isDuplicate = currentSong?.videoId === video.videoId || musicQueue.some(s => s.videoId === video.videoId);
+      if (isDuplicate) {
+        console.log(`[Music] Skipped duplicate: "${video.title}" by ${requesterName}`);
+        return;
+      }
+
+      // Limit ukuran antrian agar tidak spam berlebihan
+      if (musicQueue.length >= 50) {
+        console.log(`[Music] Queue full, skipped: "${video.title}"`);
+        return;
+      }
+
       const song = {
         id: Date.now() + "-" + Math.random().toString(36).slice(2),
         videoId: video.videoId,
@@ -190,7 +210,7 @@ function advanceMusicQueue() {
 }
 
 function broadcastMusicState() {
-  const state = { queue: musicQueue, current: currentSong };
+  const state = { queue: musicQueue, current: currentSong, requestsEnabled: musicRequestsEnabled };
   io.emit("music_state", state);
   wsBroadcast("music_state", state);
 }
@@ -360,9 +380,20 @@ async function connectToTikTok(uniqueId) {
       console.log(`[TikTok] ⚠️  No sessionId — underage account comments may not be visible.`);
     }
 
-    tiktokConnection = new WebcastPushConnection(uniqueId, connOptions);
+    const currentConnection = new WebcastPushConnection(uniqueId, connOptions);
+    tiktokConnection = currentConnection;
 
-    const state = await tiktokConnection.connect();
+    // ─── Register all event handlers SEBELUM await connect untuk cegah race condition ───
+    registerTikTokEvents(currentConnection);
+
+    const state = await currentConnection.connect();
+
+    // Pastikan connection ini masih yang valid (bukan terganti oleh request connect lain yg bersamaan)
+    if (tiktokConnection !== currentConnection) {
+      console.log(`[TikTok] Connection aborted due to newer connection request.`);
+      try { currentConnection.disconnect(); } catch(e) {}
+      return;
+    }
 
     connectionState.status = "connected";
     connectionState.roomId = state.roomId;
@@ -387,8 +418,6 @@ async function connectToTikTok(uniqueId) {
     io.emit("statusUpdate", getStatusPayload());
     wsBroadcast("tiktok_connected", { roomId: connectionState.roomId });
 
-    // ─── Register all event handlers ───
-    registerTikTokEvents(tiktokConnection);
   } catch (err) {
     console.error(`[TikTok] ❌ Connection failed:`, err.message);
     connectionState.status = "disconnected";
@@ -433,6 +462,9 @@ function registerTikTokEvents(connection) {
     
     // Check for Music Request
     if (data.comment.toLowerCase().startsWith('!play ')) {
+      if (!musicRequestsEnabled && !payload.isModerator && payload.uniqueId !== connectionState.uniqueId) {
+        return; // Ignore if disabled, except for host/mod
+      }
       const query = data.comment.substring(6).trim();
       if (query) {
         await handleMusicSearch(query, payload.nickname, payload.profilePictureUrl);
