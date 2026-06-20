@@ -202,6 +202,7 @@ export default function App() {
     const miniGameOverlayRef = useRef(null);
     const miniGameWordsRef = useRef(["KUCING", "ANJING", "SEPATU", "BENDERA", "PELANGI", "GARUDA", "KAMERA", "PENSIL", "LEMARI", "KERTAS", "BONEKA", "PANGGUNG", "KACAMATA", "BINGKAI", "LUKISAN", "DOMPET", "BANTAL", "GULING", "SELIMUT", "KASUR"]);
     const unplayedMiniGameWordsRef = useRef([]);
+    const unplayedWord500WordsRef = useRef([]);
 
     // === EFFECTS ===
 
@@ -403,9 +404,16 @@ export default function App() {
 
     const startNewWord500 = () => {
         if (miniGameWordsRef.current.length === 0) return;
-        const fiveLetterWords = miniGameWordsRef.current.filter(w => w.length === 5);
-        const sourceWords = fiveLetterWords.length > 0 ? fiveLetterWords : miniGameWordsRef.current;
-        const word = sourceWords[Math.floor(Math.random() * sourceWords.length)];
+
+        if (!unplayedWord500WordsRef.current || unplayedWord500WordsRef.current.length === 0) {
+            const fiveLetterWords = miniGameWordsRef.current.filter(w => w.length === 5);
+            unplayedWord500WordsRef.current = fiveLetterWords.length > 0 ? [...fiveLetterWords] : [...miniGameWordsRef.current];
+        }
+
+        const randomIndex = Math.floor(Math.random() * unplayedWord500WordsRef.current.length);
+        const word = unplayedWord500WordsRef.current[randomIndex];
+        
+        unplayedWord500WordsRef.current.splice(randomIndex, 1);
         
         setWord500Target(word);
         setWord500Guesses([]);
@@ -460,7 +468,7 @@ export default function App() {
             if (!word500Winner) {
                 const generateGuess = () => {
                     const targetLen = word500Target.length;
-                    const sameLengthWords = miniGameWordsRef.current.filter(w => w.length === targetLen);
+                    const sameLengthWords = miniGameWordsRef.current.filter(w => w.length === targetLen && w !== word500Target);
                     if (sameLengthWords.length > 0) {
                         const guessWord = sameLengthWords[Math.floor(Math.random() * sameLengthWords.length)];
                         const guessArr = guessWord.toUpperCase().split("");
@@ -3599,16 +3607,6 @@ export default function App() {
                                 <GripHorizontal className="w-3.5 h-3.5 text-slate-600" />
                                 <span className="text-[11px] font-bold text-emerald-400 tracking-wide uppercase">Wordle</span>
                                 <span className="text-[9px] text-slate-600 font-mono bg-slate-800 px-1 rounded">{word500Target.length} HURUF</span>
-                                {!word500Winner && (
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
-                                        onTouchEnd={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
-                                        title="Spill Jawaban"
-                                        className="ml-0.5 text-slate-600 hover:text-amber-400 transition-colors p-0.5 rounded hover:bg-slate-800 active:scale-90"
-                                    >
-                                        <Sparkles className="w-3 h-3" />
-                                    </button>
-                                )}
                             </div>
                             <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                                 <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.5}><Minus className="w-2.5 h-2.5" /></button>
