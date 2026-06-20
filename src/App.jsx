@@ -126,6 +126,7 @@ export default function App() {
     const [word500Winner, setWord500Winner] = useState(null);
     const [word500FlipPhase, setWord500FlipPhase] = useState(null); // null | "flipping" | "winner"
     const [autoWordleGuess, setAutoWordleGuess] = useState(null);
+    const [autoWordleLeaderboard, setAutoWordleLeaderboard] = useState({});
 
     const [miniGamePos, setMiniGamePos] = useState({ x: null, y: null });
     const [miniGameScale, setMiniGameScale] = useState(1);
@@ -2156,6 +2157,11 @@ export default function App() {
                     addLog("MiniGame", `🎉 ${nickname} memenangkan Word500: ${word500TargetRef.current}!`);
                     
                     if (activeMinigameRef.current === "AUTO_WORDLE") {
+                        setAutoWordleLeaderboard(prev => {
+                            const currentScore = prev[uniqueId]?.score || 0;
+                            return { ...prev, [uniqueId]: { score: currentScore + 1, nickname, avatar: profilePictureUrl || getAvatarUrl(uniqueId) } };
+                        });
+                        
                         setAutoWordleGuess({
                             word: word500TargetRef.current.toUpperCase(),
                             colors: Array(word500TargetRef.current.length).fill("green")
@@ -2252,6 +2258,11 @@ export default function App() {
                     addLog("MiniGame", `🎉 HOST memenangkan Word500: ${word500TargetRef.current}!`);
                     
                     if (activeMinigameRef.current === "AUTO_WORDLE") {
+                        setAutoWordleLeaderboard(prev => {
+                            const currentScore = prev["HOST"]?.score || 0;
+                            return { ...prev, ["HOST"]: { score: currentScore + 1, nickname: "HOST (You)", avatar: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` } };
+                        });
+                        
                         setAutoWordleGuess({
                             word: word500TargetRef.current.toUpperCase(),
                             colors: Array(word500TargetRef.current.length).fill("green")
@@ -3658,6 +3669,33 @@ export default function App() {
                                 )}
                             </div>
                         </div>
+
+                        {/* Leaderboard Marquee */}
+                        {Object.keys(autoWordleLeaderboard).length > 0 && (
+                            <div className="mt-1 w-full overflow-hidden rounded bg-slate-950/60 border border-slate-700/50 relative flex items-center h-5 shrink-0">
+                                <div className="absolute whitespace-nowrap animate-marquee flex items-center gap-4 px-2" style={{ animationDuration: `${Math.max(10, Object.keys(autoWordleLeaderboard).length * 4)}s` }}>
+                                    {Object.values(autoWordleLeaderboard)
+                                        .sort((a, b) => b.score - a.score)
+                                        .slice(0, 10)
+                                        .map((user, idx, arr) => (
+                                            <div key={idx} className="flex items-center gap-1.5">
+                                                <span className={`text-[9px] font-black ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-orange-400' : 'text-slate-500'}`}>
+                                                    #{idx + 1}
+                                                </span>
+                                                <img src={user.avatar} className="w-3 h-3 rounded-full border border-slate-600 bg-slate-800 object-cover" />
+                                                <span className="text-[10px] font-bold text-slate-200">{user.nickname}</span>
+                                                <span className="text-[10px] font-black text-emerald-400">{user.score}</span>
+                                                
+                                                {/* Bullet Separator (kecuali item terakhir) */}
+                                                {idx < arr.length - 1 && (
+                                                    <span className="text-[8px] text-slate-700 ml-1 mr-0.5">●</span>
+                                                )}
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -3802,6 +3840,14 @@ export default function App() {
 
         @keyframes shimmer {
             100% { transform: translateX(100%); }
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .animate-marquee {
+            animation: marquee linear infinite;
         }
       `}</style>
             
