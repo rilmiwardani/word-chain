@@ -120,11 +120,12 @@ export default function App() {
     const [scrambledDisplay, setScrambledDisplay] = useState("");
     const [scrambleWinner, setScrambleWinner] = useState(null);
 
-    const [activeMinigame, setActiveMinigame] = useState("ANAGRAM"); // "OFF", "ANAGRAM", "WORD500"
+    const [activeMinigame, setActiveMinigame] = useState("ANAGRAM"); // "OFF", "ANAGRAM", "WORD500", "AUTO_WORDLE"
     const [word500Target, setWord500Target] = useState("");
     const [word500Guesses, setWord500Guesses] = useState([]);
     const [word500Winner, setWord500Winner] = useState(null);
     const [word500FlipPhase, setWord500FlipPhase] = useState(null); // null | "flipping" | "winner"
+    const [autoWordleGuess, setAutoWordleGuess] = useState(null);
 
     const [miniGamePos, setMiniGamePos] = useState({ x: null, y: null });
     const [miniGameScale, setMiniGameScale] = useState(1);
@@ -432,13 +433,66 @@ export default function App() {
         if (e) { e.stopPropagation(); e.preventDefault(); }
         if (!word500TargetRef.current || word500WinnerRef.current) return;
         const ans = word500TargetRef.current.toUpperCase();
-        setWord500Guesses(prev => [...prev, {
-            word: ans, green: ans.length, yellow: 0, red: 0,
-            nickname: "Sistem", profilePictureUrl: ""
-        }]);
-        playSound("wrong");
-        setTimeout(() => startNewWord500(), 4000);
+        if (activeMinigameRef.current === "WORD500") {
+            setWord500Guesses(prev => [...prev, {
+                word: ans, green: ans.length, yellow: 0, red: 0,
+                nickname: "Sistem", profilePictureUrl: ""
+            }]);
+            playSound("wrong");
+            setTimeout(() => startNewWord500(), 4000);
+        } else if (activeMinigameRef.current === "AUTO_WORDLE") {
+            setAutoWordleGuess({
+                word: ans,
+                colors: Array(ans.length).fill("green")
+            });
+            setWord500Winner({ nickname: "Sistem (Spill)", profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=System" });
+            playSound("wrong");
+            setTimeout(() => { setWord500FlipPhase("flipping"); }, 1500);
+            setTimeout(() => { setWord500FlipPhase("winner"); }, 2100);
+            setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+        }
     };
+
+    useEffect(() => {
+        let interval;
+        if (activeMinigame === "AUTO_WORDLE" && word500Target) {
+            if (!word500Winner) {
+                const generateGuess = () => {
+                    const targetLen = word500Target.length;
+                    const sameLengthWords = miniGameWordsRef.current.filter(w => w.length === targetLen);
+                    if (sameLengthWords.length > 0) {
+                        const guessWord = sameLengthWords[Math.floor(Math.random() * sameLengthWords.length)];
+                        const guessArr = guessWord.toUpperCase().split("");
+                        const targetArr = word500Target.toUpperCase().split("");
+                        const colors = Array(targetLen).fill("gray");
+                        
+                        for (let i = 0; i < targetLen; i++) {
+                            if (guessArr[i] === targetArr[i]) {
+                                colors[i] = "green";
+                                targetArr[i] = null;
+                                guessArr[i] = null;
+                            }
+                        }
+                        for (let i = 0; i < targetLen; i++) {
+                            if (guessArr[i] !== null) {
+                                const idx = targetArr.indexOf(guessArr[i]);
+                                if (idx !== -1) {
+                                    colors[i] = "yellow";
+                                    targetArr[idx] = null;
+                                }
+                            }
+                        }
+                        setAutoWordleGuess({ word: guessWord, colors });
+                    }
+                };
+                generateGuess();
+                interval = setInterval(generateGuess, 4000); // 4 seconds
+            }
+        } else {
+            setAutoWordleGuess(null);
+        }
+        return () => clearInterval(interval);
+    }, [activeMinigame, word500Target, word500Winner]);
 
     useEffect(() => {
         if (activeMinigame === "WORD500" && word500EndRef.current) {
@@ -2043,7 +2097,7 @@ export default function App() {
         }
 
         const isScrambleActive = activeMinigameRef.current === "ANAGRAM" && !!scrambleWordRef.current && !scrambleWinnerRef.current;
-        const isWord500Active = activeMinigameRef.current === "WORD500" && !!word500TargetRef.current && !word500WinnerRef.current;
+        const isWord500Active = (activeMinigameRef.current === "WORD500" || activeMinigameRef.current === "AUTO_WORDLE") && !!word500TargetRef.current && !word500WinnerRef.current;
         const currentPlayer = playersRef.current[turnIndexRef.current];
         const isCurrentPlayerTurn = gameStateRef.current === "PLAYING" && currentPlayer?.uniqueId === uniqueId && !currentPlayer.isEliminated;
 
@@ -2086,21 +2140,35 @@ export default function App() {
             
             if (!isDuplicate) {
                 const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
-                const newGuess = {
-                    word: cleanWordCheck.toUpperCase(),
-                    green, yellow, red,
-                    nickname,
-                    profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
-                };
-                setWord500Guesses(prev => [...prev, newGuess]);
+                
+                if (activeMinigameRef.current === "WORD500") {
+                    const newGuess = {
+                        word: cleanWordCheck.toUpperCase(),
+                        green, yellow, red,
+                        nickname,
+                        profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
+                    };
+                    setWord500Guesses(prev => [...prev, newGuess]);
+                }
                 
                 if (green === word500TargetRef.current.length) {
                     setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
                     addLog("MiniGame", `🎉 ${nickname} memenangkan Word500: ${word500TargetRef.current}!`);
-                    // Show correct answer row first, then flip after 800ms
-                    setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
-                    setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
-                    setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                    
+                    if (activeMinigameRef.current === "AUTO_WORDLE") {
+                        setAutoWordleGuess({
+                            word: word500TargetRef.current.toUpperCase(),
+                            colors: Array(word500TargetRef.current.length).fill("green")
+                        });
+                        setTimeout(() => { setWord500FlipPhase("flipping"); }, 1500);
+                        setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 2100);
+                        setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                    } else {
+                        // Show correct answer row first, then flip after 800ms
+                        setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                        setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
+                        setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                    }
                 } else {
                     playSound("tick");
                 }
@@ -2159,7 +2227,7 @@ export default function App() {
             return;
         }
 
-        if (activeMinigameRef.current === "WORD500" && word500TargetRef.current && cleanWordCheck.length === word500TargetRef.current.length && !word500WinnerRef.current) {
+        if ((activeMinigameRef.current === "WORD500" || activeMinigameRef.current === "AUTO_WORDLE") && word500TargetRef.current && cleanWordCheck.length === word500TargetRef.current.length && !word500WinnerRef.current) {
             // Validasi kamus untuk HOST: cek di dictionary.txt (EN via dictionaryCache) ATAU kamus_tambahan.txt (ID)
             const activeDictHost = dictionaryCache.current[languageRef.current]?.dict || dictionaryCache.current.EN?.dict;
             const isInDictHost = activeDictHost?.has(cleanWordCheck.toLowerCase()) || false;
@@ -2168,21 +2236,35 @@ export default function App() {
                 showFeedback(`"${cleanWordCheck.toUpperCase()}" tidak ada di kamus!`, "warning");
             } else {
                 const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
-                const newGuess = {
-                    word: cleanWordCheck.toUpperCase(),
-                    green, yellow, red,
-                    nickname: "HOST (You)",
-                    profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`
-                };
-                setWord500Guesses(prev => [...prev, newGuess]);
+                
+                if (activeMinigameRef.current === "WORD500") {
+                    const newGuess = {
+                        word: cleanWordCheck.toUpperCase(),
+                        green, yellow, red,
+                        nickname: "HOST (You)",
+                        profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`
+                    };
+                    setWord500Guesses(prev => [...prev, newGuess]);
+                }
                 
                 if (green === word500TargetRef.current.length) {
                     setWord500Winner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
                     addLog("MiniGame", `🎉 HOST memenangkan Word500: ${word500TargetRef.current}!`);
-                    // Show correct answer row first, then flip after 800ms
-                    setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
-                    setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
-                    setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                    
+                    if (activeMinigameRef.current === "AUTO_WORDLE") {
+                        setAutoWordleGuess({
+                            word: word500TargetRef.current.toUpperCase(),
+                            colors: Array(word500TargetRef.current.length).fill("green")
+                        });
+                        setTimeout(() => { setWord500FlipPhase("flipping"); }, 1500);
+                        setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 2100);
+                        setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                    } else {
+                        // Show correct answer row first, then flip after 800ms
+                        setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                        setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
+                        setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                    }
                 } else {
                     playSound("tick");
                 }
@@ -2543,6 +2625,7 @@ export default function App() {
                                                 <button onClick={() => setActiveMinigame("OFF")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "OFF" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>OFF</button>
                                                 <button onClick={() => setActiveMinigame("ANAGRAM")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "ANAGRAM" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>ANAGRAM</button>
                                                 <button onClick={() => setActiveMinigame("WORD500")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORD500" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORD500</button>
+                                                <button onClick={() => setActiveMinigame("AUTO_WORDLE")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "AUTO_WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`} title="Auto Clue Wordle">AUTO</button>
                                             </div>
                                         </div>
                                     </div>
@@ -3482,6 +3565,102 @@ export default function App() {
                 </div>
             )}
 
+
+            {/* --- AUTO WORDLE MINIGAME OVERLAY --- */}
+            {activeMinigame === "AUTO_WORDLE" && word500Target && (
+                <div
+                    ref={miniGameOverlayRef}
+                    className={`z-[90] flex pointer-events-none animate-in slide-in-from-right fade-in duration-500 ${miniGamePos.x !== null ? 'fixed' : 'absolute bottom-24 sm:bottom-32 right-2 sm:right-4'}`}
+                    style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
+                >
+                    <div
+                        className="pointer-events-auto bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-2xl flex flex-col p-1.5 sm:p-2 gap-1"
+                        style={{
+                            transform: `scale(${miniGameScale})`,
+                            transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
+                            transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                            perspective: '600px'
+                        }}
+                    >
+                        {/* Header for Dragging */}
+                        <div className="flex items-center justify-between mb-0.5 pb-1 border-b border-slate-700/50 cursor-move touch-none" onMouseDown={handleMiniGameDragStart} onTouchStart={handleMiniGameDragStart}>
+                            <div className="flex items-center gap-1.5">
+                                <GripHorizontal className="w-3.5 h-3.5 text-slate-600" />
+                                <span className="text-[11px] font-bold text-emerald-400 tracking-wide uppercase">Wordle</span>
+                                <span className="text-[9px] text-slate-600 font-mono bg-slate-800 px-1 rounded">{word500Target.length} HURUF</span>
+                                {!word500Winner && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
+                                        onTouchEnd={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
+                                        title="Spill Jawaban"
+                                        className="ml-0.5 text-slate-600 hover:text-amber-400 transition-colors p-0.5 rounded hover:bg-slate-800 active:scale-90"
+                                    >
+                                        <Sparkles className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.5}><Minus className="w-2.5 h-2.5" /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(1.5, p + 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 1.5}><Plus className="w-2.5 h-2.5" /></button>
+                            </div>
+                        </div>
+
+                        {/* Flip Container */}
+                        <div
+                            style={{
+                                position: 'relative',
+                                transformStyle: 'preserve-3d',
+                                transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                                transform: word500FlipPhase === 'flipping' || word500FlipPhase === 'winner' ? 'rotateY(-180deg)' : 'rotateY(0deg)',
+                                minWidth: '170px'
+                            }}
+                        >
+                            {/* Front: The Hint */}
+                            <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }} className="flex justify-center mt-1 mb-1">
+                                {autoWordleGuess ? (
+                                    <div className="flex gap-1.5 animate-in slide-in-from-top-2 fade-in duration-300">
+                                        {autoWordleGuess.word.split('').map((char, i) => {
+                                            const colorClass = autoWordleGuess.colors[i] === 'green' ? 'bg-emerald-600 border-emerald-700 text-slate-50 shadow-emerald-900/20' : autoWordleGuess.colors[i] === 'yellow' ? 'bg-amber-600 border-amber-700 text-slate-50 shadow-amber-900/20' : 'bg-slate-700 border-slate-800 text-slate-200 shadow-black/20';
+                                            return (
+                                                <div key={`${autoWordleGuess.word}-${i}`} className={`w-9 h-9 sm:w-11 sm:h-11 shrink-0 border-b-[3px] rounded-md flex items-center justify-center font-black text-2xl sm:text-3xl leading-none uppercase transition-colors shadow-lg ${colorClass} animate-in zoom-in duration-300`} style={{ animationDelay: `${i * 100}ms` }}>
+                                                    <span className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] pt-0.5">{char}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-1.5 animate-pulse">
+                                        {Array(word500Target.length).fill(0).map((_, i) => <div key={i} className="w-9 h-9 sm:w-11 sm:h-11 bg-slate-800 border-b-[3px] border-slate-700 rounded-md" />)}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Back: The Winner Reveal */}
+                            <div
+                                className="absolute inset-0 bg-emerald-950/90 rounded-lg border border-emerald-600/60 shadow-xl flex flex-col items-center justify-center p-2"
+                                style={{
+                                    backfaceVisibility: 'hidden',
+                                    WebkitBackfaceVisibility: 'hidden',
+                                    transform: 'rotateY(180deg)'
+                                }}
+                            >
+                                {word500Winner && (
+                                    <div className="flex items-center gap-2 sm:gap-3 w-full justify-center px-1">
+                                        <div className="relative shrink-0">
+                                            <div className="absolute -inset-1 rounded-full bg-emerald-500/30 animate-ping" />
+                                            <img src={word500Winner.profilePictureUrl} className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-emerald-400 shadow-lg object-cover bg-slate-800" alt={word500Winner.nickname} />
+                                        </div>
+                                        <div className="flex flex-col items-start min-w-0">
+                                            <span className="text-[10px] sm:text-xs font-black text-emerald-400 uppercase tracking-widest leading-none">BENAR!</span>
+                                            <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[100px] sm:max-w-[140px] mt-0.5">{word500Winner.nickname}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* --- MODAL PANDUAN POIN (SCORING GUIDE) --- */}
             {showPointGuide && pointMode !== "OFF" && (
