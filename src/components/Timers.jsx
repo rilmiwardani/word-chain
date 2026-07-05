@@ -85,10 +85,10 @@ const GlobalTimer = ({ gameDuration, isActive, onTimeout, resetKey }) => {
         }
     }, [time, isActive]);
 
-    if (!isActive) return <div className="px-4 py-1 rounded-full font-mono text-xl font-bold border shadow-sm text-sky-300 border-sky-800 bg-sky-950/50">0:00</div>;
+    if (!isActive) return <div className="font-mono text-xl font-bold drop-shadow-md text-sky-300 flex items-center justify-center">0:00</div>;
 
     return (
-        <div className={`px-4 py-1 rounded-full font-mono text-xl font-bold border shadow-sm ${time <= 10 ? "text-red-400 border-red-800 bg-red-950/50 animate-pulse" : "text-sky-300 border-sky-800 bg-sky-950/50"}`}>
+        <div className={`font-mono text-xl font-bold drop-shadow-md flex items-center justify-center ${time <= 10 ? "text-red-400 animate-pulse drop-shadow-[0_0_8px_rgba(248,113,113,0.8)]" : "text-sky-300 drop-shadow-[0_0_8px_rgba(125,211,252,0.6)]"}`}>
             {`${Math.floor(time / 60)}:${(time % 60).toString().padStart(2, "0")}`}
         </div>
     );

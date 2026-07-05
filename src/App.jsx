@@ -41,6 +41,7 @@ export default function App() {
     const [gameState, setGameState] = useState("WAITING");
     const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
     const [currentWord, setCurrentWord] = useState("");
+    const [lastInputWord, setLastInputWord] = useState("");
     const [usedWords, setUsedWords] = useState(new Set());
     const [gameMode, setGameMode] = useState("LAST_LETTER");
     const [language, setLanguage] = useState("EN");
@@ -87,6 +88,7 @@ export default function App() {
     const [logs, setLogs] = useState([]);
     const [activeEffects, setActiveEffects] = useState([]);
     const [connectionStatus, setConnectionStatus] = useState("disconnected");
+    const [connectionSource, setConnectionSource] = useState(() => localStorage.getItem("sk_conn_source") || "LOCAL"); // LOCAL | TIKFINITY
 
     const [maxPlayers, setMaxPlayers] = useState(8);
     const [turnDuration, setTurnDuration] = useState(15);
@@ -98,10 +100,24 @@ export default function App() {
     const [wsHost, setWsHost] = useState(() => localStorage.getItem("word_chain_ws_host") || "");
     const [dictLoadedInfo, setDictLoadedInfo] = useState("Default (EN)");
     const [tableTheme, setTableTheme] = useState(() => localStorage.getItem("sk_tableTheme") || "midnight");
+    const [layoutStyle, setLayoutStyle] = useState(() => localStorage.getItem("sk_layoutStyle") || "round");
+    const [bgColorMode, setBgColorMode] = useState(() => {
+        const saved = localStorage.getItem("sk_bgColorMode");
+        if (saved) return saved;
+        return localStorage.getItem("sk_greenscreen") === "true" ? "greenscreen" : "default";
+    });
 
     useEffect(() => {
         localStorage.setItem("sk_tableTheme", tableTheme);
     }, [tableTheme]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_layoutStyle", layoutStyle);
+    }, [layoutStyle]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_bgColorMode", bgColorMode);
+    }, [bgColorMode]);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
@@ -130,6 +146,7 @@ export default function App() {
 
     const [miniGamePos, setMiniGamePos] = useState({ x: null, y: null });
     const [miniGameScale, setMiniGameScale] = useState(1);
+    const [tableScale, setTableScale] = useState(1);
     const [mainTableOffset, setMainTableOffset] = useState({ x: 0, y: 0 });
 
 
@@ -142,11 +159,13 @@ export default function App() {
     const lastSuccessfulPlayerIdRef = useRef(null);
     const timerRef = useRef(null);
     const wsRef = useRef(null);
+    const backendWsRef = useRef(null);
     const fileInputRef = useRef(null);
     const containerRef = useRef(null);
     const fallbackToLocalhostRef = useRef(false);
     const reconnectAttemptsRef = useRef(0);
     const wsHostRef = useRef(wsHost);
+    const connectionSourceRef = useRef(localStorage.getItem("sk_conn_source") || "LOCAL");
     const feedbackTimeoutRef = useRef(null);
     const chatHandlerRef = useRef(null);
     const phraseDictionary = useRef(new Set(FALLBACK_PHRASES_EN));
@@ -166,7 +185,9 @@ export default function App() {
     const challengeQueueRef = useRef(challengeQueue);
     const languageRef = useRef(language);
     const gameModeRef = useRef(gameMode);
+    const lastWordleGuessRef = useRef({ uniqueId: null, word: null, time: 0 });
     const currentWordRef = useRef(currentWord);
+    const lastInputWordRef = useRef(lastInputWord);
     const targetRhymeRef = useRef(targetRhyme);
     const gameStateRef = useRef(gameState);
     const winConditionRef = useRef(winCondition);
@@ -252,6 +273,7 @@ export default function App() {
         }
         setConnectionStatus("disconnected");
         fallbackToLocalhostRef.current = false;
+        reconnectAttemptsRef.current = 0;
         setTimeout(connectWebSocket, 500);
     };
 
@@ -442,13 +464,28 @@ export default function App() {
         if (e) { e.stopPropagation(); e.preventDefault(); }
         if (!word500TargetRef.current || word500WinnerRef.current) return;
         const ans = word500TargetRef.current.toUpperCase();
-        if (activeMinigameRef.current === "WORD500") {
-            setWord500Guesses(prev => [...prev, {
+        if (activeMinigameRef.current === "WORD500" || activeMinigameRef.current === "WORDLE") {
+            const guess = {
                 word: ans, green: ans.length, yellow: 0, red: 0,
-                nickname: "Sistem", profilePictureUrl: ""
-            }]);
+                nickname: "Sistem", profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=System"
+            };
+            if (activeMinigameRef.current === "WORDLE") guess.colors = Array(ans.length).fill("green");
+            
+            setWord500Guesses(prev => {
+                const next = [...prev, guess];
+                if (activeMinigameRef.current === "WORDLE" && next.length > 6) return next.slice(next.length - 6);
+                return next;
+            });
             playSound("wrong");
-            setTimeout(() => startNewWord500(), 4000);
+            
+            if (activeMinigameRef.current === "WORDLE") {
+                setWord500Winner({ nickname: "Sistem (Spill)", profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=System" });
+                setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                setTimeout(() => { setWord500FlipPhase("winner"); }, 1400);
+                setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+            } else {
+                setTimeout(() => startNewWord500(), 4000);
+            }
         } else if (activeMinigameRef.current === "AUTO_WORDLE") {
             setAutoWordleGuess({
                 word: ans,
@@ -510,20 +547,25 @@ export default function App() {
     }, [word500Guesses, activeMinigame]);
 
     useEffect(() => {
-        // Load kamus_tambahan.txt (ID) ke ref terpisah untuk validasi Word500
-        fetch("/kamus_tambahan.txt")
-            .then(res => {
-                if (!res.ok) throw new Error("kamus_tambahan.txt tidak ditemukan");
-                return res.text();
-            })
-            .then(text => {
-                const words = text.split(/\r?\n/)
-                    .map(w => w.trim().toLowerCase())
-                    .filter(w => w.length >= 3 && !w.includes(" "));
-                kamusTambahanRef.current = new Set(words);
-                addLog("System", `Kamus tambahan ID dimuat: ${words.length} kata`);
-            })
-            .catch(() => { addLog("System", "kamus_tambahan.txt tidak ditemukan, validasi ID dinonaktifkan"); });
+        // Load kamus_tambahan.txt (ID) dan dictionary.txt (EN) ke ref terpisah untuk validasi Word500
+        Promise.allSettled([
+            fetch("/kamus_tambahan.txt").then(r => r.ok ? r.text() : Promise.reject("kamus_tambahan error")),
+            fetch("/dictionary.txt").then(r => r.ok ? r.text() : Promise.reject("dictionary error"))
+        ]).then(results => {
+            let combinedWords = new Set();
+            results.forEach((result, idx) => {
+                if (result.status === 'fulfilled') {
+                    const words = result.value.split(/\r?\n/)
+                        .map(w => w.trim().toLowerCase())
+                        .filter(w => w.length >= 3 && !w.includes(" "));
+                    words.forEach(w => combinedWords.add(w));
+                    addLog("System", `Kamus ${idx === 0 ? 'tambahan ID' : 'EN'} dimuat: ${words.length} kata`);
+                } else {
+                    addLog("System", `Gagal memuat kamus ${idx === 0 ? 'tambahan ID' : 'EN'}`);
+                }
+            });
+            kamusTambahanRef.current = combinedWords;
+        });
 
         fetch("/minigame.txt")
             .then(res => {
@@ -850,21 +892,71 @@ export default function App() {
         }, type === 'gift' ? 3000 : 2000);
     };
 
+    // Dedicated connection to backend for music features and host controls
+    useEffect(() => {
+        let reconnectTimeout;
+        const connectBackendWs = () => {
+            const host = wsHostRef.current?.trim() || window.location.hostname || "localhost";
+            backendWsRef.current = new WebSocket(`ws://${host}:62024`);
+            backendWsRef.current.onmessage = (event) => {
+                try {
+                    const { event: eventName, data } = JSON.parse(event.data);
+                    if (eventName === "music_state") {
+                        setMusicState(data);
+                    }
+                } catch(err) {}
+            };
+            backendWsRef.current.onclose = () => {
+                reconnectTimeout = setTimeout(connectBackendWs, 3000);
+            };
+        };
+        connectBackendWs();
+        return () => {
+            clearTimeout(reconnectTimeout);
+            if (backendWsRef.current) {
+                backendWsRef.current.onclose = null;
+                backendWsRef.current.close();
+            }
+        };
+    }, []);
+
     const connectWebSocket = () => {
+        const source = connectionSourceRef.current;
         let hostname;
-        if (wsHostRef.current && wsHostRef.current.trim()) {
-            hostname = wsHostRef.current.trim();
+        let port = 62024;
+
+        if (source === "TIKFINITY") {
+            // TikFinity: always localhost:21213 (TikFinity desktop app WebSocket API)
+            hostname = wsHostRef.current?.trim() || "localhost";
+            port = 21213;
         } else {
-            hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
+            // LOCAL: own server.js backend
+            if (wsHostRef.current && wsHostRef.current.trim()) {
+                hostname = wsHostRef.current.trim();
+            } else {
+                hostname = fallbackToLocalhostRef.current ? "localhost" : window.location.hostname || "localhost";
+            }
         }
-        const url = `ws://${hostname}:62024`;
+
+        const url = `ws://${hostname}:${port}`;
         try {
             wsRef.current = new WebSocket(url);
             wsRef.current.onopen = () => {
-                setConnectionStatus("ws_only");
-                addLog("System", `Connected to Backend (${hostname})`);
-                fallbackToLocalhostRef.current = false;
+                if (source === "TIKFINITY") {
+                    // TikFinity handles TikTok connection itself — mark as tiktok_ready directly
+                    setConnectionStatus("tiktok_ready");
+                    addLog("System", `Terhubung ke TikFinity (${hostname}) 🟢`);
+                } else {
+                    setConnectionStatus("ws_only");
+                    addLog("System", `Connected to Backend (${hostname})`);
+                }
+                // Only clear fallback after connection is stable (don't reset immediately
+                // to avoid hostname/localhost ping-pong on flaky networks)
+                if (wsHostRef.current && wsHostRef.current.trim()) {
+                    fallbackToLocalhostRef.current = false;
+                }
                 reconnectAttemptsRef.current = 0;
+                if (source === "TIKFINITY") playSound("notification");
             };
             wsRef.current.onmessage = (event) => {
                 try {
@@ -892,21 +984,31 @@ export default function App() {
                         setMusicState(data);
                     }
                     if (eventName === "tiktok_disconnected") {
-                        setConnectionStatus("ws_only");
+                        setConnectionStatus(source === "TIKFINITY" ? "tiktok_ready" : "ws_only");
                         addLog("System", `Terputus dari TikTok Live 🔴`);
                     }
                 } catch (err) { console.error("WS Error", err); }
             };
+            wsRef.current.onerror = (err) => {
+                console.error("[WS] Connection error:", err);
+                // onerror is always followed by onclose, so reconnect logic is handled there
+            };
             wsRef.current.onclose = () => {
                 setConnectionStatus("disconnected");
-                if (!fallbackToLocalhostRef.current && window.location.hostname !== "localhost") {
+                if (source !== "TIKFINITY" && !fallbackToLocalhostRef.current && window.location.hostname !== "localhost") {
                     fallbackToLocalhostRef.current = true;
                 }
                 reconnectAttemptsRef.current += 1;
-                const delay = Math.min(reconnectAttemptsRef.current * 5000, 60000);
+                // Exponential backoff: 2s, 4s, 8s, capped at 15s
+                const delay = Math.min(2000 * Math.pow(2, reconnectAttemptsRef.current - 1), 15000);
                 setTimeout(connectWebSocket, delay);
             };
-        } catch (err) { }
+        } catch (err) {
+            console.error("[WS] Failed to create WebSocket:", err);
+            reconnectAttemptsRef.current += 1;
+            const delay = Math.min(2000 * Math.pow(2, reconnectAttemptsRef.current - 1), 15000);
+            setTimeout(connectWebSocket, delay);
+        }
     };
 
     useEffect(() => { chatHandlerRef.current = handleChatEvent; });
@@ -1585,6 +1687,8 @@ export default function App() {
             lastSuccessfulPlayerIdRef.current = modifiedPlayers[playerIndex].uniqueId;
 
             if (!gameEnded) {
+                setLastInputWord(word);
+                lastInputWordRef.current = word;
                 setCurrentWord(nextWord);
                 currentWordRef.current = nextWord;
                 advanceTurn(modifiedPlayers, playerIndex, stepsToAdvance, nextWord);
@@ -2105,8 +2209,28 @@ export default function App() {
             return;
         }
 
+        // --- Viewer Music Commands (forward to backend ONLY if using TIKFINITY, as LOCAL mode backend already catches it) ---
+        if (connectionSourceRef.current === "TIKFINITY") {
+            if (lowerComment.startsWith("!play ")) {
+                const query = comment.substring(6).trim();
+                if (query && backendWsRef.current && backendWsRef.current.readyState === WebSocket.OPEN) {
+                    backendWsRef.current.send(JSON.stringify({ 
+                        event: 'viewer_music_request', 
+                        data: { query, nickname, profilePictureUrl } 
+                    }));
+                }
+                return;
+            }
+            if (lowerComment === "!skip") {
+                if (backendWsRef.current && backendWsRef.current.readyState === WebSocket.OPEN) {
+                    backendWsRef.current.send(JSON.stringify({ event: 'music_skip' }));
+                }
+                return;
+            }
+        }
+
         const isScrambleActive = activeMinigameRef.current === "ANAGRAM" && !!scrambleWordRef.current && !scrambleWinnerRef.current;
-        const isWord500Active = (activeMinigameRef.current === "WORD500" || activeMinigameRef.current === "AUTO_WORDLE") && !!word500TargetRef.current && !word500WinnerRef.current;
+        const isWord500Active = (activeMinigameRef.current === "WORD500" || activeMinigameRef.current === "AUTO_WORDLE" || activeMinigameRef.current === "WORDLE") && !!word500TargetRef.current && !word500WinnerRef.current;
         const currentPlayer = playersRef.current[turnIndexRef.current];
         const isCurrentPlayerTurn = gameStateRef.current === "PLAYING" && currentPlayer?.uniqueId === uniqueId && !currentPlayer.isEliminated;
 
@@ -2116,8 +2240,11 @@ export default function App() {
         }
 
         // 3. Hanya gunakan regex setelah yakin chat perlu diproses
-        const cleanWordCheck = normalizeWord(lowerComment);
-
+        // Bypass filter tiktok: hapus spasi berlebih (M A K A N -> makan) dan kata sapaan (makan bang -> makan)
+        let cleanWordCheck = normalizeWord(lowerComment);
+        if (cleanWordCheck.includes(" ")) {
+            cleanWordCheck = cleanWordCheck.replace(/\b(bang|bg|cuy|dong|min|admin)\b/g, "").replace(/\s+/g, "");
+        }
         if (isScrambleActive && cleanWordCheck === scrambleWordRef.current.toLowerCase()) {
             setScrambledDisplay(scrambleWordRef.current);
             setScrambleWinner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
@@ -2142,33 +2269,57 @@ export default function App() {
                 return;
             }
 
-            // Prevent double inputs from the same user
-            const isDuplicate = word500GuessesRef.current.length > 0 && 
-                                word500GuessesRef.current[word500GuessesRef.current.length - 1].word === cleanWordCheck.toUpperCase() &&
-                                word500GuessesRef.current[word500GuessesRef.current.length - 1].nickname === nickname;
+            // Prevent double inputs from the same user (Throttling based on time and uniqueId)
+            const now = Date.now();
+            const isDuplicate = (
+                lastWordleGuessRef.current.uniqueId === uniqueId && 
+                lastWordleGuessRef.current.word === cleanWordCheck && 
+                now - lastWordleGuessRef.current.time < 1500
+            ) || (
+                word500GuessesRef.current.length > 0 && 
+                word500GuessesRef.current[word500GuessesRef.current.length - 1].word === cleanWordCheck.toUpperCase() &&
+                word500GuessesRef.current[word500GuessesRef.current.length - 1].nickname === nickname
+            );
             
             if (!isDuplicate) {
+                lastWordleGuessRef.current = { uniqueId, word: cleanWordCheck, time: now };
                 const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
                 
-                if (activeMinigameRef.current === "WORD500") {
+                if (activeMinigameRef.current === "WORD500" || activeMinigameRef.current === "WORDLE") {
+                    const targetArr = word500TargetRef.current.toUpperCase().split("");
+                    const guessArr = cleanWordCheck.toUpperCase().split("");
+                    const colors = guessArr.map((c, i) => c === targetArr[i] ? "green" : "gray");
+
                     const newGuess = {
                         word: cleanWordCheck.toUpperCase(),
                         green, yellow, red,
+                        colors, // For Wordle mode (only green/gray)
                         nickname,
                         profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
                     };
-                    setWord500Guesses(prev => [...prev, newGuess]);
+                    setWord500Guesses(prev => {
+                        const next = [...prev, newGuess];
+                        // Limit to 6 rows for WORDLE mode
+                        if (activeMinigameRef.current === "WORDLE" && next.length > 6) {
+                            return next.slice(next.length - 6);
+                        }
+                        return next;
+                    });
                 }
                 
                 if (green === word500TargetRef.current.length) {
                     setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
-                    addLog("MiniGame", `🎉 ${nickname} memenangkan Word500: ${word500TargetRef.current}!`);
+                    const gameName = activeMinigameRef.current === "WORDLE" ? "Wordle?" : (activeMinigameRef.current === "AUTO_WORDLE" ? "Auto Wordle" : "Word500");
+                    addLog("MiniGame", `🎉 ${nickname} memenangkan ${gameName}: ${word500TargetRef.current}!`);
                     
-                    if (activeMinigameRef.current === "AUTO_WORDLE") {
+                    if (activeMinigameRef.current === "AUTO_WORDLE" || activeMinigameRef.current === "WORDLE") {
                         setAutoWordleLeaderboard(prev => {
                             const currentScore = prev[uniqueId]?.score || 0;
                             return { ...prev, [uniqueId]: { score: currentScore + 1, nickname, avatar: profilePictureUrl || getAvatarUrl(uniqueId) } };
                         });
+                    }
+                    
+                    if (activeMinigameRef.current === "AUTO_WORDLE") {
                         
                         setAutoWordleGuess({
                             word: word500TargetRef.current.toUpperCase(),
@@ -2209,16 +2360,16 @@ export default function App() {
         // --- Host Music Commands ---
         if (lowerRaw.startsWith("!play ")) {
             const query = rawInput.substring(6).trim();
-            if (query && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ event: 'host_music_request', data: { query } }));
+            if (query && backendWsRef.current && backendWsRef.current.readyState === WebSocket.OPEN) {
+                backendWsRef.current.send(JSON.stringify({ event: 'host_music_request', data: { query } }));
                 showFeedback(`Mencari musik: ${query}`, "info");
             }
             setManualInput("");
             return;
         }
         if (lowerRaw === "!skip") {
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                wsRef.current.send(JSON.stringify({ event: 'music_skip' }));
+            if (backendWsRef.current && backendWsRef.current.readyState === WebSocket.OPEN) {
+                backendWsRef.current.send(JSON.stringify({ event: 'music_skip' }));
                 showFeedback("Melewati musik", "info");
             }
             setManualInput("");
@@ -2265,11 +2416,14 @@ export default function App() {
                     setWord500Winner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
                     addLog("MiniGame", `🎉 HOST memenangkan Word500: ${word500TargetRef.current}!`);
                     
-                    if (activeMinigameRef.current === "AUTO_WORDLE") {
+                    if (activeMinigameRef.current === "AUTO_WORDLE" || activeMinigameRef.current === "WORDLE") {
                         setAutoWordleLeaderboard(prev => {
                             const currentScore = prev["HOST"]?.score || 0;
                             return { ...prev, ["HOST"]: { score: currentScore + 1, nickname: "HOST (You)", avatar: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` } };
                         });
+                    }
+                    
+                    if (activeMinigameRef.current === "AUTO_WORDLE") {
                         
                         setAutoWordleGuess({
                             word: word500TargetRef.current.toUpperCase(),
@@ -2420,20 +2574,29 @@ export default function App() {
     // isMobile is now a reactive state declared at the top of the component
 
     // --- LOGIKA DINAMIS RADIUS & SKALA AVATAR ---
+    const activePlayers = players.filter(p => !p.isEliminated);
+    const playerCount = Math.max(activePlayers.length, 1);
+    
     const baseRadius = (gameState === "WAITING" && waitingCountdown === null) ? (isMobile ? 135 : 170) : (isMobile ? 185 : 260);
     // 1. Tambahkan jarak radius secara bertahap jika pemain banyak, namun batasi agar tidak keluar layar monitor/HP
-    const extraRadius = Math.max(0, players.length - 8) * (isMobile ? 4 : 8);
+    const extraRadius = Math.max(0, playerCount - 8) * (isMobile ? 4 : 8);
     const dynamicRadius = baseRadius + Math.min(extraRadius, isMobile ? 35 : 60);
 
     // 2. Perkecil ukuran profil (scale down) secara otomatis jika pemain lebih dari 6
-    const dynamicScale = players.length > 6 ? Math.max(0.45, 1 - (players.length - 6) * 0.045) : 1;
+    const dynamicScale = playerCount > 6 ? Math.max(0.45, 1 - (playerCount - 6) * 0.045) : 1;
 
 
     // ==========================================
     // 4. RENDER UI
     // ==========================================
     return (
-        <div ref={containerRef} className="min-h-screen bg-slate-950 text-slate-200 font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative">
+        <div ref={containerRef} className={`group min-h-screen ${bgColorMode === 'greenscreen' ? 'bg-[#00FF00]' : bgColorMode === 'darkblue' ? 'bg-[#1a1d27]' : 'bg-slate-950'} text-slate-200 font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative`}>
+            {/* Table Zoom Controls - Hidden until hover */}
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <button onClick={() => setTableScale(s => Math.min(2, s + 0.1))} className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Perbesar Meja"><Plus className="w-5 h-5" /></button>
+                <button onClick={() => setTableScale(s => Math.max(0.3, s - 0.1))} className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Perkecil Meja"><Minus className="w-5 h-5" /></button>
+                <button onClick={() => setTableScale(1)} className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Reset Ukuran"><RefreshCw className="w-4 h-4 m-0.5" /></button>
+            </div>
             {/* Background Pattern Overlay - Subtle subtle texture */}
             <div className="absolute inset-0 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-[0.03]"></div>
             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 pointer-events-none">
@@ -2441,7 +2604,7 @@ export default function App() {
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 mt-1">
                     <span
                         className={`w-2.5 h-2.5 rounded-full ${connectionStatus === "tiktok_ready" ? "bg-emerald-500 shadow-sm shadow-emerald-500/50" : connectionStatus === "ws_only" ? "bg-amber-400 animate-pulse" : "bg-red-500"}`}
-                        title={connectionStatus === "tiktok_ready" ? "Terhubung ke TikTok" : connectionStatus === "ws_only" ? "Backend OK, TikTok Belum Connect" : "Backend Offline"}
+                        title={connectionStatus === "tiktok_ready" ? (connectionSource === "TIKFINITY" ? "Terhubung via TikFinity" : "Terhubung ke TikTok") : connectionStatus === "ws_only" ? "Backend OK, TikTok Belum Connect" : "Backend Offline"}
                     ></span>
                     <div className="flex gap-2">
                         <span className="text-sky-300 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800 shadow-sm">{language}</span>
@@ -2615,6 +2778,21 @@ export default function App() {
                                                 {Object.keys(TABLE_THEMES).map(themeKey => ( <option key={themeKey} value={themeKey} className="bg-slate-900">{THEME_LABELS[themeKey]}</option> ))}
                                             </select>
                                         </div>
+                                        <div className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2"><Users className="w-3.5 h-3.5 text-amber-400" /><span className="text-slate-300">Layout Pemain</span></div>
+                                            <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
+                                                <button onClick={() => setLayoutStyle("round")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${layoutStyle === "round" ? "bg-sky-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Bundar</button>
+                                                <button onClick={() => setLayoutStyle("fut")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${layoutStyle === "fut" ? "bg-amber-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>FUT Card</button>
+                                            </div>
+                                        </div>
+                                        <div className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2"><Maximize className="w-3.5 h-3.5 text-emerald-400" /><span className="text-slate-300">Warna Latar</span></div>
+                                            <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
+                                                <button onClick={() => setBgColorMode("default")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "default" ? "bg-slate-700 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Default</button>
+                                                <button onClick={() => setBgColorMode("darkblue")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "darkblue" ? "bg-[#1a1d27] text-white shadow-sm border border-slate-600" : "text-slate-400 hover:text-white"}`}>Dark Blue</button>
+                                                <button onClick={() => setBgColorMode("greenscreen")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "greenscreen" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Green</button>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     {/* Media & Overlay Group */}
@@ -2640,10 +2818,11 @@ export default function App() {
                                         </button>
                                         <div className="px-3 py-2 text-xs font-bold flex flex-col gap-1.5">
                                             <div className="flex items-center gap-2"><Gamepad2 className="w-3.5 h-3.5 text-purple-400" /><span className="text-slate-300">Minigame Overlay</span></div>
-                                            <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
+                                            <div className="flex flex-wrap gap-1">
                                                 <button onClick={() => setActiveMinigame("OFF")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "OFF" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>OFF</button>
                                                 <button onClick={() => setActiveMinigame("ANAGRAM")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "ANAGRAM" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>ANAGRAM</button>
                                                 <button onClick={() => setActiveMinigame("WORD500")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORD500" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORD500</button>
+                                                <button onClick={() => setActiveMinigame("WORDLE")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORDLE?</button>
                                                 <button onClick={() => setActiveMinigame("AUTO_WORDLE")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "AUTO_WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`} title="Auto Clue Wordle">AUTO</button>
                                             </div>
                                         </div>
@@ -2651,33 +2830,67 @@ export default function App() {
 
                                     {/* Connection & Advanced */}
                                     <div className="w-full bg-slate-800/30 rounded border border-slate-700/50 p-2.5 flex flex-col gap-3">
-                                        {/* TikTok Connection */}
+                                        {/* Connection Source Toggle */}
                                         <div>
                                             <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                                                TikTok Live
-                                                {connectionStatus === "tiktok_ready" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+                                                Sumber Koneksi
+                                                <span className={`w-1.5 h-1.5 rounded-full ${connectionStatus === "tiktok_ready" ? "bg-emerald-500 animate-pulse" : connectionStatus === "ws_only" ? "bg-amber-400 animate-pulse" : "bg-red-500"}`}></span>
                                             </div>
-                                            <div className="flex items-center gap-1.5">
-                                                <span className="text-slate-500 font-mono text-xs">@</span>
-                                                <input type="text" value={tiktokUsername} onChange={(e) => setTiktokUsername(e.target.value)} placeholder="username" className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500" />
+                                            <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5 mb-2">
                                                 <button onClick={() => {
-                                                    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && tiktokUsername.trim()) {
-                                                        wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim(), sessionId: tiktokSessionId.trim() || undefined } }));
-                                                        addLog("System", `Menyambung @${tiktokUsername.trim()}...`);
-                                                    }
-                                                }} className="bg-emerald-900/40 hover:bg-emerald-800/60 px-2.5 py-1 rounded border border-emerald-800/50 text-emerald-400 transition-colors text-xs font-bold whitespace-nowrap">Conn</button>
+                                                    setConnectionSource("LOCAL");
+                                                    connectionSourceRef.current = "LOCAL";
+                                                    localStorage.setItem("sk_conn_source", "LOCAL");
+                                                    handleReconnectWebSocket();
+                                                }} className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-colors ${connectionSource === "LOCAL" ? "bg-sky-600 text-white shadow-sm" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
+                                                    🖥️ Server Lokal
+                                                </button>
+                                                <button onClick={() => {
+                                                    setConnectionSource("TIKFINITY");
+                                                    connectionSourceRef.current = "TIKFINITY";
+                                                    localStorage.setItem("sk_conn_source", "TIKFINITY");
+                                                    handleReconnectWebSocket();
+                                                }} className={`flex-1 py-1.5 rounded text-[10px] font-bold transition-colors ${connectionSource === "TIKFINITY" ? "bg-violet-600 text-white shadow-sm" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
+                                                    🌐 TikFinity
+                                                </button>
                                             </div>
-                                            <div className="flex items-center gap-1.5 mt-1.5">
-                                                <input type="password" value={tiktokSessionId} onChange={(e) => { setTiktokSessionId(e.target.value); localStorage.setItem("tiktok_session_id", e.target.value); }} placeholder="sessionid (opsional)" className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500" />
-                                                {tiktokSessionId && <button onClick={() => { setTiktokSessionId(""); localStorage.removeItem("tiktok_session_id"); }} className="text-slate-500 hover:text-red-400 p-1"><X className="w-3.5 h-3.5" /></button>}
-                                            </div>
+                                            <p className="text-[9px] text-slate-500 mb-1">
+                                                {connectionSource === "TIKFINITY"
+                                                    ? "Terhubung langsung ke TikFinity — TikTok dikelola oleh TikFinity."
+                                                    : "Terhubung ke server lokal (server.js) — kelola TikTok secara mandiri."
+                                                }
+                                            </p>
                                         </div>
 
-                                        {/* WebSockets & Dictionary */}
+                                        {/* TikTok Connection — only show for LOCAL mode */}
+                                        {connectionSource === "LOCAL" && (
+                                            <div className="border-t border-slate-700/50 pt-2">
+                                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                                                    TikTok Live
+                                                    {connectionStatus === "tiktok_ready" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>}
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-slate-500 font-mono text-xs">@</span>
+                                                    <input type="text" value={tiktokUsername} onChange={(e) => setTiktokUsername(e.target.value)} placeholder="username" className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500" />
+                                                    <button onClick={() => {
+                                                        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && tiktokUsername.trim()) {
+                                                            wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim(), sessionId: tiktokSessionId.trim() || undefined } }));
+                                                            addLog("System", `Menyambung @${tiktokUsername.trim()}...`);
+                                                        }
+                                                    }} className="bg-emerald-900/40 hover:bg-emerald-800/60 px-2.5 py-1 rounded border border-emerald-800/50 text-emerald-400 transition-colors text-xs font-bold whitespace-nowrap">Conn</button>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 mt-1.5">
+                                                    <input type="password" value={tiktokSessionId} onChange={(e) => { setTiktokSessionId(e.target.value); localStorage.setItem("tiktok_session_id", e.target.value); }} placeholder="sessionid (opsional)" className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500" />
+                                                    {tiktokSessionId && <button onClick={() => { setTiktokSessionId(""); localStorage.removeItem("tiktok_session_id"); }} className="text-slate-500 hover:text-red-400 p-1"><X className="w-3.5 h-3.5" /></button>}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* WebSocket Host & Dictionary */}
                                         <div className="flex items-center justify-between gap-2 border-t border-slate-700/50 pt-2">
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex items-center gap-1.5">
-                                                    <input type="text" value={wsHost} onChange={handleWsHostChange} placeholder={window.location.hostname || "localhost"} className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono" />
+                                                    <input type="text" value={wsHost} onChange={handleWsHostChange} placeholder={connectionSource === "TIKFINITY" ? "localhost" : (window.location.hostname || "localhost")} className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[10px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono" />
                                                     <button onClick={handleReconnectWebSocket} className="bg-sky-900/40 hover:bg-sky-800/60 p-1 rounded border border-sky-800/50 text-sky-400 transition-colors"><RefreshCw className="w-3 h-3" /></button>
                                                 </div>
                                             </div>
@@ -2794,20 +3007,168 @@ export default function App() {
             )}
 
 
-            <div 
-                ref={mainTableRef}
+            {/* MAIN TABLE WRAPPER WITH SCALE */}
+            <div className="transition-transform duration-300 ease-out" style={{ transform: `scale(${tableScale})`, transformOrigin: "center center" }}>
+                <div 
+                    ref={mainTableRef}
                 onMouseDown={handleMainTableDragStart}
                 onTouchStart={handleMainTableDragStart}
                 style={{ position: 'relative', left: `${mainTableOffset.x}px`, top: `${mainTableOffset.y}px` }}
                 className="cursor-move transform scale-[0.85] -translate-y-12 sm:translate-y-0 sm:scale-100 transition-transform duration-300 z-10"
             >
                 <div className="relative w-[360px] h-[360px] sm:w-[500px] sm:h-[500px] flex items-center justify-center">
-                    <div className={`absolute inset-0 rounded-full border-[8px] transition-all duration-500 flex items-center justify-center overflow-hidden ${getTableStatusClass()} ${tableStatus === 'success' ? 'scale-105' : 'scale-100'}`}>
+                    <div className={`absolute inset-0 transition-all duration-500 flex items-center justify-center overflow-hidden ${layoutStyle === "round" ? `rounded-full border-[8px] ${getTableStatusClass()}` : `bg-transparent`} ${tableStatus === 'success' ? 'scale-105' : 'scale-100'}`}>
                         {gameState === "PAUSED" && (
                             <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
                                 <Pause className="w-16 h-16 sm:w-20 sm:h-20 text-amber-400 mb-2 animate-pulse" />
                                 <p className="text-2xl sm:text-4xl font-black text-amber-400 tracking-widest drop-shadow-sm">PAUSED</p>
                                 <p className="text-xs sm:text-sm text-amber-500 mt-2 font-mono">Menunggu Jaringan Stabil...</p>
+                            </div>
+                        )}
+
+                        {/* Victory Overlay */}
+                        {gameState === "ENDED" && getWinners().length > 0 && (
+                            <div className={`absolute inset-0 z-[60] flex flex-col items-center justify-center ${layoutStyle === "round" ? "rounded-full overflow-hidden" : "overflow-visible"} animate-in fade-in duration-1000`}>
+                                {/* Cinematic Background (Solid for round, glowing for FUT) */}
+                                {layoutStyle === "round" ? (
+                                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-amber-900/60 via-slate-900/85 to-slate-950/95 backdrop-blur-md"></div>
+                                ) : (
+                                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[radial-gradient(circle,_rgba(251,191,36,0.15)_0%,_transparent_60%)] pointer-events-none mix-blend-screen"></div>
+                                )}
+                                
+                                {/* Confetti Burst (Lightweight) */}
+                                <div className={`absolute inset-0 pointer-events-none ${layoutStyle === "round" ? "overflow-hidden" : "overflow-visible"}`}>
+                                    {[...Array(80)].map((_, i) => {
+                                        const colors = ["#ef4444", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#38bdf8"];
+                                        const color = colors[Math.floor(Math.random() * colors.length)];
+                                        const width = Math.random() * 6 + 6; // Confetti size: 6px to 12px
+                                        const height = Math.random() > 0.5 ? width : width * 1.5;
+                                        // Random horizontal drift direction per particle
+                                        const drift = Math.random() > 0.5 ? 1 : -1;
+                                        return (
+                                            <div key={i} className="absolute animate-confetti rounded-sm" style={{ 
+                                                left: `${Math.random() * 100}%`, 
+                                                top: '-30px',
+                                                backgroundColor: color, 
+                                                width: `${width}px`, 
+                                                height: `${height}px`, 
+                                                animationDuration: `${2 + Math.random() * 2}s`, // 2s to 4s
+                                                animationDelay: `${Math.random() * 1.5}s`, // Stagger burst over 1.5s
+                                                transform: `scaleX(${drift})` // Flips animation direction for half of them
+                                            }}></div>
+                                        );
+                                    })}
+                                </div>
+
+                                {/* Content */}
+                                <div className="relative flex flex-col items-center justify-center z-10 px-6 w-full h-full animate-in fade-in zoom-in-[0.98] duration-1000 ease-out delay-200 fill-mode-both">
+                                    <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-amber-400 drop-shadow-[0_0_25px_rgba(251,191,36,0.5)] mb-2 fill-amber-500/10" />
+                                    <h2 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-100 to-amber-500 uppercase tracking-widest mb-3">
+                                        {getWinners().length > 1 ? t("draw") : t("winner")}
+                                    </h2>
+                                    <div className={`flex flex-wrap justify-center gap-2 sm:gap-6 mb-3 ${layoutStyle === "round" ? "max-h-[120px] sm:max-h-[160px] overflow-y-auto" : "overflow-visible"} custom-scrollbar`}>
+                                        {getWinners().map((winner, idx) => {
+                                            if (layoutStyle !== "round") {
+                                                const wTier = winner.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (winner.botDifficulty || 3) - 1))] : getPlayerTier(winner.stats);
+                                                return (
+                                                    <div key={idx} className="relative group flex flex-col items-center justify-center animate-in zoom-in-50 slide-in-from-bottom-8 duration-1000 ease-out fill-mode-backwards mx-2 my-2" style={{ animationDelay: `${400 + idx * 250}ms` }}>
+                                                        <div className="absolute -inset-10 bg-amber-400/20 rounded-full animate-ping opacity-60 blur-3xl pointer-events-none"></div>
+                                                        <div className="absolute -inset-12 bg-[radial-gradient(circle,_rgba(251,191,36,0.3)_0%,_transparent_70%)] animate-pulse pointer-events-none"></div>
+                                                        
+                                                        <div className="w-[130px] h-[180px] sm:w-[170px] sm:h-[240px] bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 p-[3px] shadow-2xl relative overflow-hidden flex flex-col items-center shadow-amber-500/80 scale-110" style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}>
+                                                            <div className="absolute inset-0 bg-black/10 mix-blend-overlay pointer-events-none"></div>
+                                                            <div className="absolute inset-[3px] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 z-0 pointer-events-none" style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}></div>
+                                                            
+                                                            <div className="relative z-10 flex flex-col items-center w-full h-full pt-2 sm:pt-4">
+                                                                <div className="flex w-full px-2 sm:px-3 relative h-[75px] sm:h-[105px]">
+                                                                    <div className="flex flex-col items-center pt-1 text-amber-400">
+                                                                        <span className="text-[18px] sm:text-[26px] font-black leading-none drop-shadow-sm">{winner.stats?.wins || 1}</span>
+                                                                        <span className="text-[8px] sm:text-[11px] font-bold uppercase tracking-wider drop-shadow-sm">{wTier.name.slice(0,3)}</span>
+                                                                        <Crown className="w-4 h-4 sm:w-6 sm:h-6 text-amber-300 fill-amber-300 mt-1 drop-shadow-md" />
+                                                                    </div>
+                                                                    <div className="absolute right-0 top-0 bottom-0 overflow-hidden w-[90px] sm:w-[125px] flex justify-end items-end pb-1 pr-1">
+                                                                        <img src={winner.avatarUrl} alt={winner.nickname} className="w-[80px] sm:w-[110px] h-[80px] sm:h-[110px] object-cover drop-shadow-[2px_2px_8px_rgba(0,0,0,0.9)] filter contrast-125 saturate-150" />
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="w-[85%] h-[2px] bg-amber-400/60 my-1 sm:my-2 shadow-[0_0_5px_rgba(251,191,36,0.8)]"></div>
+
+                                                                <div className="text-[11px] sm:text-[15px] font-black uppercase text-amber-100 tracking-wider truncate w-full text-center px-1 drop-shadow-lg">
+                                                                    {winner.nickname}
+                                                                </div>
+
+                                                                <div className="w-[60%] h-px bg-amber-400/40 my-1 sm:my-1.5"></div>
+
+                                                                <div className="grid grid-cols-2 gap-x-2 sm:gap-x-3 gap-y-0.5 text-[9px] sm:text-[12px] font-mono w-full px-2 sm:px-4 text-amber-200/90 mt-1">
+                                                                    <div className="flex justify-between"><span>PTS</span> <span className="font-bold text-white drop-shadow-sm">{winner.score || 0}</span></div>
+                                                                    <div className="flex justify-between"><span>KIL</span> <span className="font-bold text-white drop-shadow-sm">{winner.sessionKills || 0}</span></div>
+                                                                    <div className="flex justify-between"><span>TRN</span> <span className="font-bold text-white drop-shadow-sm">{winner.turnCount || 0}</span></div>
+                                                                    <div className="flex justify-between"><span>PLY</span> <span className="font-bold text-white drop-shadow-sm">{winner.stats?.games || 1}</span></div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {getWinners().length > 1 && <div className="absolute -bottom-4 bg-amber-600 text-white font-black px-3 py-1 rounded-full text-[10px] sm:text-xs shadow-xl border-2 border-amber-400 z-20 whitespace-nowrap">Winner #{idx + 1}</div>}
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div key={idx} className="flex flex-col items-center p-2 sm:p-3 min-w-[80px] sm:min-w-[100px] animate-in fade-in duration-700 ease-out fill-mode-backwards" style={{ animationDelay: `${400 + idx * 150}ms` }}>
+                                                    <div className="relative mb-1.5">
+                                                        <div className="absolute -inset-1 bg-amber-500/20 rounded-full blur-md"></div>
+                                                        <img src={winner.avatarUrl} alt="Winner" className="relative w-12 h-12 sm:w-16 sm:h-16 rounded-full border-2 border-amber-400/80 shadow-sm object-cover bg-slate-800" />
+                                                        {getWinners().length > 1 && <div className="absolute -bottom-1 -right-1 bg-amber-600 text-white font-black px-1.5 py-0.5 rounded-full text-[9px] shadow-sm border border-amber-400">#{idx + 1}</div>}
+                                                    </div>
+                                                    <p className="text-xs sm:text-sm font-bold text-slate-100 truncate w-full max-w-[110px] sm:max-w-[130px] text-center drop-shadow-sm px-1">{winner.nickname}</p>
+                                                    {pointMode !== "OFF" && <p className="text-[10px] sm:text-xs font-mono text-emerald-400 font-bold drop-shadow-sm">{winner.score} <span className="text-[8px] opacity-70">PTS</span></p>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Most Killer - compact */}
+                                    {(() => {
+                                        const killers = players.filter(p => (p.sessionKills || 0) > 0).sort((a, b) => b.sessionKills - a.sessionKills);
+                                        const maxKills = killers.length > 0 ? killers[0].sessionKills : 0;
+                                        const mostKillers = killers.filter(p => p.sessionKills === maxKills);
+                                        if (mostKillers.length > 0) {
+                                            return (
+                                                <div className="bg-sky-950/40 border border-sky-900/50 rounded-xl px-3 py-1.5 flex items-center gap-2 mb-3">
+                                                    <Sparkles className="w-3 h-3 text-sky-400 animate-pulse shrink-0" />
+                                                    <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                                                        {mostKillers.slice(0, 3).map((killer, idx) => (
+                                                            <div key={idx} className="flex items-center gap-1">
+                                                                <img src={killer.avatarUrl} alt="" className="w-5 h-5 rounded-full border border-sky-800 object-cover shrink-0" />
+                                                                <span className="text-[9px] text-sky-300 font-bold truncate max-w-[60px]">{killer.nickname}</span>
+                                                                <span className="text-[8px] text-sky-500 font-mono shrink-0">({killer.sessionKills})</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+
+                                    <div className="flex gap-2">
+                                        <button onClick={() => {
+                                            setRestartCountdown(null);
+                                            if (autoRestartEnabled) {
+                                                clearLobby();
+                                                pickShowcaseWords();
+                                                setTimeout(() => setWaitingCountdown(60), 0);
+                                            } else {
+                                                processQueue();
+                                                startGame();
+                                            }
+                                        }} className="px-4 py-1.5 bg-emerald-600 text-white font-bold rounded-full shadow-sm hover:bg-emerald-500 active:scale-95 transition-all text-xs border border-emerald-500">
+                                            {restartCountdown !== null ? `${restartCountdown}s` : t("play_again")}
+                                        </button>
+                                        <button onClick={() => { setRestartCountdown(null); clearLobby(); }} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-full shadow-sm active:scale-95 transition-all text-[10px] border border-slate-700">
+                                            {t("clear_lobby")}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -2877,20 +3238,20 @@ export default function App() {
                                             {winCondition === "TIME" ? (
                                                 <GlobalTimer gameDuration={gameDuration} isActive={gameState === "PLAYING" && globalTimer !== null} onTimeout={() => { setGameState("ENDED"); playSound("win"); addLog("System", "WAKTU HABIS! Permainan Selesai."); }} resetKey={globalTimer} />
                                             ) : winCondition === "SCORE" ? (
-                                                <div className="px-4 py-1 rounded-full font-bold border text-emerald-400 border-emerald-800 bg-emerald-950/50 shadow-sm flex items-center gap-2">
+                                                <div className="font-bold text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)] flex items-center gap-2">
                                                     <Target className="w-4 h-4" /><span className="text-xs uppercase tracking-wide opacity-80">{t("target")}:</span><span className="text-lg">{targetScore}</span>
                                                 </div>
                                             ) : (
-                                                <div className="px-4 py-1 rounded-full font-bold border text-indigo-400 border-indigo-800 bg-indigo-950/50 shadow-sm flex items-center gap-2">
+                                                <div className="font-bold text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.6)] flex items-center gap-2">
                                                     <RefreshCw className="w-4 h-4" /><span className="text-xs uppercase tracking-wide opacity-80">{t("round")}:</span><span className="text-lg">{Math.min(...players.filter((p) => !p.isEliminated).map((p) => p.turnCount || 0)) + 1}/{targetRounds}</span>
                                                 </div>
                                             )}
                                         </div>
                                     )}
 
-                                    <div className="flex items-center gap-1.5 mb-2 h-7">
+                                    <div className="flex items-center gap-4 mb-2 h-7 drop-shadow-md">
                                         {actionCardsEnabled && (
-                                            <div title="Action Cards Enabled" className="w-6 h-6 rounded-full bg-amber-950/50 text-amber-400 flex items-center justify-center border border-amber-800">
+                                            <div title="Action Cards Enabled" className="text-amber-400 flex items-center justify-center">
                                                 <Sparkles className="w-3.5 h-3.5 animate-pulse" />
                                             </div>
                                         )}
@@ -2898,19 +3259,19 @@ export default function App() {
                                             <button
                                                 onClick={handleOpenPointGuide}
                                                 title={`Point Mode: ${pointMode}. Klik untuk melihat tabel poin!`}
-                                                className="px-2 h-6 rounded-full bg-emerald-950/50 text-emerald-400 flex items-center justify-center border border-emerald-800 hover:bg-emerald-900/50 transition-colors cursor-pointer shadow-sm active:scale-95"
+                                                className="text-emerald-400 flex items-center justify-center hover:text-emerald-300 transition-colors cursor-pointer active:scale-95"
                                             >
                                                 <Target className="w-3.5 h-3.5 animate-pulse mr-1" />
                                                 <span className="text-[9px] font-bold uppercase tracking-tighter">{pointMode}</span>
                                             </button>
                                         )}
                                         {maxWordLength > 0 && (
-                                            <div title={`Batas Maksimal: ${maxWordLength} Huruf`} className="px-2 h-6 rounded-full bg-rose-950/50 border border-rose-800 flex items-center gap-1 shadow-sm">
+                                            <div title={`Batas Maksimal: ${maxWordLength} Huruf`} className="flex items-center gap-1 text-rose-400">
                                                 <Hash className="w-3.5 h-3.5 text-rose-400" />
-                                                <span className="text-[9px] font-bold text-rose-300 uppercase tracking-tighter">MAX {maxWordLength}</span>
+                                                <span className="text-[9px] font-bold text-rose-400 uppercase tracking-tighter">MAX {maxWordLength}</span>
                                             </div>
                                         )}
-                                        <div title={`Game Mode: ${getModeLabel()}`} className="px-2 h-6 rounded-full bg-slate-800 border border-slate-700 flex items-center gap-1">
+                                        <div title={`Game Mode: ${getModeLabel()}`} className="flex items-center gap-1 text-slate-300">
                                             {gameMode === "CITIES" && <MapPin className="w-3.5 h-3.5 text-sky-400" />}
                                             {gameMode === "WRAP_AROUND" && <Repeat2 className="w-3.5 h-3.5 text-rose-400 animate-pulse" />}
                                             {gameMode === "RHYME" && <Hash className="w-3.5 h-3.5 text-purple-400" />}
@@ -2933,7 +3294,7 @@ export default function App() {
                                             if (gameMode === "RHYME") {
                                                 return (
                                                     <div className="flex flex-col items-center w-full">
-                                                        <span className="text-[1em] text-sky-400 bg-sky-950/80 border-2 border-sky-500/50 rounded-[0.3em] px-[0.6em] py-[0.2em] shadow-[0_0_20px_rgba(56,189,248,0.4)] whitespace-nowrap">...{targetRhyme.toUpperCase()}</span>
+                                                        <span className="text-[1em] text-sky-400 drop-shadow-[0_0_10px_rgba(56,189,248,0.6)] whitespace-nowrap">...{targetRhyme.toUpperCase()}</span>
                                                         {currentWord && <span className="text-[0.5em] text-slate-500 mt-[0.5em] font-normal opacity-80 whitespace-nowrap">Kata Sebelumnya: {currentWord.toUpperCase()}</span>}
                                                     </div>
                                                 );
@@ -2941,72 +3302,59 @@ export default function App() {
                                             if (gameMode === "FILL_BLANK") {
                                                 const parts = currentWord.toUpperCase().split(/(\.\.\.)/g);
                                                 return (
-                                                    <div className="bg-slate-900/80 px-[0.6em] py-[0.3em] rounded-[0.5em] border border-slate-700 shadow-inner flex items-center justify-center whitespace-nowrap">
-                                                        {parts.map((part, i) =>
-                                                            part === "..."
-                                                                ? <span key={i} className="text-emerald-400 mx-[0.3em] tracking-widest animate-pulse">. . .</span>
-                                                                : <span key={i} className="text-slate-100 tracking-widest">{part}</span>
-                                                        )}
+                                                    <div className="flex flex-col items-center w-full">
+                                                        <div className="flex items-center justify-center whitespace-nowrap drop-shadow-md">
+                                                            {parts.map((part, i) =>
+                                                                part === "..."
+                                                                    ? <span key={i} className="text-emerald-400 mx-[0.3em] tracking-widest animate-pulse">. . .</span>
+                                                                    : <span key={i} className="text-slate-200 tracking-widest">{part}</span>
+                                                            )}
+                                                        </div>
+                                                        {lastInputWord && <span className="text-[0.5em] text-slate-500 mt-[0.5em] font-normal opacity-80 whitespace-nowrap">Kata Sebelumnya: {lastInputWord.toUpperCase()}</span>}
                                                     </div>
                                                 );
                                             }
                                             const { pre, high, post } = getDisplayParts(currentWord, getLogicOptions());
                                             return (
-                                                <div className="flex items-center justify-center bg-slate-900/60 pl-[0.6em] pr-[0.2em] py-[0.2em] rounded-[0.5em] border border-slate-800 shadow-inner whitespace-nowrap">
-                                                    {pre && <span className="text-slate-400 opacity-60 tracking-widest">{pre.toUpperCase()}</span>}
-                                                    <span className="text-sky-400 bg-sky-950 border-2 border-sky-500/60 rounded-[0.3em] px-[0.3em] mx-[0.1em] shadow-[0_0_15px_rgba(56,189,248,0.4)] tracking-widest animate-pulse scale-105">
+                                                <div className="flex items-center justify-center whitespace-nowrap drop-shadow-md">
+                                                    {pre && <span className="text-slate-200 tracking-widest">{pre.toUpperCase()}</span>}
+                                                    <span className="text-sky-400 tracking-widest mx-[0.1em] drop-shadow-[0_0_10px_rgba(56,189,248,0.6)] animate-pulse">
                                                         {high.toUpperCase()}
                                                     </span>
-                                                    {post && <span className="text-slate-400 opacity-60 tracking-widest">{post.toUpperCase()}</span>}
+                                                    {post && <span className="text-slate-200 tracking-widest">{post.toUpperCase()}</span>}
                                                 </div>
                                             );
                                         })()}
                                     </h2>
 
                                     <div className="flex flex-col items-center w-full">
-                                        <div className="mt-1 flex flex-col items-center gap-2 w-full max-w-[280px] sm:max-w-[400px]">
-                                            <div className="w-full text-sky-300 bg-sky-950/30 px-3 py-3 rounded-2xl border border-sky-800/40 flex justify-center items-center text-center shadow-lg relative overflow-hidden">
-                                                {/* Shimmer effect background */}
-                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-sky-500/10 to-transparent -translate-x-full animate-[shimmer_2.5s_infinite]"></div>
+                                        <div className="mt-2 flex flex-col items-center justify-center w-full">
+                                            {(() => {
+                                                const rule = getRuleDisplay(currentWord, getLogicOptions());
+                                                if (gameMode === "RHYME" || gameMode === "FILL_BLANK" || !rule.target) return null;
 
-                                                {(() => {
-                                                    const rule = getRuleDisplay(currentWord, getLogicOptions());
-                                                    const totalLen = (rule.desc?.length || 0) + (rule.action?.length || 0) + (rule.target?.length || 0);
-                                                    const dynamicTextSize = totalLen > 30 ? "text-[11px] sm:text-sm" : "text-sm sm:text-base";
-                                                    return (
-                                                        <div className={`${dynamicTextSize} flex flex-col justify-center items-center gap-y-3 leading-snug w-full relative z-10`}>
-                                                            <span className="font-bold text-slate-200 px-2 text-center font-sans">{rule.desc}</span>
-                                                            {gameMode !== "RHYME" && gameMode !== "FILL_BLANK" && (
-                                                                <div className="flex items-center justify-center bg-slate-950 px-4 py-2 rounded-xl border border-sky-500/40 shadow-[0_0_15px_rgba(56,189,248,0.2)]">
-                                                                    {rule.action && <span className="mr-2 font-bold text-slate-400 text-[10px] sm:text-xs uppercase tracking-widest">{rule.action}</span>}
+                                                return (
+                                                    <div className="flex items-baseline text-4xl sm:text-5xl font-black text-sky-400 drop-shadow-[0_0_15px_rgba(56,189,248,0.5)]">
+                                                        {gameMode === "MIRROR" && (
+                                                            <div className="mr-1 flex tracking-widest text-sky-400/80">
+                                                                <span className="animate-pulse">.</span>
+                                                                <span className="animate-pulse" style={{ animationDelay: "200ms" }}>.</span>
+                                                                <span className="animate-pulse" style={{ animationDelay: "400ms" }}>.</span>
+                                                            </div>
+                                                        )}
 
-                                                                    {/* Titik indikator di KIRI khusus mode MIRROR */}
-                                                                    {gameMode === "MIRROR" && (
-                                                                        <div className="mr-3 flex items-center opacity-80">
-                                                                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-sky-400 rounded-full animate-bounce shadow-[0_0_5px_rgba(56,189,248,0.8)]"></div>
-                                                                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-sky-400 rounded-full animate-bounce mx-1 shadow-[0_0_5px_rgba(56,189,248,0.8)]" style={{ animationDelay: "150ms" }}></div>
-                                                                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-sky-400 rounded-full animate-bounce shadow-[0_0_5px_rgba(56,189,248,0.8)]" style={{ animationDelay: "300ms" }}></div>
-                                                                        </div>
-                                                                    )}
+                                                        <span className="tracking-widest">{rule.target}</span>
 
-                                                                    <span className="font-black text-sky-400 bg-sky-900/50 px-3 py-0.5 rounded-lg tracking-widest text-lg sm:text-2xl border border-sky-700/50 drop-shadow-md">
-                                                                        {rule.target}
-                                                                    </span>
-
-                                                                    {/* Titik indikator di KANAN untuk mode selain MIRROR */}
-                                                                    {gameMode !== "MIRROR" && (
-                                                                        <div className="ml-3 flex items-center opacity-80">
-                                                                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-sky-400 rounded-full animate-bounce shadow-[0_0_5px_rgba(56,189,248,0.8)]"></div>
-                                                                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-sky-400 rounded-full animate-bounce mx-1 shadow-[0_0_5px_rgba(56,189,248,0.8)]" style={{ animationDelay: "150ms" }}></div>
-                                                                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-sky-400 rounded-full animate-bounce shadow-[0_0_5px_rgba(56,189,248,0.8)]" style={{ animationDelay: "300ms" }}></div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })()}
-                                            </div>
+                                                        {gameMode !== "MIRROR" && (
+                                                            <div className="ml-1 flex tracking-widest text-sky-400/80">
+                                                                <span className="animate-pulse">.</span>
+                                                                <span className="animate-pulse" style={{ animationDelay: "200ms" }}>.</span>
+                                                                <span className="animate-pulse" style={{ animationDelay: "400ms" }}>.</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                         {feedbackMessage && (
                                             <div className={`mt-2 px-3 py-1 rounded-full text-xs font-bold animate-bounce shadow-sm ${feedbackMessage.type === 'error' ? 'bg-red-950/50 text-red-400 border border-red-800' : feedbackMessage.type === 'warning' ? 'bg-amber-950/50 text-amber-400 border border-amber-800' : feedbackMessage.type === 'info' ? 'bg-sky-950/50 text-sky-400 border border-sky-800' : 'bg-green-950/50 text-emerald-400 border border-emerald-800'}`}>
@@ -3020,18 +3368,56 @@ export default function App() {
                     </div>
 
 
-                    {players.map((player, index) => {
-                        const angleDeg = index * (360 / Math.max(players.length, 1)) + 90;
-                        const isTurn = gameState === "PLAYING" && currentTurnIndex === index && !player.isEliminated;
+                    {(gameState !== "ENDED" || layoutStyle === "round") && activePlayers.map((player, index, arr) => {
+                        const isRound = layoutStyle === "round";
+                        
+                        const activeCurrentIndex = arr.findIndex(p => p.uniqueId === players[currentTurnIndex]?.uniqueId);
+                        const safeCurrentIndex = activeCurrentIndex !== -1 ? activeCurrentIndex : 0;
+                        
+                        // Posisi Meja Bundar
+                        const angleDeg = index * (360 / Math.max(arr.length, 1)) + 90;
+                        const roundTransform = `rotate(${angleDeg}deg) translate(${dynamicRadius}px) rotate(-${angleDeg}deg) scale(${dynamicScale})`;
+                        
+                        // Posisi FUT Card (Cover Flow Perspective, Satu Baris)
+                        const total = Math.max(arr.length, 1);
+                        let diff = index - (gameState === "PLAYING" ? safeCurrentIndex : 0);
+                        if (diff > total / 2) diff -= total;
+                        else if (diff < -total / 2) diff += total;
+
+                        const absDiff = Math.abs(diff);
+                        
+                        // Active card is at front and center
+                        const isTurn = gameState === "PLAYING" && diff === 0 && !player.isEliminated;
+                        const futZIndex = 200 - absDiff;
+                        
+                        // Scale down as they go further away
+                        const baseScale = isMobile ? 1.0 : 1.3;
+                        const futScale = Math.max(0.6, baseScale - (absDiff * 0.12)) * dynamicScale;
+                        
+                        // Shift them horizontally (overlap with dampening to prevent infinite stretch)
+                        const gapBase = isMobile ? 75 : 110;
+                        const dampening = 0.75;
+                        const geometricX = gapBase * (1 - Math.pow(dampening, absDiff)) / (1 - dampening);
+                        const xOffset = Math.sign(diff) * geometricX;
+                        
+                        // Push them slightly down for perspective curve
+                        const baseFutY = isMobile ? 150 : 220; 
+                        const perspectiveY = absDiff * 5; 
+                        const yOffset = baseFutY + perspectiveY;
+                        
+                        const futTransform = `translate(${xOffset}px, ${yOffset}px) scale(${futScale})`;
+
                         const maxWins = Math.max(...players.map((p) => p.stats?.wins || 0));
                         const isKing = maxWins > 0 && (player.stats?.wins || 0) === maxWins && !player.isEliminated;
                         const isStarter = player.uniqueId === roundStarterId;
                         const tier = player.isBot
                             ? TIER_LEVELS[Math.min(5, Math.max(0, (player.botDifficulty || 3) - 1))]
                             : getPlayerTier(player.stats);
+                            
+                        const currentZIndex = isRound ? (isTurn ? 100 : 20) : futZIndex;
 
                         return (
-                            <div key={player.uniqueId} className="absolute transition-all duration-500 ease-out flex flex-col items-center justify-center w-24 h-28" style={{ transform: `rotate(${angleDeg}deg) translate(${dynamicRadius}px) rotate(-${angleDeg}deg) scale(${dynamicScale})`, zIndex: isTurn ? 100 : 20 }}>
+                            <div key={player.uniqueId} className={`absolute transition-all duration-500 ease-out flex flex-col items-center justify-center ${isRound ? "w-24 h-28" : ""}`} style={{ transform: isRound ? roundTransform : futTransform, zIndex: currentZIndex }}>
 
                                 {/* --- RENDER EFEK VISUAL DI SINI --- */}
                                 <div className="absolute inset-0 pointer-events-none z-[150]">
@@ -3073,42 +3459,93 @@ export default function App() {
                                     })}
                                 </div>
 
-                                <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"}`}>
-                                    {isTurn && <div className="absolute -inset-2 bg-amber-500/30 rounded-full animate-ping opacity-75"></div>}
-                                    {isKing && <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 animate-bounce drop-shadow-sm"><Crown className="w-5 h-5 text-amber-400 fill-amber-400" /></div>}
-                                    <div className={`w-14 h-14 rounded-full border-4 overflow-hidden bg-slate-800 z-10 relative shadow-sm ${isTurn ? (bombNextRef.current ? "border-orange-500 scale-110 animate-shake" : "border-amber-400 scale-110 shadow-lg") : isKing ? "border-amber-500/70 scale-105" : "border-slate-700"} transition-all duration-300`}>
-                                        <img src={player.avatarUrl} alt={player.nickname} className={`w-full h-full object-cover transition-all ${isKing ? "brightness-105" : ""}`} />
-                                    </div>
-                                    {/* Badge Tier menggantikan posisi bot difficulty lama */}
-                                    <div className={`absolute -top-2 -right-3 sm:-right-5 text-[6px] sm:text-[7px] px-1.5 py-0.5 rounded-full font-bold border border-slate-900 z-30 flex items-center shadow-sm uppercase tracking-widest transition-colors whitespace-nowrap ${tier.class}`}>
-                                        {tier.name}
-                                    </div>
-                                    {isStarter && !player.isEliminated && (
-                                        <div className="absolute -top-1 -left-2 bg-sky-600 border border-slate-900 text-white p-1.5 rounded-full shadow-sm z-40 animate-pulse" title="First Player (Round Starter)"><Flag className="w-3 h-3 fill-white" /></div>
-                                    )}
-                                    <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
-                                    {player.isEliminated && <div className="absolute inset-0 flex items-center justify-center z-20"><X className="w-8 h-8 text-slate-500 drop-shadow-md" /></div>}
-                                </div>
-                                <div className="mt-[-2px] flex flex-col items-center z-40 relative w-full">
-                                    <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border shadow-md transition-all duration-300 ${isTurn ? "bg-slate-800 border-amber-500/50 text-amber-400 scale-110" : "bg-slate-900/95 border-slate-700 text-slate-300"}`}>
-                                        {player.stats?.wins > 0 && (
-                                            <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`}>
-                                                <Trophy className={`w-3 h-3 ${isTurn ? "text-amber-500" : "text-slate-500"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-amber-400" : "text-slate-400"}`}>{player.stats.wins}</span>
+                                {isRound ? (
+                                    <>
+                                        <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"}`}>
+                                            {isTurn && <div className="absolute -inset-2 bg-amber-500/30 rounded-full animate-ping opacity-75"></div>}
+                                            {isKing && <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 animate-bounce drop-shadow-sm"><Crown className="w-5 h-5 text-amber-400 fill-amber-400" /></div>}
+                                            <div className={`w-14 h-14 rounded-full border-4 overflow-hidden bg-slate-800 z-10 relative shadow-sm ${isTurn ? (bombNextRef.current ? "border-orange-500 scale-110 animate-shake" : "border-amber-400 scale-110 shadow-lg") : isKing ? "border-amber-500/70 scale-105" : "border-slate-700"} transition-all duration-300`}>
+                                                <img src={player.avatarUrl} alt={player.nickname} className={`w-full h-full object-cover transition-all ${isKing ? "brightness-105" : ""}`} />
                                             </div>
-                                        )}
-                                        {pointMode !== "OFF" && (
-                                            <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`}>
-                                                <Star className={`w-3 h-3 ${isTurn ? "text-amber-500" : "text-emerald-500"}`} fill={isTurn ? "currentColor" : "none"} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-amber-400" : "text-emerald-400"}`}>{player.score || 0}</span>
+                                            {/* Badge Tier menggantikan posisi bot difficulty lama */}
+                                            <div className={`absolute -top-2 -right-3 sm:-right-5 text-[6px] sm:text-[7px] px-1.5 py-0.5 rounded-full font-bold border border-slate-900 z-30 flex items-center shadow-sm uppercase tracking-widest transition-colors whitespace-nowrap ${tier.class}`}>
+                                                {tier.name}
                                             </div>
-                                        )}
-                                        {player.sessionKills > 0 && (
-                                            <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`} title="Combos this match">
-                                                <Sparkles className={`w-3 h-3 ${isTurn ? "text-orange-400" : "text-sky-400"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-orange-300" : "text-sky-300"}`}>{player.sessionKills}</span>
+                                            {isStarter && !player.isEliminated && (
+                                                <div className="absolute -top-1 -left-2 bg-sky-600 border border-slate-900 text-white p-1.5 rounded-full shadow-sm z-40 animate-pulse" title="First Player (Round Starter)"><Flag className="w-3 h-3 fill-white" /></div>
+                                            )}
+                                            <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
+                                            {player.isEliminated && <div className="absolute inset-0 flex items-center justify-center z-20"><X className="w-8 h-8 text-slate-500 drop-shadow-md" /></div>}
+                                        </div>
+                                        <div className="mt-[-2px] flex flex-col items-center z-40 relative w-full">
+                                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border shadow-md transition-all duration-300 ${isTurn ? "bg-slate-800 border-amber-500/50 text-amber-400 scale-110" : "bg-slate-900/95 border-slate-700 text-slate-300"}`}>
+                                                {player.stats?.wins > 0 && (
+                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`}>
+                                                        <Trophy className={`w-3 h-3 ${isTurn ? "text-amber-500" : "text-slate-500"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-amber-400" : "text-slate-400"}`}>{player.stats.wins}</span>
+                                                    </div>
+                                                )}
+                                                {pointMode !== "OFF" && (
+                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`}>
+                                                        <Star className={`w-3 h-3 ${isTurn ? "text-amber-500" : "text-emerald-500"}`} fill={isTurn ? "currentColor" : "none"} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-amber-400" : "text-emerald-400"}`}>{player.score || 0}</span>
+                                                    </div>
+                                                )}
+                                                {player.sessionKills > 0 && (
+                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`} title="Combos this match">
+                                                        <Sparkles className={`w-3 h-3 ${isTurn ? "text-orange-400" : "text-sky-400"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-orange-300" : "text-sky-300"}`}>{player.sessionKills}</span>
+                                                    </div>
+                                                )}
+                                                <span className="text-[10px] font-bold tracking-wide truncate max-w-[70px]">{player.nickname}</span>
                                             </div>
-                                        )}
-                                        <span className="text-[10px] font-bold tracking-wide truncate max-w-[70px]">{player.nickname}</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"} flex flex-col items-center justify-center transition-all duration-300 ${isTurn ? 'scale-110 brightness-110' : 'scale-100 brightness-90'}`}>
+                                        <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
+                                        {isTurn && <div className="absolute -inset-3 bg-amber-500/40 rounded-xl animate-ping opacity-75 blur-md"></div>}
+                                        <div className={`w-[85px] h-[120px] sm:w-[110px] sm:h-[155px] bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 p-[2px] shadow-xl relative overflow-hidden flex flex-col items-center ${isTurn ? (bombNextRef.current ? "border-orange-500 animate-shake" : "shadow-amber-500/50 shadow-2xl") : "shadow-black/50"}`} style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}>
+                                            <div className="absolute inset-0 bg-black/40 mix-blend-overlay pointer-events-none"></div>
+                                            <div className="absolute inset-[2px] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 z-0 pointer-events-none" style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}></div>
+                                            
+                                            {/* FUT Content */}
+                                            <div className="relative z-10 flex flex-col items-center w-full h-full pt-1 sm:pt-2">
+                                                {/* Top Stats & Avatar */}
+                                                <div className="flex w-full px-1.5 sm:px-2 relative h-[50px] sm:h-[65px]">
+                                                    <div className="flex flex-col items-center pt-1 text-amber-500">
+                                                        <span className="text-[12px] sm:text-lg font-black leading-none drop-shadow-sm">{player.stats?.wins || 0}</span>
+                                                        <span className="text-[7px] sm:text-[9px] font-bold uppercase tracking-wider drop-shadow-sm">{tier.name.slice(0,3)}</span>
+                                                        {isKing && <Crown className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400 fill-amber-400 mt-0.5 drop-shadow-md" />}
+                                                    </div>
+                                                    <div className="absolute right-0 top-0 bottom-0 overflow-hidden w-[60px] sm:w-[80px] flex justify-end items-end pb-1 pr-1">
+                                                        <img src={player.avatarUrl} alt={player.nickname} className="w-[50px] sm:w-[70px] h-[50px] sm:h-[70px] object-cover drop-shadow-[2px_2px_4px_rgba(0,0,0,0.9)] filter contrast-125 saturate-150" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Divider */}
+                                                <div className="w-[80%] h-px bg-amber-500/50 my-1 shadow-[0_0_2px_rgba(245,158,11,0.5)]"></div>
+
+                                                {/* Name */}
+                                                <div className="text-[9px] sm:text-[11px] font-black uppercase text-amber-100 tracking-wider truncate w-full text-center px-1 drop-shadow-md">
+                                                    {player.nickname}
+                                                </div>
+
+                                                <div className="w-[40%] h-px bg-amber-500/30 my-0.5"></div>
+
+                                                {/* Stats Grid */}
+                                                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[8px] sm:text-[9px] font-mono w-full px-1.5 sm:px-3 text-amber-200/80 mt-0.5">
+                                                    <div className="flex justify-between"><span>PTS</span> <span className="font-bold text-white drop-shadow-sm">{player.score || 0}</span></div>
+                                                    <div className="flex justify-between"><span>KIL</span> <span className="font-bold text-white drop-shadow-sm">{player.sessionKills || 0}</span></div>
+                                                    <div className="flex justify-between"><span>TRN</span> <span className="font-bold text-white drop-shadow-sm">{player.turnCount || 0}</span></div>
+                                                    <div className="flex justify-between"><span>PLY</span> <span className="font-bold text-white drop-shadow-sm">{player.stats?.games || 0}</span></div>
+                                                </div>
+                                            </div>
+                                            
+                                            {isStarter && !player.isEliminated && (
+                                                <div className="absolute -top-1 -left-1 bg-sky-600 border border-slate-900 text-white p-1 rounded-full shadow-sm z-30 animate-pulse"><Flag className="w-2.5 h-2.5 fill-white" /></div>
+                                            )}
+                                            {player.isEliminated && <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/60 backdrop-blur-[1px] rounded-b-xl rounded-t-3xl"><X className="w-8 h-8 text-red-500 drop-shadow-md" /></div>}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </div>
                         );
                     })}
@@ -3138,6 +3575,7 @@ export default function App() {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
 
 
@@ -3177,83 +3615,7 @@ export default function App() {
                 </div>
             )}
 
-            {gameState === "ENDED" && getWinners().length > 0 && (
-                <div className="absolute inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-1000 p-4">
-                    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                        {[...Array(30)].map((_, i) => (
-                            <div key={i} className="absolute animate-pulse" style={{ left: `${Math.random() * 100}%`, top: `${Math.random() * 100}%`, animationDuration: `${2 + Math.random() * 3}s`, animationDelay: `${Math.random() * 2}s`, backgroundColor: ["#FCD34D", "#F59E0B", "#D97706"][Math.floor(Math.random() * 3)], width: `${Math.random() * 4 + 2}px`, height: `${Math.random() * 4 + 2}px`, borderRadius: "50%", boxShadow: "0 0 10px rgba(251,191,36,0.5)" }}></div>
-                        ))}
-                    </div>
-                    <div className="relative bg-gradient-to-b from-slate-900 to-slate-950 border border-slate-800 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.8)] rounded-[2.5rem] p-8 sm:p-10 max-w-3xl w-full flex flex-col items-center transform transition-all animate-in slide-in-from-bottom-12 fade-in zoom-in-95 duration-1000 ease-out">
-                        <div className="relative flex flex-col items-center justify-center mb-8 w-full">
-                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-amber-500/20 blur-[60px] rounded-full pointer-events-none"></div>
-                            <Trophy className="w-16 h-16 sm:w-20 sm:h-20 text-amber-400 drop-shadow-[0_0_25px_rgba(251,191,36,0.6)] mb-4 animate-in zoom-in fade-in duration-700 delay-200 fill-amber-500/20" />
-                            <h2 className="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white to-slate-400 drop-shadow-sm uppercase tracking-widest animate-in slide-in-from-bottom-4 fade-in duration-700 delay-300 relative z-10">
-                                {getWinners().length > 1 ? t("draw") : t("winner")}
-                            </h2>
-                            <div className="h-px w-3/4 bg-gradient-to-r from-transparent via-slate-600 to-transparent mt-6 animate-in fade-in duration-1000 delay-500"></div>
-                        </div>
-                        <div className="flex flex-wrap justify-center gap-4 sm:gap-6 mb-8 w-full max-h-[35vh] overflow-y-auto custom-scrollbar">
-                            {getWinners().map((winner, idx) => (
-                                <div key={idx} className="flex flex-col items-center bg-slate-800/40 p-4 rounded-3xl border border-slate-700/50 min-w-[120px] sm:min-w-[140px] animate-in zoom-in fade-in duration-700 fill-mode-backwards" style={{ animationDelay: `${500 + idx * 150}ms` }}>
-                                    <div className="relative mb-3 group">
-                                        <div className="absolute -inset-1 bg-amber-500/30 rounded-full blur-md opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                                        <img src={winner.avatarUrl} alt="Winner" className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-full border-[3px] border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.4)] object-cover bg-slate-800" />
-                                        {getWinners().length > 1 && <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white font-black px-2 py-0.5 rounded-full text-[11px] shadow-lg border border-amber-300">#{idx + 1}</div>}
-                                    </div>
-                                    <p className="text-base sm:text-lg font-bold text-white truncate max-w-[110px] sm:max-w-[120px]">{winner.nickname}</p>
-                                    {pointMode !== "OFF" && <p className="text-sm sm:text-base font-mono text-emerald-400 font-bold mt-1">{winner.score} <span className="text-[10px] opacity-70">PTS</span></p>}
-                                </div>
-                            ))}
-                        </div>
-                        {(() => {
-                            const killers = players.filter(p => (p.sessionKills || 0) > 0).sort((a, b) => b.sessionKills - a.sessionKills);
-                            const maxKills = killers.length > 0 ? killers[0].sessionKills : 0;
-                            const mostKillers = killers.filter(p => p.sessionKills === maxKills);
-                            if (mostKillers.length > 0) {
-                                return (
-                                    <div className="w-full bg-sky-950/30 border border-sky-900/50 rounded-2xl p-3 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 mb-6">
-                                        <div className="flex items-center gap-1.5 text-sky-400 text-xs sm:text-sm font-black tracking-widest"><Sparkles className="w-4 h-4 animate-pulse" /> {t("most_killer")}</div>
-                                        <div className="flex flex-wrap justify-center gap-2">
-                                            {mostKillers.map((killer, idx) => (
-                                                <div key={idx} className="bg-slate-800 px-2.5 py-1.5 rounded-lg border border-slate-700 flex items-center gap-2 shadow-sm hover:scale-105 transition-transform">
-                                                    <div className="relative">
-                                                        <img src={killer.avatarUrl} alt="killer" className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border border-sky-800 object-cover bg-slate-700" />
-                                                        <div className="absolute -bottom-1 -right-1 text-[8px] bg-sky-500 text-white rounded-full px-1 shadow-sm">⭐</div>
-                                                    </div>
-                                                    <div className="text-left leading-tight">
-                                                        <p className="text-[10px] sm:text-xs font-bold text-slate-200 truncate max-w-[80px]">{killer.nickname}</p>
-                                                        <p className="text-[9px] sm:text-[10px] font-mono text-sky-400 font-bold">{killer.sessionKills} {t("stats_kills")}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                );
-                            }
-                            return null;
-                        })()}
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <button onClick={() => {
-                                setRestartCountdown(null);
-                                if (autoRestartEnabled) {
-                                    clearLobby();
-                                    pickShowcaseWords();
-                                    setTimeout(() => setWaitingCountdown(60), 0);
-                                } else {
-                                    processQueue();
-                                    startGame();
-                                }
-                            }} className="px-8 py-2.5 bg-emerald-600 text-white font-bold rounded-full shadow-sm hover:bg-emerald-500 active:scale-95 transition-all text-sm sm:text-base border border-emerald-500">
-                                {restartCountdown !== null ? `Timer Join (${restartCountdown}s)` : t("play_again")}
-                            </button>
-                            <button onClick={() => { setRestartCountdown(null); clearLobby(); }} className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-full shadow-sm active:scale-95 transition-all text-xs sm:text-sm border border-slate-700">
-                                {t("clear_lobby")}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+
 
             <div className="absolute bottom-12 left-2 sm:bottom-4 sm:left-4 z-40 flex flex-col gap-1 items-start">
                 <button
@@ -3379,17 +3741,17 @@ export default function App() {
                         {/* Scale Controls */}
                         <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                             <button
-                                onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }}
+                                onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.2, p - 0.1)); }}
                                 className="text-slate-500 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors disabled:opacity-30"
-                                disabled={miniGameScale <= 0.5}
+                                disabled={miniGameScale <= 0.2}
                                 title="Perkecil"
                             >
                                 <Minus className="w-3 h-3" />
                             </button>
                             <button
-                                onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(1.5, p + 0.25)); }}
+                                onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(3.0, p + 0.1)); }}
                                 className="text-slate-500 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors disabled:opacity-30"
-                                disabled={miniGameScale >= 1.5}
+                                disabled={miniGameScale >= 3.0}
                                 title="Perbesar"
                             >
                                 <Plus className="w-3 h-3" />
@@ -3454,8 +3816,8 @@ export default function App() {
                                             )}
                                         </div>
                                         <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                                            <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.5}><Minus className="w-2.5 h-2.5" /></button>
-                                            <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(1.5, p + 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 1.5}><Plus className="w-2.5 h-2.5" /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.2, p - 0.1)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.2}><Minus className="w-2.5 h-2.5" /></button>
+                                            <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(3.0, p + 0.1)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 3.0}><Plus className="w-2.5 h-2.5" /></button>
                                         </div>
                                     </div>
 
@@ -3585,6 +3947,157 @@ export default function App() {
             )}
 
 
+            {/* --- WORDLE MINIGAME OVERLAY --- */}
+            {activeMinigame === "WORDLE" && word500Target && (
+                <div
+                    ref={miniGameOverlayRef}
+                    className={`z-[90] flex pointer-events-none animate-in slide-in-from-right fade-in duration-500 ${miniGamePos.x !== null ? 'fixed' : 'absolute bottom-24 sm:bottom-32 right-2 sm:right-4'}`}
+                    style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
+                >
+                    <div
+                        className="pointer-events-auto bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-2xl flex flex-col p-1.5 sm:p-2 gap-1 w-max max-w-[90vw]"
+                        style={{
+                            transform: `scale(${miniGameScale})`,
+                            transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
+                            transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                            perspective: '600px'
+                        }}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-0.5 pb-1 border-b border-slate-700/50 cursor-move touch-none" onMouseDown={handleMiniGameDragStart} onTouchStart={handleMiniGameDragStart}>
+                            <div className="flex items-center gap-1.5">
+                                <GripHorizontal className="w-3.5 h-3.5 text-slate-600" />
+                                <span className="text-[11px] font-bold text-emerald-400 tracking-wide uppercase">Wordle?</span>
+                                <span className="text-[9px] text-slate-600 font-mono bg-slate-800 px-1 rounded">{word500Target.length} HURUF</span>
+                                {!word500Winner && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
+                                        onTouchEnd={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
+                                        title="Spill Jawaban"
+                                        className="ml-0.5 text-slate-600 hover:text-emerald-400 transition-colors p-0.5 rounded hover:bg-slate-800 active:scale-90"
+                                    >
+                                        <Sparkles className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.2, p - 0.1)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.2}><Minus className="w-2.5 h-2.5" /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(3.0, p + 0.1)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 3.0}><Plus className="w-2.5 h-2.5" /></button>
+                            </div>
+                        </div>
+
+                        {/* Flip Container */}
+                        <div
+                            style={{
+                                position: 'relative',
+                                transformStyle: 'preserve-3d',
+                                transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                                transform: word500FlipPhase === 'flipping' || word500FlipPhase === 'winner' ? 'rotateY(-180deg)' : 'rotateY(0deg)',
+                                minWidth: '170px'
+                            }}
+                        >
+                            {/* Front: The Guesses */}
+                            <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }} className="flex flex-col gap-1 mt-1 mb-1">
+                                {(() => {
+                                    const displayRows = [...word500Guesses];
+                                    while (displayRows.length < 6) displayRows.push(null);
+                                    
+                                    return displayRows.map((g, idx) => (
+                                        <div key={idx} className="flex items-center gap-1.5 animate-in slide-in-from-right fade-in duration-200">
+                                            <div className="flex-shrink-0 w-5 flex justify-center">
+                                                {g ? (
+                                                    g.profilePictureUrl ? (
+                                                        <img src={g.profilePictureUrl} className="w-5 h-6 rounded-[3px] border border-slate-600 object-cover bg-slate-800" alt={g.nickname} title={g.nickname} />
+                                                    ) : (
+                                                        <div className="w-5 h-6 rounded-[3px] border border-slate-600 bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400" title={g.nickname}>{g.nickname.substring(0, 1).toUpperCase()}</div>
+                                                    )
+                                                ) : (
+                                                    <div className="w-5 h-6 rounded-[3px] border border-slate-700/30 bg-slate-800/10" />
+                                                )}
+                                            </div>
+                                            <div className="flex gap-1">
+                                                {Array(word500Target.length).fill(0).map((_, j) => {
+                                                    if (g) {
+                                                        const char = g.word[j];
+                                                        const colorClass = g.colors && g.colors[j] === 'green' ? 'bg-emerald-700 border-emerald-600 text-white shadow-[0_2px_4px_rgba(0,0,0,0.6)]' : 'bg-slate-700 border-slate-600 text-slate-300';
+                                                        return (
+                                                            <div key={j} className={`w-5 h-6 shrink-0 border rounded-[3px] flex items-center justify-center font-bold text-[15px] leading-none uppercase ${colorClass}`}>
+                                                                {char}
+                                                            </div>
+                                                        );
+                                                    } else {
+                                                        return (
+                                                            <div key={j} className="w-5 h-6 shrink-0 border border-slate-700/30 rounded-[3px] bg-slate-800/10"></div>
+                                                        );
+                                                    }
+                                                })}
+                                            </div>
+                                        </div>
+                                    ));
+                                })()}
+                            </div>
+
+                            {/* Back: The Winner Reveal */}
+                            <div
+                                className="absolute inset-0 bg-emerald-950/90 rounded-lg border border-emerald-600/60 shadow-xl flex flex-col items-center justify-center p-2"
+                                style={{
+                                    backfaceVisibility: 'hidden',
+                                    WebkitBackfaceVisibility: 'hidden',
+                                    transform: 'rotateY(180deg)'
+                                }}
+                            >
+                                {word500Winner && (
+                                    <div className="flex items-center gap-2 sm:gap-3 w-full justify-center px-1">
+                                        <div className="relative shrink-0">
+                                            <div className="absolute -inset-1 rounded-full bg-emerald-500/30 animate-ping" />
+                                            <img src={word500Winner.profilePictureUrl} className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-emerald-400 shadow-lg object-cover bg-slate-800" alt={word500Winner.nickname} />
+                                        </div>
+                                        <div className="flex flex-col items-start min-w-0">
+                                            <span className="text-[9px] sm:text-[10px] font-bold text-emerald-400 uppercase tracking-widest leading-none">Menang!</span>
+                                            <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[100px] sm:max-w-[140px] mt-0.5">{word500Winner.nickname}</span>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="flex gap-1 mt-2.5">
+                                    {word500Winner && word500Target.split('').map((char, i) => (
+                                        <div key={i} className="w-5 h-6 shrink-0 bg-emerald-700 border border-emerald-600 rounded-[3px] flex items-center justify-center font-black text-[15px] leading-none text-white shadow-[0_2px_4px_rgba(0,0,0,0.6)] animate-in zoom-in duration-300" style={{ animationDelay: `${i * 100}ms` }}>
+                                            {char}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Leaderboard Marquee */}
+                        {Object.keys(autoWordleLeaderboard).length > 0 && (
+                            <div className="mt-1 w-full overflow-hidden rounded bg-slate-950/60 border border-slate-700/50 relative flex items-center h-5 shrink-0">
+                                <div className="absolute whitespace-nowrap animate-marquee flex items-center gap-4 px-2" style={{ animationDuration: `${Math.max(10, Object.keys(autoWordleLeaderboard).length * 4)}s` }}>
+                                    {Object.values(autoWordleLeaderboard)
+                                        .sort((a, b) => b.score - a.score)
+                                        .slice(0, 10)
+                                        .map((user, idx, arr) => (
+                                            <div key={idx} className="flex items-center gap-1.5">
+                                                <span className={`text-[9px] font-black ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-orange-400' : 'text-slate-500'}`}>
+                                                    #{idx + 1}
+                                                </span>
+                                                <img src={user.avatar} className="w-3 h-3 rounded-full border border-slate-600 bg-slate-800 object-cover" />
+                                                <span className="text-[10px] font-bold text-slate-200">{user.nickname}</span>
+                                                <span className="text-[10px] font-black text-emerald-400">{user.score}</span>
+                                                
+                                                {/* Bullet Separator (kecuali item terakhir) */}
+                                                {idx < arr.length - 1 && (
+                                                    <span className="text-[8px] text-slate-700 ml-1 mr-0.5">●</span>
+                                                )}
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* --- AUTO WORDLE MINIGAME OVERLAY --- */}
             {activeMinigame === "AUTO_WORDLE" && word500Target && (
                 <div
@@ -3609,8 +4122,8 @@ export default function App() {
                                 <span className="text-[9px] text-slate-600 font-mono bg-slate-800 px-1 rounded">{word500Target.length} HURUF</span>
                             </div>
                             <div className="flex items-center gap-0.5 border-l border-slate-700/50 pl-1.5 ml-1.5" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.5, p - 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.5}><Minus className="w-2.5 h-2.5" /></button>
-                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(1.5, p + 0.25)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 1.5}><Plus className="w-2.5 h-2.5" /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.max(0.2, p - 0.1)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale <= 0.2}><Minus className="w-2.5 h-2.5" /></button>
+                                <button onClick={(e) => { e.stopPropagation(); setMiniGameScale(p => Math.min(3.0, p + 0.1)); }} className="text-slate-600 hover:text-white p-0.5 rounded hover:bg-slate-800 transition-colors disabled:opacity-30" disabled={miniGameScale >= 3.0}><Plus className="w-2.5 h-2.5" /></button>
                             </div>
                         </div>
 
@@ -3850,7 +4363,7 @@ export default function App() {
       `}</style>
             
             {/* --- MUSIC PLAYER OVERLAY --- */}
-            <MusicPlayer musicState={musicState} wsRef={wsRef} isKeyboardOpen={showVirtualKeyboard} overlayStyle={musicOverlayStyle} />
+            <MusicPlayer musicState={musicState} wsRef={backendWsRef} isKeyboardOpen={showVirtualKeyboard} overlayStyle={musicOverlayStyle} />
 
         </div>
     );

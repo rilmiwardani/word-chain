@@ -10,3 +10,20 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+@keyframes confetti-fall {
+  0% { 
+    transform: translate3d(0, -50px, 0) rotateX(0deg) rotateY(0deg); 
+    opacity: 1; 
+  }
+  50% { 
+    transform: translate3d(20px, 200px, 0) rotateX(180deg) rotateY(90deg); 
+  }
+  100% { 
+    transform: translate3d(-20px, 500px, 0) rotateX(360deg) rotateY(180deg); 
+    opacity: 0; 
+  }
+}
+.animate-confetti {
+  animation: confetti-fall linear forwards;
+}

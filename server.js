@@ -1,7 +1,7 @@
 /**
  * ╔══════════════════════════════════════════════════════════════╗
  * ║  TikTok Live WebSocket Server                               ║
- * ║  IndoFinity-compatible backend for interactive TikTok games  ║
+ * ║  TikFinity-compatible backend for interactive TikTok games  ║
  * ║                                                              ║
  * ║  Connects to TikTok Live → Decodes events → Relays via       ║
  * ║  Socket.IO + Native WS bridge for game frontend              ║
@@ -128,6 +128,9 @@ wss.on("connection", (ws) => {
       if (event === "host_music_request" && data?.query) {
         await handleMusicSearch(data.query, "Host", null);
       }
+      if (event === "viewer_music_request" && data?.query) {
+        await handleMusicSearch(data.query, data.nickname || "Viewer", data.profilePictureUrl || null);
+      }
       if (event === "music_skip") {
         advanceMusicQueue();
       }
@@ -145,7 +148,7 @@ wss.on("connection", (ws) => {
         console.log(`[WS Bridge] Session ID ${tiktokSessionId ? 'set ✅' : 'cleared'}`);
         ws.send(JSON.stringify({ event: "session_id_updated", data: { hasSession: !!tiktokSessionId } }));
       }
-    } catch(e) {}
+    } catch(e) { console.error("[WS Bridge] Message parse error:", e.message); }
   });
 
   ws.on("close", () => {
@@ -216,7 +219,7 @@ function broadcastMusicState() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  SOCKET.IO SERVER (port 9100 - IndoFinity compatible)
+//  SOCKET.IO SERVER (port 9100 - TikFinity compatible)
 // ═══════════════════════════════════════════════════════
 const socketApp = express();
 const socketHttpServer = http.createServer(socketApp);
@@ -620,6 +623,7 @@ function registerTikTokEvents(connection) {
     console.log(`[TikTok] Stream ended (action: ${actionId})`);
     connectionState.status = "disconnected";
     connectionState.error = "Stream ended";
+    tiktokConnection = null;
     io.emit("streamEnd", { actionId });
     io.emit("tiktokDisconnected", "tiktok.live_ended");
     io.emit("statusUpdate", getStatusPayload());
@@ -637,6 +641,7 @@ function registerTikTokEvents(connection) {
   connection.on("disconnected", () => {
     console.log("[TikTok] Connection lost.");
     connectionState.status = "disconnected";
+    tiktokConnection = null;
     io.emit("tiktokDisconnected", "tiktok.disconnected");
     io.emit("statusUpdate", getStatusPayload());
     wsBroadcast("tiktok_disconnected", { reason: "connection_lost" });
@@ -681,7 +686,7 @@ console.log(`
 ║                                                           ║
 ║   🎮  TikTok Live Server for Interactive Games            ║
 ║   ─────────────────────────────────────────────           ║
-║   IndoFinity-compatible WebSocket Backend                 ║
+║   TikFinity-compatible WebSocket Backend                 ║
 ║                                                           ║
 ║   Socket.IO : ws://localhost:${SOCKET_PORT}                       ║
 ║   Dashboard : http://localhost:${DASHBOARD_PORT}                     ║
