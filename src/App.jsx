@@ -3739,9 +3739,12 @@ export default function App() {
             {scrambleWord && activeMinigame === "ANAGRAM" && (
                 <div
                     ref={miniGameOverlayRef}
-                    className={`z-[90] flex pointer-events-none animate-in slide-in-from-right fade-in duration-500 ${miniGamePos.x !== null ? 'fixed' : 'absolute bottom-24 sm:bottom-32 right-2 sm:right-4'}`}
+                    className={`z-[90] flex flex-col items-center gap-1 pointer-events-none animate-in slide-in-from-right fade-in duration-500 ${miniGamePos.x !== null ? 'fixed' : 'absolute bottom-24 sm:bottom-32 right-2 sm:right-4'}`}
                     style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
                 >
+                    <div className="bg-slate-900/60 backdrop-blur-sm border border-slate-700/50 text-[9px] sm:text-[10px] text-slate-300 px-3 py-0.5 rounded-full font-bold tracking-widest uppercase shadow-sm pointer-events-none mr-auto ml-2">
+                        SUSUN KATA
+                    </div>
                     <div
                         className="bg-slate-900/80 backdrop-blur-md rounded-full border border-slate-700/50 shadow-lg pointer-events-auto flex items-center p-1.5 gap-2 w-max"
                         style={{
@@ -3781,7 +3784,7 @@ export default function App() {
                                     title="Nyerah / Spill Jawaban"
                                     disabled={scrambledDisplay === scrambleWord}
                                 >
-                                    <Sparkles className={`w-4 h-4 ${scrambledDisplay === scrambleWord ? 'text-slate-500' : 'text-amber-400 animate-pulse hover:text-amber-300'} drop-shadow-md`} />
+                                    <Sparkles className={`w-4 h-4 sm:w-5 sm:h-5 ${scrambledDisplay === scrambleWord ? 'text-slate-500' : 'text-amber-400 animate-pulse hover:text-amber-300'} drop-shadow-md`} />
                                 </button>
                                 <div className="flex gap-0.5 sm:gap-1 flex-nowrap">
                                     {scrambledDisplay.split('').map((char, i) => (
