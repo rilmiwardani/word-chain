@@ -636,7 +636,20 @@ export default function App() {
                 if (playersRef.current.length >= 2) {
                     startGame();
                 } else {
-                    addLog("System", t("log_need_players"));
+                    addLog("System", "Waktu habis. Menambahkan bot otomatis...");
+                    const botCountNeeded = 2 - playersRef.current.length;
+                    for (let i = 0; i < botCountNeeded; i++) {
+                        const existingNames = new Set(playersRef.current.map((p) => p.nickname));
+                        const midTierBots = BOT_PROFILES.filter(b => b.diff >= 3 && b.diff <= 4);
+                        const availableBots = midTierBots.filter((b) => !existingNames.has(b.name));
+                        if (availableBots.length === 0) {
+                            joinGame(`bot_auto_${Date.now()}_${i}`, `Bot Pengganti ${i + 1}`, null, 3);
+                        } else {
+                            const selected = availableBots[Math.floor(Math.random() * availableBots.length)];
+                            joinGame(`bot_auto_${Date.now()}_${i}`, selected.name, null, selected.diff);
+                        }
+                    }
+                    setTimeout(() => startGame(), 500);
                 }
             }
         }
@@ -3087,7 +3100,7 @@ export default function App() {
                                                                         <Crown className="w-4 h-4 sm:w-6 sm:h-6 text-amber-300 fill-amber-300 mt-1 drop-shadow-md" />
                                                                     </div>
                                                                     <div className="absolute right-0 top-0 bottom-0 overflow-hidden w-[90px] sm:w-[125px] flex justify-end items-end pb-1 pr-1">
-                                                                        <img src={winner.avatarUrl} alt={winner.nickname} className="w-[80px] sm:w-[110px] h-[80px] sm:h-[110px] object-cover drop-shadow-[2px_2px_8px_rgba(0,0,0,0.9)] filter contrast-125 saturate-150" />
+                                                                        <img src={winner.avatarUrl} alt={winner.nickname} className="w-[80px] sm:w-[110px] h-[80px] sm:h-[110px] object-cover drop-shadow-[2px_2px_8px_rgba(0,0,0,0.9)] filter contrast-125 saturate-150 rounded-tl-2xl rounded-tr-md rounded-bl-md [-webkit-mask-image:linear-gradient(to_bottom,black_75%,transparent_100%)] [mask-image:linear-gradient(to_bottom,black_75%,transparent_100%)]" />
                                                                     </div>
                                                                 </div>
 
@@ -3226,7 +3239,7 @@ export default function App() {
                                         </>
                                     )}
                                 </div>
-                            ) : gameState === "ENDED" ? (
+                            ) : gameState === "ENDED" && getWinners().length === 0 ? (
                                 <div className="animate-in zoom-in fade-in duration-700 flex flex-col items-center">
                                     <p className="text-2xl font-black text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.6)] uppercase tracking-widest mb-2">{t("game_over")}</p>
                                     <button onClick={() => { setRestartCountdown(null); processQueue(); startGame(); }} className="bg-emerald-600 text-white px-5 py-2 rounded-full text-sm font-bold shadow-sm hover:bg-emerald-500 transition-colors animate-pulse">{t("new_game")}</button>
@@ -3516,7 +3529,7 @@ export default function App() {
                                                         {isKing && <Crown className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400 fill-amber-400 mt-0.5 drop-shadow-md" />}
                                                     </div>
                                                     <div className="absolute right-0 top-0 bottom-0 overflow-hidden w-[60px] sm:w-[80px] flex justify-end items-end pb-1 pr-1">
-                                                        <img src={player.avatarUrl} alt={player.nickname} className="w-[50px] sm:w-[70px] h-[50px] sm:h-[70px] object-cover drop-shadow-[2px_2px_4px_rgba(0,0,0,0.9)] filter contrast-125 saturate-150" />
+                                                        <img src={player.avatarUrl} alt={player.nickname} className="w-[50px] sm:w-[70px] h-[50px] sm:h-[70px] object-cover drop-shadow-[2px_2px_4px_rgba(0,0,0,0.9)] filter contrast-125 saturate-150 rounded-tl-xl rounded-tr-sm rounded-bl-sm [-webkit-mask-image:linear-gradient(to_bottom,black_75%,transparent_100%)] [mask-image:linear-gradient(to_bottom,black_75%,transparent_100%)]" />
                                                     </div>
                                                 </div>
 
