@@ -410,13 +410,42 @@ export default function App() {
 
         let scrambled = word;
         let attempts = 0;
-        while (scrambled === word && attempts < 10) {
-            scrambled = word.split('').sort(() => Math.random() - 0.5).join('');
+        
+        const isDerangement = (orig, shuff) => {
+            for (let i = 0; i < orig.length; i++) {
+                if (orig[i] === shuff[i]) return false;
+            }
+            return true;
+        };
+
+        while (attempts < 50) {
+            let arr = word.split('');
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            scrambled = arr.join('');
+            
+            if (isDerangement(word, scrambled)) break;
             attempts++;
         }
-        if (scrambled === word) {
-            const reversed = word.split('').reverse().join('');
-            scrambled = reversed !== word ? reversed : word.slice(1) + word[0];
+
+        // Fallback jika derangement gagal (misal terlalu banyak huruf kembar)
+        if (attempts >= 50) {
+            let fallbackAttempts = 0;
+            while (scrambled === word && fallbackAttempts < 10) {
+                let arr = word.split('');
+                for (let i = arr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [arr[i], arr[j]] = [arr[j], arr[i]];
+                }
+                scrambled = arr.join('');
+                fallbackAttempts++;
+            }
+            if (scrambled === word) {
+                const reversed = word.split('').reverse().join('');
+                scrambled = reversed !== word ? reversed : word.slice(1) + word[0];
+            }
         }
 
         setScrambleWord(word);
