@@ -428,8 +428,8 @@ export default function App() {
         if (miniGameWordsRef.current.length === 0) return;
 
         if (!unplayedWord500WordsRef.current || unplayedWord500WordsRef.current.length === 0) {
-            const fiveLetterWords = miniGameWordsRef.current.filter(w => w.length === 5);
-            unplayedWord500WordsRef.current = fiveLetterWords.length > 0 ? [...fiveLetterWords] : [...miniGameWordsRef.current];
+            const validWords = miniGameWordsRef.current.filter(w => w.length >= 5 && w.length <= 6);
+            unplayedWord500WordsRef.current = validWords.length > 0 ? [...validWords] : [...miniGameWordsRef.current];
         }
 
         const randomIndex = Math.floor(Math.random() * unplayedWord500WordsRef.current.length);
