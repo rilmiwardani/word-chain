@@ -141,6 +141,7 @@ export default function App() {
     const [word500Guesses, setWord500Guesses] = useState([]);
     const [word500Winner, setWord500Winner] = useState(null);
     const [word500FlipPhase, setWord500FlipPhase] = useState(null); // null | "flipping" | "winner"
+    const [anagramFlipPhase, setAnagramFlipPhase] = useState(null); // null | "flipping" | "winner"
     const [autoWordleGuess, setAutoWordleGuess] = useState(null);
     const [autoWordleLeaderboard, setAutoWordleLeaderboard] = useState({});
 
@@ -392,10 +393,11 @@ export default function App() {
 
         setScrambledDisplay(scrambleWordRef.current);
         playSound("wrong");
-
-        setTimeout(() => {
-            startNewScramble();
-        }, 4000);
+        setScrambleWinner({ nickname: "Sistem (Spill)", profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=System" });
+        
+        setTimeout(() => { setAnagramFlipPhase("flipping"); }, 1000);
+        setTimeout(() => { setAnagramFlipPhase("winner"); }, 1600);
+        setTimeout(() => { setAnagramFlipPhase(null); startNewScramble(); }, 5000);
     };
 
     const startNewScramble = () => {
@@ -451,6 +453,7 @@ export default function App() {
         setScrambleWord(word);
         setScrambledDisplay(scrambled);
         setScrambleWinner(null);
+        setAnagramFlipPhase(null);
     };
 
     const startNewWord500 = () => {
@@ -602,14 +605,16 @@ export default function App() {
                 return res.text();
             })
             .then(text => {
-                const words = text.split(/\r?\n/)
+                const rawWords = text.split(/\r?\n/)
                     .map(w => w.trim().toUpperCase())
-                    .filter(w => w.length >= 5 && w.length <= 8 && !w.includes(" "));
+                    .filter(w => w.length > 0 && !w.includes(" "));
 
-                if (words.length > 0) {
-                    miniGameWordsRef.current = words;
-                    unplayedMiniGameWordsRef.current = [...words];
-                    addLog("System", `Berhasil memuat ${words.length} kata minigame!`);
+                const uniqueWords = Array.from(new Set(rawWords));
+
+                if (uniqueWords.length > 0) {
+                    miniGameWordsRef.current = uniqueWords;
+                    unplayedMiniGameWordsRef.current = [...uniqueWords];
+                    addLog("System", `Berhasil memuat ${uniqueWords.length} kata minigame unik!`);
                 } else {
                     unplayedMiniGameWordsRef.current = [...miniGameWordsRef.current];
                 }
@@ -2293,7 +2298,11 @@ export default function App() {
             playSound("notification");
             triggerTableEffect("info");
             addLog("MiniGame", `🎉 ${nickname} menebak anagram: ${scrambleWordRef.current}!`);
+            
+            setTimeout(() => { setAnagramFlipPhase("flipping"); }, 1000);
+            setTimeout(() => { setAnagramFlipPhase("winner"); }, 1600);
             setTimeout(() => {
+                setAnagramFlipPhase(null);
                 startNewScramble();
             }, 5000);
             return;
@@ -2427,7 +2436,11 @@ export default function App() {
             playSound("notification");
             triggerTableEffect("info");
             addLog("MiniGame", `🎉 HOST menebak anagram: ${scrambleWordRef.current}!`);
+            
+            setTimeout(() => { setAnagramFlipPhase("flipping"); }, 1000);
+            setTimeout(() => { setAnagramFlipPhase("winner"); }, 1600);
             setTimeout(() => {
+                setAnagramFlipPhase(null);
                 startNewScramble();
             }, 5000);
             setManualInput("");
@@ -3748,18 +3761,19 @@ export default function App() {
                         </div>
 
                         {/* Content Mini Game */}
-                        <div className="flex items-center gap-1.5 sm:gap-2 pr-1">
-                            {scrambleWinner ? (
-                                <div className="flex items-center gap-1.5 animate-in slide-in-from-left duration-300">
-                                    <img src={scrambleWinner.profilePictureUrl} className="w-5 h-5 sm:w-6 sm:h-6 rounded-full border border-emerald-500 object-cover bg-slate-800 shadow-sm" alt="winner" />
-                                    <span className="text-[10px] sm:text-xs font-bold max-w-[80px] sm:max-w-[120px] truncate text-emerald-100">
-                                        {scrambleWinner.nickname}
-                                    </span>
-                                    <span className="text-[8px] font-black px-1 py-0.5 rounded border text-emerald-400 bg-emerald-950/50 border-emerald-800/50 hidden sm:inline-block">
-                                        BENAR
-                                    </span>
-                                </div>
-                            ) : (
+                        {/* Content Mini Game */}
+                        <div 
+                            className="relative flex items-center pr-1"
+                            style={{
+                                perspective: '1000px',
+                                transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                                transformStyle: 'preserve-3d',
+                                transform: anagramFlipPhase === 'flipping' || anagramFlipPhase === 'winner' ? 'rotateX(-180deg)' : 'rotateX(0deg)',
+                                minHeight: '34px'
+                            }}
+                        >
+                            {/* Front: Button + Letters */}
+                            <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }} className="flex items-center gap-1.5 sm:gap-2">
                                 <button
                                     onClick={handleRevealAnagram}
                                     onTouchEnd={handleRevealAnagram}
@@ -3769,14 +3783,36 @@ export default function App() {
                                 >
                                     <Sparkles className={`w-4 h-4 ${scrambledDisplay === scrambleWord ? 'text-slate-500' : 'text-amber-400 animate-pulse hover:text-amber-300'} drop-shadow-md`} />
                                 </button>
-                            )}
+                                <div className="flex gap-0.5 sm:gap-1 flex-nowrap">
+                                    {scrambledDisplay.split('').map((char, i) => (
+                                        <div key={i} className={`w-5 h-6 sm:w-6 sm:h-7 shrink-0 bg-slate-800 border rounded flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm transition-colors duration-300 ${scrambleWinner ? 'border-emerald-500/50 text-emerald-400 bg-emerald-950/30' : (scrambledDisplay === scrambleWord ? 'border-amber-500/50 text-amber-400 bg-amber-950/30' : 'border-slate-700 text-sky-400')}`}>
+                                            {char}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
 
-                            <div className="flex gap-0.5 sm:gap-1 flex-nowrap">
-                                {scrambledDisplay.split('').map((char, i) => (
-                                    <div key={i} className={`w-5 h-6 sm:w-6 sm:h-7 shrink-0 bg-slate-800 border rounded flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm transition-colors duration-300 ${scrambleWinner ? 'border-emerald-500/50 text-emerald-400 bg-emerald-950/30' : (scrambledDisplay === scrambleWord ? 'border-amber-500/50 text-amber-400 bg-amber-950/30' : 'border-slate-700 text-sky-400')}`}>
-                                        {char}
+                            {/* Back: Winner */}
+                            <div
+                                className="absolute inset-0 bg-emerald-950/90 rounded border border-emerald-600/60 shadow-xl flex items-center justify-center px-2"
+                                style={{
+                                    backfaceVisibility: 'hidden',
+                                    WebkitBackfaceVisibility: 'hidden',
+                                    transform: 'rotateX(180deg)'
+                                }}
+                            >
+                                {scrambleWinner && (
+                                    <div className="flex items-center gap-2 sm:gap-3 w-full justify-center">
+                                        <div className="relative shrink-0">
+                                            <div className="absolute -inset-1 rounded-full bg-emerald-500/30 animate-ping" />
+                                            <img src={scrambleWinner.profilePictureUrl} className="relative w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-emerald-400 shadow-sm object-cover bg-slate-800" alt="winner" />
+                                        </div>
+                                        <div className="flex flex-col items-start min-w-0 pr-1">
+                                            <span className="text-[9px] sm:text-[10px] font-black text-emerald-400 uppercase tracking-widest leading-none">BENAR!</span>
+                                            <span className="text-[11px] sm:text-sm font-bold text-white truncate max-w-[80px] sm:max-w-[130px] mt-0.5">{scrambleWinner.nickname}</span>
+                                        </div>
                                     </div>
-                                ))}
+                                )}
                             </div>
                         </div>
 
