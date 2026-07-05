@@ -4025,7 +4025,7 @@ export default function App() {
                                                         <div className="w-5 h-6 rounded-[3px] border border-slate-600 bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400" title={g.nickname}>{g.nickname.substring(0, 1).toUpperCase()}</div>
                                                     )
                                                 ) : (
-                                                    <div className="w-5 h-6 rounded-[3px] border border-slate-700/30 bg-slate-800/10" />
+                                                    <div className="w-5 h-6 shrink-0" />
                                                 )}
                                             </div>
                                             <div className="flex gap-1">
