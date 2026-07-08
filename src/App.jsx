@@ -168,6 +168,7 @@ export default function App() {
     const containerRef = useRef(null);
     const fallbackToLocalhostRef = useRef(false);
     const reconnectAttemptsRef = useRef(0);
+    const pausedByDisconnectRef = useRef(false);
     const wsHostRef = useRef(wsHost);
     const connectionSourceRef = useRef(localStorage.getItem("sk_conn_source") || "LOCAL");
     const feedbackTimeoutRef = useRef(null);
@@ -1009,6 +1010,14 @@ export default function App() {
                 }
                 reconnectAttemptsRef.current = 0;
                 if (source === "TIKFINITY") playSound("notification");
+
+                // Auto-resume jika sebelumnya di-pause oleh disconnect
+                if (pausedByDisconnectRef.current && gameStateRef.current === "PAUSED") {
+                    pausedByDisconnectRef.current = false;
+                    setGameState("PLAYING");
+                    addLog("System", "▶️ Koneksi pulih! Game dilanjutkan otomatis.");
+                    playSound("start");
+                }
             };
             wsRef.current.onmessage = (event) => {
                 try {
@@ -1051,12 +1060,22 @@ export default function App() {
             };
             wsRef.current.onclose = () => {
                 setConnectionStatus("disconnected");
+
+                // Auto-pause jika sedang bermain saat koneksi putus
+                if (gameStateRef.current === "PLAYING") {
+                    pausedByDisconnectRef.current = true;
+                    setGameState("PAUSED");
+                    addLog("System", "⏸️ Koneksi terputus! Game di-pause otomatis.");
+                    playSound("notification");
+                }
+
                 if (source !== "TIKFINITY" && !fallbackToLocalhostRef.current && window.location.hostname !== "localhost") {
                     fallbackToLocalhostRef.current = true;
                 }
                 reconnectAttemptsRef.current += 1;
                 // Exponential backoff: 2s, 4s, 8s, capped at 15s
                 const delay = Math.min(2000 * Math.pow(2, reconnectAttemptsRef.current - 1), 15000);
+                addLog("System", `🔄 Mencoba reconnect dalam ${delay/1000}s... (percobaan ke-${reconnectAttemptsRef.current})`);
                 setTimeout(connectWebSocket, delay);
             };
         } catch (err) {
