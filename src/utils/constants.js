@@ -260,22 +260,30 @@ function generatePattern(baseWord, dict, currentUsed, lastType = null) {
         return min + Math.floor(Math.random() * (range + 1));
     };
 
-    let types = ["PREFIX", "SUFFIX", "WRAP", "MIDDLE", "SUFFIX", "PREFIX"]; // weight lebih ke prefix/suffix
+    let types = ["WRAP", "MIDDLE", "DOUBLE", "SKELETON"];
     if (lastType) {
         types = types.filter(t => t !== lastType);
     }
+    if (types.length === 0) types = ["WRAP", "MIDDLE", "DOUBLE", "SKELETON"];
     types.sort(() => Math.random() - 0.5);
+
+    const testPattern = (patStr, word) => {
+        const parts = patStr.toLowerCase().split('...').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const regex = new RegExp('^' + parts.join('.+') + '$', 'i');
+        return regex.test(word);
+    };
 
     for (const type of types) {
         // Tiap tipe dicoba beberapa kali dengan parameter berbeda
-        const attempts = type === "MIDDLE" ? 4 : 3;
+        const attempts = 5;
         for (let attempt = 0; attempt < attempts; attempt++) {
             let patternStr = "";
             let isValidMatch = null;
 
-            if (type === "MIDDLE" && wLen >= 5) {
-                // Panjang tengah: 2-3 huruf (min 2 agar tidak terlalu mudah)
-                const midLen = Math.min(wLen - 2, Math.max(2, Math.floor(Math.random() * 2) + 2));
+            if (type === "MIDDLE" && wLen >= 4) {
+                // Panjang tengah: 1-2 huruf
+                const maxMid = Math.min(wLen - 2, 2);
+                const midLen = Math.max(1, Math.floor(Math.random() * maxMid) + 1);
                 const maxStart = wLen - midLen - 1;
                 if (maxStart < 1) continue;
                 const startIdx = Math.floor(Math.random() * maxStart) + 1;
@@ -283,32 +291,37 @@ function generatePattern(baseWord, dict, currentUsed, lastType = null) {
                 patternStr = `...${mid}...`;
                 isValidMatch = (word) => word.includes(mid) && !word.startsWith(mid) && !word.endsWith(mid) && word.length > mid.length + 1;
             }
-            else if (type === "PREFIX" && wLen >= 4) {
-                // Min 2 huruf agar tidak terlalu mudah
-                const maxPLen = Math.min(wLen - 1, 4);
-                const pLen = randLen(2, maxPLen);
-                const prefix = w.slice(0, pLen);
-                patternStr = `${prefix}...`;
-                isValidMatch = (word) => word.startsWith(prefix) && word.length > prefix.length;
-            }
-            else if (type === "SUFFIX" && wLen >= 4) {
-                // Min 2 huruf agar tidak terlalu mudah
-                const maxSLen = Math.min(wLen - 1, 4);
-                const sLen = randLen(2, maxSLen);
-                const suffix = w.slice(-sLen);
-                patternStr = `...${suffix}`;
-                isValidMatch = (word) => word.endsWith(suffix) && word.length > suffix.length;
-            }
-            else if (type === "WRAP" && wLen >= 4) {
+            else if (type === "WRAP" && wLen >= 3) {
                 const preLen = randLen(1, Math.min(2, Math.floor(wLen / 2)));
                 const sufLen = randLen(1, Math.min(2, Math.floor(wLen / 2)));
                 if (preLen + sufLen >= wLen) continue;
                 const prefix = w.slice(0, preLen);
                 const suffix = w.slice(-sufLen);
-                // Hindari prefix === suffix yang bisa membingungkan
-                if (prefix === suffix) continue;
+                if (prefix === suffix && wLen > 3) continue;
                 patternStr = `${prefix}...${suffix}`;
                 isValidMatch = (word) => word.startsWith(prefix) && word.endsWith(suffix) && word.length > preLen + sufLen;
+            }
+            else if (type === "DOUBLE" && wLen >= 6) {
+                if (Math.random() < 0.5) {
+                    const seg1 = w.slice(0, 2);
+                    const midIdx = Math.floor(Math.random() * (wLen - 5)) + 3;
+                    const seg2 = w.slice(midIdx, midIdx + 2);
+                    patternStr = `${seg1}...${seg2}...`;
+                } else {
+                    const midIdx = Math.floor(Math.random() * (wLen - 5)) + 1;
+                    const seg1 = w.slice(midIdx, midIdx + 2);
+                    const seg2 = w.slice(-2);
+                    patternStr = `...${seg1}...${seg2}`;
+                }
+                isValidMatch = (word) => testPattern(patternStr, word);
+            }
+            else if (type === "SKELETON" && wLen >= 5) {
+                const first = w[0];
+                const last = w.slice(-2);
+                const midIdx = Math.floor(Math.random() * (wLen - 4)) + 2;
+                const midChar = w[midIdx];
+                patternStr = `${first}...${midChar}...${last}`;
+                isValidMatch = (word) => testPattern(patternStr, word);
             }
 
             if (!patternStr || !isValidMatch) continue;
@@ -318,8 +331,8 @@ function generatePattern(baseWord, dict, currentUsed, lastType = null) {
         }
     }
 
-    // Fallback: ambil 1 huruf akhir sebagai awalan
-    return { display: `${w.slice(-1)}...`, type: "PREFIX" };
+    // Fallback berformat WRAP
+    return { display: `${w[0]}...${w.slice(-1)}`, type: "WRAP" };
 }
 
 

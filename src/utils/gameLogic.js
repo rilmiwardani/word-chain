@@ -109,21 +109,16 @@ export function validateConnection(prev, next, options) {
     const overlap = overlapLength;
 
     if (gameMode === "FILL_BLANK") {
-        const pat = p.toLowerCase();
-        if (pat.startsWith('...') && pat.endsWith('...')) {
-            const mid = pat.replace(/\.\.\./g, '');
-            return n.slice(1, -1).includes(mid);
-        } else if (pat.startsWith('...')) {
-            const suf = pat.replace(/\.\.\./g, '');
-            return n.endsWith(suf) && n.length > suf.length;
-        } else if (pat.endsWith('...')) {
-            const pref = pat.replace(/\.\.\./g, '');
-            return n.startsWith(pref) && n.length > pref.length;
-        } else if (pat.includes('...')) {
-            const [pref, suf] = pat.split('...');
-            return n.startsWith(pref) && n.endsWith(suf) && n.length > pref.length + suf.length;
+        const cleanPat = p.toLowerCase().trim();
+        const cleanWord = n.toLowerCase().trim();
+        const parts = cleanPat.split('...').map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const regexStr = '^' + parts.join('.+') + '$';
+        try {
+            const regex = new RegExp(regexStr, 'i');
+            return regex.test(cleanWord);
+        } catch (e) {
+            return false;
         }
-        return false;
     }
 
     if (gameMode === "PHRASE_CHAIN") return phraseDictionary.has(`${p} ${n}`);

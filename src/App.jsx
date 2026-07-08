@@ -59,6 +59,9 @@ export default function App() {
     const [overlapMode, setOverlapMode] = useState("FIXED"); // FIXED, RANDOM, SEQUENTIAL
     const [maxWordLength, setMaxWordLength] = useState(0);
     const [autoRestartEnabled, setAutoRestartEnabled] = useState(false);
+    const [restartLikes, setRestartLikes] = useState(0);
+    const TARGET_RESTART_LIKES = 200;
+    const restartLikesRef = useRef(0);
     const [restartCountdown, setRestartCountdown] = useState(null);
     const [waitingCountdown, setWaitingCountdown] = useState(null);
     const [playerQueue, setPlayerQueue] = useState([]);
@@ -169,6 +172,7 @@ export default function App() {
     const connectionSourceRef = useRef(localStorage.getItem("sk_conn_source") || "LOCAL");
     const feedbackTimeoutRef = useRef(null);
     const chatHandlerRef = useRef(null);
+    const likeHandlerRef = useRef(null);
     const phraseDictionary = useRef(new Set(FALLBACK_PHRASES_EN));
 
     const dictionaryCache = useRef({
@@ -245,6 +249,7 @@ export default function App() {
         maxWordLengthRef.current = maxWordLength;
         activeChallengeRef.current = activeChallenge;
         autoRestartEnabledRef.current = autoRestartEnabled;
+        restartLikesRef.current = restartLikes;
         playerQueueRef.current = playerQueue;
         scrambleWordRef.current = scrambleWord;
         scrambleWinnerRef.current = scrambleWinner;
@@ -632,7 +637,7 @@ export default function App() {
     useEffect(() => {
         let interval;
         if (gameState === "ENDED" && autoRestartEnabled) {
-            setRestartCountdown(10);
+            setRestartCountdown(35);
             interval = setInterval(() => {
                 setRestartCountdown(prev => {
                     if (prev !== null && prev <= 1) {
@@ -653,8 +658,8 @@ export default function App() {
             setRestartCountdown(null);
             clearLobby();
             pickShowcaseWords();
-            setWaitingCountdown(60);
-            addLog("System", "Lobby dibuka 60 detik untuk pemain baru!");
+            setWaitingCountdown(30);
+            addLog("System", "Lobby dibuka 30 detik untuk pemain baru!");
         }
     }, [restartCountdown, gameState]);
 
@@ -1016,11 +1021,15 @@ export default function App() {
                         giftName: data.giftName,
                         giftPictureUrl: data.giftPictureUrl
                     });
-                    if (eventName === "like") triggerVisualEffect("like", data.uniqueId, {
-                        nickname: data.nickname,
-                        profilePictureUrl: data.profilePictureUrl,
-                        count: Math.min(data.likeCount || 1, 5)
-                    });
+                    if (eventName === "like") {
+                        const count = data.likeCount || 1;
+                        triggerVisualEffect("like", data.uniqueId, {
+                            nickname: data.nickname,
+                            profilePictureUrl: data.profilePictureUrl,
+                            count: Math.min(count, 5)
+                        });
+                        if (likeHandlerRef.current) likeHandlerRef.current(count);
+                    }
 
                     if (eventName === "tiktok_connected") {
                         setConnectionStatus("tiktok_ready");
@@ -1974,6 +1983,7 @@ export default function App() {
         const randomFirstPlayerIndex = Math.floor(Math.random() * playersRef.current.length);
         setCurrentTurnIndex(randomFirstPlayerIndex); setRoundStarterId(playersRef.current[randomFirstPlayerIndex].uniqueId);
         setTimer(turnDuration); setGameState("PLAYING"); setShowSettings(false);
+        setRestartLikes(0); restartLikesRef.current = 0;
         addLog("System", `Start: ${playersRef.current[randomFirstPlayerIndex].nickname} ${t("log_goes_first")}`);
         if (randomStart) addLog("System", `Word: ${randomStart.toUpperCase()} ${cityMetadataRef.current[randomStart] ? `(${cityMetadataRef.current[randomStart]})` : ""}`);
     }
@@ -1981,6 +1991,7 @@ export default function App() {
     function resetGame() {
         setGameState("WAITING");
         setWaitingCountdown(null);
+        setRestartLikes(0); restartLikesRef.current = 0;
         processQueue();
         setPlayers((prev) => prev.map((p) => ({ ...p, isEliminated: false, score: 0, turnCount: 0, sessionKills: 0 })));
         setUsedWords(new Set()); setCurrentWord(""); setTargetRhyme(""); setGlobalTimer(null);
@@ -2641,6 +2652,86 @@ export default function App() {
     const dynamicScale = playerCount > 6 ? Math.max(0.45, 1 - (playerCount - 6) * 0.045) : 1;
 
 
+    const triggerAutoRestartGame = () => {
+        setRestartCountdown(null);
+        setWaitingCountdown(null);
+        setRestartLikes(0);
+        restartLikesRef.current = 0;
+        addLog("System", "⚡ 200 Tap-Tap Likes tercapai! Memulai kembali permainan...");
+        playSound("notification");
+
+        if (playersRef.current.length < 2) {
+            const botCountNeeded = 2 - playersRef.current.length;
+            for (let i = 0; i < botCountNeeded; i++) {
+                const existingNames = new Set(playersRef.current.map((p) => p.nickname));
+                const midTierBots = BOT_PROFILES.filter(b => b.diff >= 3 && b.diff <= 4);
+                const availableBots = midTierBots.filter((b) => !existingNames.has(b.name));
+                if (availableBots.length === 0) {
+                    joinGame(`bot_auto_${Date.now()}_${i}`, `Bot Pengganti ${i + 1}`, null, 3);
+                } else {
+                    const selected = availableBots[Math.floor(Math.random() * availableBots.length)];
+                    joinGame(`bot_auto_${Date.now()}_${i}`, selected.name, null, selected.diff);
+                }
+            }
+        }
+        setTimeout(() => startGame(), 300);
+    };
+
+    const handleAddRestartLikes = (count = 1) => {
+        if (!autoRestartEnabledRef.current) return;
+        if (gameStateRef.current !== "ENDED" && gameStateRef.current !== "WAITING") return;
+
+        setRestartLikes(prev => {
+            const nextVal = prev + count;
+            restartLikesRef.current = nextVal;
+            if (nextVal >= TARGET_RESTART_LIKES) {
+                setTimeout(() => {
+                    triggerAutoRestartGame();
+                }, 100);
+            }
+            return nextVal;
+        });
+    };
+
+    useEffect(() => {
+        likeHandlerRef.current = handleAddRestartLikes;
+    });
+
+    const renderLikeRestartMeter = () => {
+        if (!autoRestartEnabled) return null;
+        const progressPercent = Math.min(100, (restartLikes / TARGET_RESTART_LIKES) * 100);
+        return (
+            <div 
+                onClick={() => handleAddRestartLikes(10)}
+                title="Klik untuk simulasi +10 Likes"
+                className="relative w-full max-w-[280px] sm:max-w-[320px] mx-auto my-1 px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-amber-500/40 shadow-[0_0_15px_rgba(251,191,36,0.15)] backdrop-blur-md transition-all duration-300 hover:border-amber-400 cursor-pointer group select-none"
+            >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-1.5">
+                        <Heart className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-pulse shrink-0" />
+                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider uppercase bg-gradient-to-r from-amber-200 via-yellow-300 to-emerald-300 bg-clip-text text-transparent truncate">
+                            TAP-TAP 200 LIKES UNTUK START
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-0.5 font-mono text-[10px] font-bold text-amber-300 shrink-0">
+                        <span>{Math.min(restartLikes, TARGET_RESTART_LIKES)}</span>
+                        <span className="text-amber-500/70">/{TARGET_RESTART_LIKES}</span>
+                    </div>
+                </div>
+
+                {/* Meter Track - Ultra Compact */}
+                <div className="relative w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-amber-500/30">
+                    <div
+                        style={{ width: `${progressPercent}%` }}
+                        className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 shadow-[0_0_8px_rgba(251,191,36,0.6)] transition-all duration-300 ease-out relative overflow-hidden"
+                    >
+                        <div className="absolute inset-0 bg-white/30 animate-pulse"></div>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     // ==========================================
     // 4. RENDER UI
     // ==========================================
@@ -3117,11 +3208,11 @@ export default function App() {
 
                                 {/* Content */}
                                 <div className="relative flex flex-col items-center justify-center z-10 px-6 w-full h-full animate-in fade-in zoom-in-[0.98] duration-1000 ease-out delay-200 fill-mode-both">
-                                    <Trophy className="w-10 h-10 sm:w-14 sm:h-14 text-amber-400 drop-shadow-[0_0_25px_rgba(251,191,36,0.5)] mb-2 fill-amber-500/10" />
-                                    <h2 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-100 to-amber-500 uppercase tracking-widest mb-3">
+                                    <Trophy className="w-8 h-8 sm:w-11 sm:h-11 text-amber-400 drop-shadow-[0_0_25px_rgba(251,191,36,0.5)] mb-1 fill-amber-500/10" />
+                                    <h2 className="text-lg sm:text-xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-100 to-amber-500 uppercase tracking-widest mb-1.5">
                                         {getWinners().length > 1 ? t("draw") : t("winner")}
                                     </h2>
-                                    <div className={`flex flex-wrap justify-center gap-2 sm:gap-6 mb-3 ${layoutStyle === "round" ? "max-h-[120px] sm:max-h-[160px] overflow-y-auto" : "overflow-visible"} custom-scrollbar`}>
+                                    <div className={`flex flex-wrap justify-center gap-2 sm:gap-6 mb-1.5 ${layoutStyle === "round" ? "max-h-[120px] sm:max-h-[160px] overflow-y-auto" : "overflow-visible"} custom-scrollbar`}>
                                         {getWinners().map((winner, idx) => {
                                             if (layoutStyle !== "round") {
                                                 const wTier = winner.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (winner.botDifficulty || 3) - 1))] : getPlayerTier(winner.stats);
@@ -3188,7 +3279,7 @@ export default function App() {
                                         const mostKillers = killers.filter(p => p.sessionKills === maxKills);
                                         if (mostKillers.length > 0) {
                                             return (
-                                                <div className="bg-sky-950/40 border border-sky-900/50 rounded-xl px-3 py-1.5 flex items-center gap-2 mb-3">
+                                                <div className="bg-sky-950/40 border border-sky-900/50 rounded-xl px-3 py-1 flex items-center gap-2 mb-1">
                                                     <Sparkles className="w-3 h-3 text-sky-400 animate-pulse shrink-0" />
                                                     <div className="flex items-center gap-1.5 flex-wrap justify-center">
                                                         {mostKillers.slice(0, 3).map((killer, idx) => (
@@ -3204,6 +3295,8 @@ export default function App() {
                                         }
                                         return null;
                                     })()}
+
+                                    {renderLikeRestartMeter()}
 
                                     <div className="flex gap-2">
                                         <button onClick={() => {
@@ -3278,12 +3371,14 @@ export default function App() {
                                             <p className="text-slate-300 font-bold">{t("waiting")}</p>
                                             <p className="text-xs text-slate-500">{t("type_join")}</p>
                                             <p className="text-xl font-mono mt-2 text-sky-400">{players.length} / {maxPlayers}</p>
+                                            {renderLikeRestartMeter()}
                                         </>
                                     )}
                                 </div>
                             ) : gameState === "ENDED" && getWinners().length === 0 ? (
                                 <div className="animate-in zoom-in fade-in duration-700 flex flex-col items-center">
                                     <p className="text-2xl font-black text-amber-400 drop-shadow-[0_0_10px_rgba(251,191,36,0.6)] uppercase tracking-widest mb-2">{t("game_over")}</p>
+                                    {renderLikeRestartMeter()}
                                     <button onClick={() => { setRestartCountdown(null); processQueue(); startGame(); }} className="bg-emerald-600 text-white px-5 py-2 rounded-full text-sm font-bold shadow-sm hover:bg-emerald-500 transition-colors animate-pulse">{t("new_game")}</button>
                                 </div>
                             ) : (
