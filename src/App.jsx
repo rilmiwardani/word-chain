@@ -1680,7 +1680,9 @@ export default function App() {
             let pts = isScoreMode() ? ` (+${pointsAwarded})` : "";
 
             if (gameModeRef.current === "FILL_BLANK") {
-                const pat = generatePattern(word, dictionary, usedWordsRef.current, lastPatternTypeRef.current);
+                const nextPlayerObj = modifiedPlayers[nextIdx];
+                const nextPlayerTierObj = nextPlayerObj.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (nextPlayerObj.botDifficulty || 3) - 1))] : getPlayerTier(nextPlayerObj.stats);
+                const pat = generatePattern(word, dictionary, usedWordsRef.current, lastPatternTypeRef.current, nextPlayerTierObj.level);
                 nextWord = pat.display;
                 lastPatternTypeRef.current = pat.type;
             } else if (gameModeRef.current === "INFIKS") {
@@ -1835,14 +1837,6 @@ export default function App() {
             isEliminated: false, color: getRandomColor(), isBot, botDifficulty, stats, score: 0, turnCount: 0, sessionKills: 0
         };
 
-        if (gameStateRef.current !== "WAITING") {
-            playerQueueRef.current = [...playerQueueRef.current, newPlayer];
-            setPlayerQueue([...playerQueueRef.current]);
-            playSound("notification");
-            addLog("System", `${nickname} masuk antrean next game!`, uniqueId);
-            return;
-        }
-
         if (playersRef.current.length >= maxPlayers) {
             playerQueueRef.current = [...playerQueueRef.current, newPlayer];
             setPlayerQueue([...playerQueueRef.current]);
@@ -1850,7 +1844,13 @@ export default function App() {
             return;
         }
 
-        playSound("join"); addLog("System", `${nickname} ${t("log_joined")}`, uniqueId);
+        playSound("join"); 
+        if (gameStateRef.current === "PLAYING") {
+            addLog("System", `${nickname} langsung ikut bermain!`, uniqueId);
+        } else {
+            addLog("System", `${nickname} ${t("log_joined")}`, uniqueId);
+        }
+        
         playersRef.current = [...playersRef.current, newPlayer]; setPlayers([...playersRef.current]);
     }
 
@@ -2678,6 +2678,7 @@ export default function App() {
         restartLikesRef.current = 0;
         addLog("System", "⚡ 200 Tap-Tap Likes tercapai! Memulai kembali permainan...");
         playSound("notification");
+        processQueue(); // Add queued players to the game
 
         if (playersRef.current.length < 2) {
             const botCountNeeded = 2 - playersRef.current.length;

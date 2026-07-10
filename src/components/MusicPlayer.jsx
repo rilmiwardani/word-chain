@@ -192,29 +192,6 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen, overlayStyle = 'thumbn
 
     return (
         <>
-            {/* TOAST NOTIFICATION FOR NEW REQUESTS */}
-            <div className={`fixed ${isKeyboardOpen ? 'bottom-[370px]' : 'bottom-[6.5rem]'} right-4 z-[110] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${toast ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-10 opacity-0 scale-95 pointer-events-none'}`}>
-                {toast && (
-                    <div className="bg-gradient-to-r from-sky-900/95 to-slate-900/95 border border-sky-500/40 p-2.5 rounded-2xl shadow-[0_0_20px_rgba(14,165,233,0.2)] backdrop-blur-md flex items-center gap-3 w-72">
-                        <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-inner">
-                            <img src={toast.thumbnail} alt="" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 bg-sky-500/20 mix-blend-overlay"></div>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                                <span className="flex h-2 w-2 relative">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
-                                </span>
-                                <p className="text-sky-300 text-[10px] font-bold uppercase tracking-wider">New Request</p>
-                            </div>
-                            <p className="text-white text-[11px] font-medium truncate drop-shadow-sm">{toast.title}</p>
-                            <p className="text-slate-400 text-[9px] truncate">dari {toast.requesterName}</p>
-                        </div>
-                    </div>
-                )}
-            </div>
-
             {/* UI Overlay - Always rendered so YT API can bind, but hidden when no current song */}
             <div 
                 ref={overlayRef}
@@ -223,6 +200,29 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen, overlayStyle = 'thumbn
                 className={`fixed z-40 [perspective:1000px] transition-all cursor-move ${dragRef.current?.isDragging ? 'duration-0' : 'duration-500'} ${isFlipped ? 'w-72 h-52' : 'w-72 h-20'} ${current ? 'opacity-100' : 'opacity-0 pointer-events-none'} ${pos.x === null ? 'bottom-4 right-4' : ''}`}
                 style={pos.x !== null ? { left: `${pos.x}px`, top: `${pos.y}px` } : {}}
             >
+                {/* TOAST NOTIFICATION FOR NEW REQUESTS */}
+                <div className={`absolute bottom-full right-0 mb-3 z-[110] transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${toast ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-4 opacity-0 scale-95 pointer-events-none'}`}>
+                    {toast && (
+                        <div className="bg-gradient-to-r from-sky-900/95 to-slate-900/95 border border-sky-500/40 p-2.5 rounded-2xl shadow-[0_0_20px_rgba(14,165,233,0.2)] backdrop-blur-md flex items-center gap-3 w-72 pointer-events-none">
+                            <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 shadow-inner">
+                                <img src={toast.thumbnail} alt="" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-sky-500/20 mix-blend-overlay"></div>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className="flex h-2 w-2 relative">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
+                                    </span>
+                                    <p className="text-sky-300 text-[10px] font-bold uppercase tracking-wider">New Request</p>
+                                </div>
+                                <p className="text-white text-[11px] font-medium truncate drop-shadow-sm">{toast.title}</p>
+                                <p className="text-slate-400 text-[9px] truncate">dari {toast.requesterName}</p>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 <div className={`w-full h-full relative transition-all duration-700 [transform-style:preserve-3d] ${isFlipped ? '[transform:rotateY(-180deg)]' : ''} ${!current ? 'translate-y-10' : 'translate-y-0'}`}>
                     
                     {/* FRONT FACE - CURRENT SONG */}

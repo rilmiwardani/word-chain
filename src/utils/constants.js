@@ -233,7 +233,7 @@ const normalizeWord = (word) => {
     return word.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z\s]/g, "").trim();
 };
 
-function generatePattern(baseWord, dict, currentUsed, lastType = null) {
+function generatePattern(baseWord, dict, currentUsed, lastType = null, playerTier = null) {
     const w = baseWord.toLowerCase();
     const wLen = w.length;
 
@@ -260,11 +260,21 @@ function generatePattern(baseWord, dict, currentUsed, lastType = null) {
         return min + Math.floor(Math.random() * (range + 1));
     };
 
-    let types = ["WRAP", "MIDDLE", "DOUBLE", "SKELETON"];
+    let types = ["WRAP", "MIDDLE", "DOUBLE", "SKELETON", "PREFIX", "SUFFIX"];
+    if (playerTier !== null) {
+        if (playerTier <= 2) {
+            types = ["PREFIX", "SUFFIX", "WRAP"]; // Mudah
+        } else if (playerTier <= 4) {
+            types = ["WRAP", "MIDDLE", "PREFIX", "SUFFIX"]; // Menengah
+        } else {
+            types = ["MIDDLE", "DOUBLE", "SKELETON", "WRAP"]; // Sulit
+        }
+    }
+
     if (lastType) {
         types = types.filter(t => t !== lastType);
     }
-    if (types.length === 0) types = ["WRAP", "MIDDLE", "DOUBLE", "SKELETON"];
+    if (types.length === 0) types = ["WRAP", "PREFIX", "SUFFIX"];
     types.sort(() => Math.random() - 0.5);
 
     const testPattern = (patStr, word) => {
@@ -281,11 +291,15 @@ function generatePattern(baseWord, dict, currentUsed, lastType = null) {
             let isValidMatch = null;
 
             if (type === "MIDDLE" && wLen >= 4) {
-                // Panjang tengah: 1-2 huruf
-                const maxMid = Math.min(wLen - 2, 2);
-                const midLen = Math.max(1, Math.floor(Math.random() * maxMid) + 1);
+                // Panjang tengah: makin tinggi tier, makin panjang huruf tengah yang ditampilkan (makin spesifik/sulit)
+                const minMid = (playerTier !== null && playerTier >= 3) ? 2 : 1;
+                const maxMid = Math.min(wLen - 2, 3);
+                if (maxMid < minMid) continue;
+
+                const midLen = Math.floor(Math.random() * (maxMid - minMid + 1)) + minMid;
                 const maxStart = wLen - midLen - 1;
                 if (maxStart < 1) continue;
+                
                 const startIdx = Math.floor(Math.random() * maxStart) + 1;
                 const mid = w.slice(startIdx, startIdx + midLen);
                 patternStr = `...${mid}...`;
@@ -322,6 +336,18 @@ function generatePattern(baseWord, dict, currentUsed, lastType = null) {
                 const midChar = w[midIdx];
                 patternStr = `${first}...${midChar}...${last}`;
                 isValidMatch = (word) => testPattern(patternStr, word);
+            }
+            else if (type === "PREFIX" && wLen >= 4) {
+                const preLen = Math.max(1, randLen(1, Math.min(3, Math.floor(wLen / 2))));
+                const prefix = w.slice(0, preLen);
+                patternStr = `${prefix}...`;
+                isValidMatch = (word) => word.startsWith(prefix) && word.length > preLen;
+            }
+            else if (type === "SUFFIX" && wLen >= 4) {
+                const sufLen = Math.max(1, randLen(1, Math.min(3, Math.floor(wLen / 2))));
+                const suffix = w.slice(-sufLen);
+                patternStr = `...${suffix}`;
+                isValidMatch = (word) => word.endsWith(suffix) && word.length > sufLen;
             }
 
             if (!patternStr || !isValidMatch) continue;
