@@ -1680,7 +1680,17 @@ export default function App() {
             let pts = isScoreMode() ? ` (+${pointsAwarded})` : "";
 
             if (gameModeRef.current === "FILL_BLANK") {
-                const nextPlayerObj = modifiedPlayers[nextIdx];
+                let nextTargetIdx = playerIndex;
+                let stepsTaken = 0;
+                let attempts = 0;
+                const len = modifiedPlayers.length;
+                const direction = isReversedRef.current ? -1 : 1;
+                while (stepsTaken < stepsToAdvance && attempts < len * 2) {
+                    nextTargetIdx = (nextTargetIdx + direction + len) % len;
+                    if (!modifiedPlayers[nextTargetIdx].isEliminated) stepsTaken++;
+                    attempts++;
+                }
+                const nextPlayerObj = modifiedPlayers[nextTargetIdx];
                 const nextPlayerTierObj = nextPlayerObj.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (nextPlayerObj.botDifficulty || 3) - 1))] : getPlayerTier(nextPlayerObj.stats);
                 const pat = generatePattern(word, dictionary, usedWordsRef.current, lastPatternTypeRef.current, nextPlayerTierObj.level);
                 nextWord = pat.display;
