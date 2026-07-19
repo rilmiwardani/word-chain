@@ -6,7 +6,7 @@ import {
     MoveUpRight, Plus, RefreshCw, Repeat2, Send, Settings,
     Star, Target, TrendingUp as TrendingUpIcon, Trophy, Unlink,
     User, Users, Volume2, VolumeX, X, Sparkles, MessageSquare, MessageSquareOff,
-    Pause, Play, Music
+    Pause, Play, Music, Camera, CameraOff
 } from "lucide-react";
 
 import { TRANSLATIONS, TIER_LEVELS, getPlayerTier, FALLBACK_DICTIONARY_EN, FALLBACK_PHRASES_ID, FALLBACK_PHRASES_EN, FALLBACK_DICTIONARY_ID_DATA, FALLBACK_CITIES, DYNAMIC_CHALLENGES, BOT_PROFILES, getRandomColor, getAvatarUrl, normalizeWord, generatePattern, getEnglishSyllableSuffix, StatsManager, SoundManager } from "./utils/constants";
@@ -14,6 +14,7 @@ import { TRANSLATIONS, TIER_LEVELS, getPlayerTier, FALLBACK_DICTIONARY_EN, FALLB
 import { PlayerTimer, GlobalTimer } from "./components/Timers";
 import { getIndonesianOverlapSuffix, getSuffixOrRule, getRecoverySuffix, getRuleDisplay, getDisplayParts, validateConnection } from "./utils/gameLogic";
 import MusicPlayer from "./components/MusicPlayer";
+import CameraOverlay from "./components/CameraOverlay";
 
 const TABLE_THEMES = {
     midnight: "border-slate-800 bg-slate-900 shadow-2xl shadow-black/20",
@@ -53,6 +54,7 @@ export default function App() {
     const [pointMode, setPointMode] = useState("OFF"); // OFF, LENGTH, SCRABBLE, VOWELS
     const [musicState, setMusicState] = useState(null);
     const [musicOverlayStyle, setMusicOverlayStyle] = useState("thumbnail");
+    const [isCamEnabled, setIsCamEnabled] = useState(() => localStorage.getItem("is_cam_enabled") === "true");
 
     const [isReversed, setIsReversed] = useState(false);
     const [overlapLength, setOverlapLength] = useState(1);
@@ -121,6 +123,10 @@ export default function App() {
     useEffect(() => {
         localStorage.setItem("sk_bgColorMode", bgColorMode);
     }, [bgColorMode]);
+
+    useEffect(() => {
+        localStorage.setItem("is_cam_enabled", isCamEnabled);
+    }, [isCamEnabled]);
 
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
@@ -3014,6 +3020,13 @@ export default function App() {
                                             <div className="flex items-center gap-2"><Play className="w-3.5 h-3.5 text-fuchsia-400" /><span className="text-slate-300">Request Musik</span></div>
                                             <span className={(musicState?.requestsEnabled ?? true) ? "text-emerald-400" : "text-red-400"}>{(musicState?.requestsEnabled ?? true) ? "ON" : "OFF"}</span>
                                         </button>
+                                        <button onClick={() => setIsCamEnabled(!isCamEnabled)} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2">
+                                                <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                                                <span className="text-slate-300">Kamera Overlay</span>
+                                            </div>
+                                            <span className={isCamEnabled ? "text-emerald-400" : "text-red-400"}>{isCamEnabled ? "ON" : "OFF"}</span>
+                                        </button>
                                         <div className="px-3 py-2 text-xs font-bold flex flex-col gap-1.5">
                                             <div className="flex items-center gap-2"><Gamepad2 className="w-3.5 h-3.5 text-purple-400" /><span className="text-slate-300">Minigame Overlay</span></div>
                                             <div className="flex flex-wrap gap-1">
@@ -4592,6 +4605,9 @@ export default function App() {
             
             {/* --- MUSIC PLAYER OVERLAY --- */}
             <MusicPlayer musicState={musicState} wsRef={backendWsRef} isKeyboardOpen={showVirtualKeyboard} overlayStyle={musicOverlayStyle} />
+
+            {/* --- CAMERA OVERLAY --- */}
+            <CameraOverlay isEnabled={isCamEnabled} setIsEnabled={setIsCamEnabled} />
 
         </div>
     );
