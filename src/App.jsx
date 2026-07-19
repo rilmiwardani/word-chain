@@ -1234,6 +1234,28 @@ export default function App() {
             if (gameModeRef.current === "RHYME") {
                 setTimeout(changeRhymeTarget, 800);
             }
+            if (gameModeRef.current === "FILL_BLANK") {
+                // Cari pemain berikutnya untuk sesuaikan kesulitan pola berdasarkan tier
+                let nextTargetIdx = startIndex;
+                let stFound = 0;
+                let att = 0;
+                const dirRound = isReversedRef.current ? -1 : 1;
+                while (stFound < steps && att < len * 2) {
+                    nextTargetIdx = (nextTargetIdx + dirRound + len) % len;
+                    if (!currentPlayersList[nextTargetIdx].isEliminated) stFound++;
+                    att++;
+                }
+                const nextPlayerObj = currentPlayersList[nextTargetIdx];
+                const nextPlayerTierObj = nextPlayerObj.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (nextPlayerObj.botDifficulty || 3) - 1))] : getPlayerTier(nextPlayerObj.stats);
+
+                const baseW = getNewRandomWord();
+                const pat = generatePattern(baseW, dictionary, usedWordsRef.current, lastPatternTypeRef.current, nextPlayerTierObj.level);
+                setCurrentWord(pat.display);
+                currentWordRef.current = pat.display;
+                lastPatternTypeRef.current = pat.type;
+                addLog("System", `🔄 Pola Baru: ${pat.display.toUpperCase()}`);
+                playSound("tick");
+            }
             if (gameModeRef.current === "INFIKS") {
                 const newFragment = generateInfixFragment();
                 setCurrentWord(newFragment);
@@ -2985,8 +3007,8 @@ export default function App() {
                                             </div>
                                         </div>
                                         <button onClick={() => {
-                                            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                                                wsRef.current.send(JSON.stringify({ event: "toggle_music_requests", data: { enabled: !(musicState?.requestsEnabled ?? true) } }));
+                                            if (backendWsRef.current && backendWsRef.current.readyState === WebSocket.OPEN) {
+                                                backendWsRef.current.send(JSON.stringify({ event: "toggle_music_requests", data: { enabled: !(musicState?.requestsEnabled ?? true) } }));
                                             }
                                         }} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
                                             <div className="flex items-center gap-2"><Play className="w-3.5 h-3.5 text-fuchsia-400" /><span className="text-slate-300">Request Musik</span></div>
