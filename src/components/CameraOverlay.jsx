@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Camera, CameraOff, Settings, Minimize2, Move, RotateCcw, ShieldAlert, Sliders, ToggleLeft, ToggleRight, AlertCircle, RefreshCw } from 'lucide-react';
+import { Camera, CameraOff, Settings, Minimize2, Move, RotateCcw, ShieldAlert, Sliders, ToggleLeft, ToggleRight, AlertCircle, RefreshCw, Video, Palette, Sparkles, X } from 'lucide-react';
 
 const CameraOverlay = ({ isEnabled, setIsEnabled }) => {
     const [stream, setStream] = useState(null);
@@ -20,6 +20,7 @@ const CameraOverlay = ({ isEnabled, setIsEnabled }) => {
     const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('cam_opacity')) || 100);
     const [filterMode, setFilterMode] = useState(() => localStorage.getItem('cam_filter') || 'none');
     const [showConfig, setShowConfig] = useState(false);
+    const [activeTab, setActiveTab] = useState('camera'); // 'camera', 'layout', 'style'
     
     // Positioning
     const [pos, setPos] = useState(() => {
@@ -343,242 +344,281 @@ const CameraOverlay = ({ isEnabled, setIsEnabled }) => {
 
             {/* Drag config panel */}
             {showConfig && (
-                <div className="absolute top-0 left-full ml-3 bg-slate-950/95 backdrop-blur-md border border-slate-800 p-4 rounded-2xl shadow-2xl text-slate-200 w-72 z-[360] no-drag font-sans select-none animate-in slide-in-from-left-4 duration-200">
-                    <div className="flex justify-between items-center mb-3.5 pb-2 border-b border-slate-800">
-                        <div className="flex items-center gap-2">
-                            <Sliders className="w-4 h-4 text-sky-400" />
-                            <h3 className="text-sm font-black tracking-wide text-white uppercase">Set Kamera Overlay</h3>
-                        </div>
+                <div className="absolute top-0 left-full ml-3 bg-slate-950/90 backdrop-blur-xl border border-slate-800/60 p-3.5 rounded-2xl shadow-2xl text-slate-200 w-64 z-[360] no-drag font-sans select-none animate-in slide-in-from-left-4 duration-200 flex flex-col gap-3">
+                    {/* Header */}
+                    <div className="flex justify-between items-center pb-1">
+                        <span className="text-[10px] font-black tracking-wider text-slate-400 uppercase">Camera Overlay Settings</span>
                         <button 
                             onClick={() => setShowConfig(false)}
-                            className="text-slate-400 hover:text-white bg-slate-900 p-1 rounded-full transition-colors"
+                            className="text-slate-400 hover:text-white bg-slate-900/80 hover:bg-slate-800 p-1 rounded-lg transition-all"
                         >
-                            <Minimize2 className="w-4 h-4" />
+                            <Minimize2 className="w-3.5 h-3.5" />
                         </button>
                     </div>
 
-                    <div className="space-y-3.5 overflow-y-auto max-h-[380px] pr-1.5 scrollbar-thin">
-                        
-                        {/* Simulation / Mock Toggle */}
-                        <div className="bg-slate-900/50 border border-slate-800 p-2.5 rounded-xl flex items-center justify-between">
-                            <div className="flex flex-col gap-0.5">
-                                <span className="text-[10px] font-bold text-slate-200 uppercase tracking-wide">Mode Simulasi</span>
-                                <span className="text-[8px] text-slate-400">Gunakan feed buatan untuk tes</span>
-                            </div>
-                            <button
-                                onClick={() => setUseSimulation(!useSimulation)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${useSimulation ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
-                            >
-                                {useSimulation ? 'ON' : 'OFF'}
-                            </button>
-                        </div>
+                    {/* Tab Navigation */}
+                    <div className="flex bg-slate-900/85 p-0.5 rounded-lg border border-slate-800/80">
+                        <button
+                            onClick={() => setActiveTab('camera')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all ${activeTab === 'camera' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                            <Video className="w-3.5 h-3.5" />
+                            Kamera
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('layout')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all ${activeTab === 'layout' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                            <Sliders className="w-3.5 h-3.5" />
+                            Bingkai
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('style')}
+                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all ${activeTab === 'style' ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                            <Palette className="w-3.5 h-3.5" />
+                            Efek
+                        </button>
+                    </div>
 
-                        {/* Device Selector */}
-                        {!useSimulation && (
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Pilih Perangkat</label>
-                                {devices.length === 0 ? (
-                                    <div className="text-[10px] text-amber-500 flex items-center gap-1.5 p-2 bg-amber-950/20 rounded-lg border border-amber-900/40">
-                                        <ShieldAlert className="w-4 h-4 shrink-0" />
-                                        <span>Kamera tidak terdeteksi</span>
+                    {/* Tab Content */}
+                    <div className="space-y-3">
+                        {activeTab === 'camera' && (
+                            <div className="space-y-3 animate-in fade-in duration-200">
+                                {/* Simulation / Mock Toggle */}
+                                <div className="bg-slate-900/40 border border-slate-800/60 p-2 rounded-xl flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-bold text-slate-250 uppercase">Mode Simulasi</span>
+                                        <span className="text-[8px] text-slate-400">Gunakan feed buatan</span>
                                     </div>
-                                ) : (
-                                    <div className="flex gap-1.5">
-                                        <select 
-                                            value={selectedDevice} 
-                                            onChange={(e) => {
-                                                setSelectedDevice(e.target.value);
-                                                localStorage.setItem('cam_device', e.target.value);
-                                            }}
-                                            className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 w-full font-medium"
-                                        >
-                                            {devices.map(dev => (
-                                                <option key={dev.deviceId} value={dev.deviceId}>
-                                                    {dev.label || `Camera ${dev.deviceId.slice(0,5)}...`}
-                                                </option>
+                                    <button
+                                        onClick={() => setUseSimulation(!useSimulation)}
+                                        className={`px-2 py-1 rounded-md text-[9px] font-black transition-all ${useSimulation ? 'bg-sky-600 text-white shadow-sm' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                    >
+                                        {useSimulation ? 'ON' : 'OFF'}
+                                    </button>
+                                </div>
+
+                                {/* Device Selector */}
+                                {!useSimulation && (
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[9px] text-slate-400 font-bold uppercase">Pilih Perangkat</label>
+                                        {devices.length === 0 ? (
+                                            <div className="text-[9px] text-amber-500 flex items-center gap-1.5 p-2 bg-amber-950/20 rounded-lg border border-amber-900/40">
+                                                <ShieldAlert className="w-3.5 h-3.5 shrink-0 animate-pulse" />
+                                                <span>Kamera tidak terdeteksi</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-1.5">
+                                                <select 
+                                                    value={selectedDevice} 
+                                                    onChange={(e) => {
+                                                        setSelectedDevice(e.target.value);
+                                                        localStorage.setItem('cam_device', e.target.value);
+                                                    }}
+                                                    className="bg-slate-900/80 border border-slate-800 rounded-md px-2 py-1 text-[11px] outline-none focus:border-sky-500 w-full font-medium"
+                                                >
+                                                    {devices.map(dev => (
+                                                        <option key={dev.deviceId} value={dev.deviceId}>
+                                                            {dev.label || `Camera ${dev.deviceId.slice(0,5)}...`}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <button 
+                                                    onClick={startStream}
+                                                    className="bg-slate-900/80 hover:bg-slate-800 p-1.5 rounded-md border border-slate-800 text-slate-300 hover:text-white transition-colors"
+                                                    title="Refresh Kamera"
+                                                >
+                                                    <RefreshCw className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Mirror Mode */}
+                                <div className="bg-slate-900/40 border border-slate-800/60 p-2 rounded-xl flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-bold text-slate-250 uppercase">Mirror Video</span>
+                                        <span className="text-[8px] text-slate-400">Balik arah horizontal</span>
+                                    </div>
+                                    <button
+                                        onClick={() => setMirror(!mirror)}
+                                        className={`px-2 py-1 rounded-md text-[9px] font-black transition-all ${mirror ? 'bg-sky-600 text-white shadow-sm' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                    >
+                                        {mirror ? 'ON' : 'OFF'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'layout' && (
+                            <div className="space-y-3 animate-in fade-in duration-200">
+                                {/* Shape select */}
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[9px] text-slate-400 font-bold uppercase">Bentuk Bingkai</label>
+                                    <div className="grid grid-cols-3 gap-1">
+                                        {['rounded', 'circle', 'square', 'hexagon', 'pill'].map(s => (
+                                            <button
+                                                key={s}
+                                                onClick={() => setShape(s)}
+                                                className={`py-1 rounded text-[9px] font-bold uppercase transition-all ${shape === s ? 'bg-sky-600 text-white shadow-sm' : 'bg-slate-900/60 text-slate-450 hover:bg-slate-800'}`}
+                                            >
+                                                {s}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Size slider */}
+                                <div className="flex flex-col gap-0.5">
+                                    <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase">
+                                        <span>Lebar Bingkai</span>
+                                        <span className="font-mono text-sky-400">{size}px</span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min="120" 
+                                        max="450" 
+                                        value={size} 
+                                        onChange={(e) => setSize(Number(e.target.value))}
+                                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" 
+                                    />
+                                </div>
+
+                                {/* Aspect ratio */}
+                                {shape !== 'circle' && shape !== 'hexagon' && (
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[9px] text-slate-400 font-bold uppercase">Rasio Aspek</label>
+                                        <div className="flex gap-1 bg-slate-900/60 p-0.5 rounded-lg border border-slate-800">
+                                            {['1:1', '4:3', '16:9'].map(r => (
+                                                <button
+                                                    key={r}
+                                                    onClick={() => setAspectRatio(r)}
+                                                    className={`flex-1 py-1 rounded text-[9px] font-bold transition-all ${aspectRatio === r ? 'bg-sky-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                                                >
+                                                    {r}
+                                                </button>
                                             ))}
-                                        </select>
-                                        <button 
-                                            onClick={startStream}
-                                            className="bg-slate-900 hover:bg-slate-800 p-2 rounded-lg border border-slate-800 text-slate-300 hover:text-white transition-colors"
-                                            title="Refresh Kamera"
-                                        >
-                                            <RefreshCw className="w-3.5 h-3.5" />
-                                        </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        {/* Shape select */}
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Bentuk Bingkai</label>
-                            <div className="grid grid-cols-3 gap-1">
-                                {['rounded', 'circle', 'square', 'hexagon', 'pill'].map(s => (
-                                    <button
-                                        key={s}
-                                        onClick={() => setShape(s)}
-                                        className={`py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase transition-all ${shape === s ? 'bg-sky-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-850'}`}
-                                    >
-                                        {s}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Size slider */}
-                        <div className="flex flex-col gap-1">
-                            <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                                <span>Lebar Bingkai</span>
-                                <span className="font-mono text-sky-400">{size}px</span>
-                            </div>
-                            <input 
-                                type="range" 
-                                min="120" 
-                                max="450" 
-                                value={size} 
-                                onChange={(e) => setSize(Number(e.target.value))}
-                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" 
-                            />
-                        </div>
-
-                        {/* Aspect ratio */}
-                        {shape !== 'circle' && shape !== 'hexagon' && (
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Rasio Aspek</label>
-                                <div className="flex gap-1.5 bg-slate-900 p-0.5 rounded-lg border border-slate-850">
-                                    {['1:1', '4:3', '16:9'].map(r => (
-                                        <button
-                                            key={r}
-                                            onClick={() => setAspectRatio(r)}
-                                            className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${aspectRatio === r ? 'bg-sky-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                                        >
-                                            {r}
-                                        </button>
-                                    ))}
+                        {activeTab === 'style' && (
+                            <div className="space-y-3 animate-in fade-in duration-200">
+                                {/* Border settings & Color */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[9px] text-slate-400 font-bold uppercase">Warna Neon</label>
+                                        <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-800/80 p-0.5 rounded-md">
+                                            <input 
+                                                type="color" 
+                                                value={glowColor}
+                                                onChange={(e) => setGlowColor(e.target.value)}
+                                                className="w-6 h-6 border-0 bg-transparent cursor-pointer rounded overflow-hidden shrink-0" 
+                                            />
+                                            <span className="text-[8px] font-mono uppercase font-bold text-slate-350">{glowColor}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[9px] text-slate-400 font-bold uppercase">Tebal Garis</label>
+                                        <input 
+                                            type="number" 
+                                            min="0" 
+                                            max="8" 
+                                            value={borderWidth} 
+                                            onChange={(e) => setBorderWidth(Number(e.target.value))}
+                                            className="bg-slate-900/80 border border-slate-800 rounded-md px-1 py-0.5 text-[11px] text-center font-mono outline-none focus:border-sky-500 font-bold" 
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-                        )}
 
-                        {/* Border settings */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Neon Bingkai</label>
-                                <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-800 p-1 rounded-lg">
+                                {/* Glow intensity slider */}
+                                <div className="flex flex-col gap-0.5">
+                                    <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase">
+                                        <span>Intensitas Neon</span>
+                                        <span className="font-mono text-sky-400">{glowIntensity}px</span>
+                                    </div>
                                     <input 
-                                        type="color" 
-                                        value={glowColor}
-                                        onChange={(e) => setGlowColor(e.target.value)}
-                                        className="w-7 h-7 border-0 bg-transparent cursor-pointer rounded-lg overflow-hidden shrink-0" 
+                                        type="range" 
+                                        min="0" 
+                                        max="30" 
+                                        value={glowIntensity} 
+                                        onChange={(e) => setGlowIntensity(Number(e.target.value))}
+                                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" 
                                     />
-                                    <span className="text-[9px] font-mono tracking-tighter uppercase font-bold text-slate-300">{glowColor}</span>
                                 </div>
-                            </div>
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Tebal Garis</label>
-                                <input 
-                                    type="number" 
-                                    min="0" 
-                                    max="8" 
-                                    value={borderWidth} 
-                                    onChange={(e) => setBorderWidth(Number(e.target.value))}
-                                    className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-center font-mono outline-none focus:border-sky-500 font-bold" 
-                                />
-                            </div>
-                        </div>
 
-                        {/* Glow intensity slider */}
-                        <div className="flex flex-col gap-1">
-                            <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                                <span>Intensitas Neon</span>
-                                <span className="font-mono text-sky-400">{glowIntensity}px</span>
-                            </div>
-                            <input 
-                                type="range" 
-                                min="0" 
-                                max="30" 
-                                value={glowIntensity} 
-                                onChange={(e) => setGlowIntensity(Number(e.target.value))}
-                                className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" 
-                            />
-                        </div>
-
-                        {/* Mirror and Transparency */}
-                        <div className="grid grid-cols-2 gap-3 pt-1">
-                            <button
-                                onClick={() => setMirror(!mirror)}
-                                className={`py-1.5 px-2.5 rounded-xl text-xs font-bold transition-all border flex items-center justify-between ${mirror ? 'bg-sky-955 border-sky-600 text-sky-300' : 'bg-slate-900 border-slate-800 text-slate-450 hover:bg-slate-850'}`}
-                            >
-                                <span>Mirror</span>
-                                <div className={`w-3.5 h-3.5 rounded-full border transition-all ${mirror ? 'bg-sky-500 border-sky-400' : 'bg-slate-850 border-slate-700'}`}></div>
-                            </button>
-
-                            <div className="flex flex-col justify-center gap-0.5">
-                                <div className="flex justify-between items-center text-[8px] text-slate-400 font-bold uppercase">
-                                    <span>Opasitas</span>
-                                    <span className="font-mono text-sky-400">{opacity}%</span>
+                                {/* Transparency Opacity */}
+                                <div className="flex flex-col gap-0.5">
+                                    <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase">
+                                        <span>Opasitas</span>
+                                        <span className="font-mono text-sky-400">{opacity}%</span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min="20" 
+                                        max="100" 
+                                        step="5"
+                                        value={opacity} 
+                                        onChange={(e) => setOpacity(Number(e.target.value))}
+                                        className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" 
+                                    />
                                 </div>
-                                <input 
-                                    type="range" 
-                                    min="20" 
-                                    max="100" 
-                                    step="5"
-                                    value={opacity} 
-                                    onChange={(e) => setOpacity(Number(e.target.value))}
-                                    className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-500" 
-                                />
-                            </div>
-                        </div>
 
-                        {/* Color Filters */}
-                        {!useSimulation && (
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Efek / Filter</label>
-                                <div className="grid grid-cols-3 gap-1">
-                                    {['none', 'grayscale', 'sepia', 'invert', 'contrast', 'dream'].map(f => (
-                                        <button
-                                            key={f}
-                                            onClick={() => setFilterMode(f)}
-                                            className={`py-1 rounded text-[9px] font-bold uppercase transition-all ${filterMode === f ? 'bg-sky-600 text-white' : 'bg-slate-900 text-slate-400 hover:bg-slate-850'}`}
-                                        >
-                                            {f}
-                                        </button>
-                                    ))}
-                                </div>
+                                {/* Color Filters */}
+                                {!useSimulation && (
+                                    <div className="flex flex-col gap-1">
+                                        <label className="text-[9px] text-slate-400 font-bold uppercase">Efek / Filter</label>
+                                        <div className="grid grid-cols-3 gap-1">
+                                            {['none', 'grayscale', 'sepia', 'invert', 'contrast', 'dream'].map(f => (
+                                                <button
+                                                    key={f}
+                                                    onClick={() => setFilterMode(f)}
+                                                    className={`py-1 rounded text-[8px] font-bold uppercase transition-all ${filterMode === f ? 'bg-sky-600 text-white shadow-sm' : 'bg-slate-900/60 text-slate-400 hover:bg-slate-850'}`}
+                                                >
+                                                    {f}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
+                    </div>
 
-                        {/* Reset and Turn off buttons */}
-                        <div className="flex gap-2 pt-2 border-t border-slate-800/80">
-                            <button
-                                onClick={() => {
-                                    setPos({ x: 30, y: 150 });
-                                    setShape('rounded');
-                                    setSize(200);
-                                    setAspectRatio('1:1');
-                                    setMirror(false);
-                                    setGlowColor('#06b6d4');
-                                    setGlowIntensity(15);
-                                    setBorderWidth(3);
-                                    setOpacity(100);
-                                    setFilterMode('none');
-                                    setUseSimulation(false);
-                                    localStorage.removeItem('cam_pos');
-                                }}
-                                className="flex-1 bg-slate-900 hover:bg-slate-800 py-2 rounded-xl text-[10px] font-black text-slate-400 hover:text-white transition-colors flex items-center justify-center gap-1 border border-slate-800 uppercase"
-                            >
-                                <RotateCcw className="w-3 h-3" /> Reset
-                            </button>
-                            <button
-                                onClick={() => {
-                                    setIsEnabled(false);
-                                    setShowConfig(false);
-                                }}
-                                className="flex-1 bg-red-950/20 hover:bg-red-950/40 py-2 rounded-xl text-[10px] font-black text-red-400 hover:text-red-300 transition-colors flex items-center justify-center gap-1 border border-red-950/40 uppercase"
-                            >
-                                <CameraOff className="w-3.5 h-3.5" /> Off
-                            </button>
-                        </div>
+                    {/* Footer Actions */}
+                    <div className="flex gap-2 pt-2 border-t border-slate-800/80">
+                        <button
+                            onClick={() => {
+                                setPos({ x: 30, y: 150 });
+                                setShape('rounded');
+                                setSize(200);
+                                setAspectRatio('1:1');
+                                setMirror(false);
+                                setGlowColor('#06b6d4');
+                                setGlowIntensity(15);
+                                setBorderWidth(3);
+                                setOpacity(100);
+                                setFilterMode('none');
+                                setUseSimulation(false);
+                                localStorage.removeItem('cam_pos');
+                            }}
+                            className="flex-1 bg-slate-900/80 hover:bg-slate-800 py-1.5 rounded-lg text-[9px] font-bold text-slate-400 hover:text-white transition-all flex items-center justify-center gap-1 border border-slate-800/60 uppercase"
+                        >
+                            <RotateCcw className="w-2.5 h-2.5" /> Reset
+                        </button>
+                        <button
+                            onClick={() => {
+                                setIsEnabled(false);
+                                setShowConfig(false);
+                            }}
+                            className="flex-1 bg-red-950/20 hover:bg-red-950/40 py-1.5 rounded-lg text-[9px] font-bold text-red-400 hover:text-red-350 transition-all flex items-center justify-center gap-1 border border-red-950/40 uppercase"
+                        >
+                            <CameraOff className="w-2.5 h-2.5" /> Matikan
+                        </button>
                     </div>
                 </div>
             )}
