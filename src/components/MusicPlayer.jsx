@@ -158,9 +158,14 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen, overlayStyle = 'thumbn
             dragRef.current.initialX = pos.x;
             dragRef.current.initialY = pos.y;
         }
+
+        if (overlayRef.current) {
+            overlayRef.current.style.transition = 'none';
+        }
     };
 
     useEffect(() => {
+        let rafId = null;
         const handleMouseMove = (e) => {
             if (!dragRef.current.isDragging) return;
             const clientX = e.clientX || (e.touches && e.touches[0].clientX);
@@ -168,14 +173,33 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen, overlayStyle = 'thumbn
             
             const dx = clientX - dragRef.current.startX;
             const dy = clientY - dragRef.current.startY;
-            setPos({
-                x: dragRef.current.initialX + dx,
-                y: dragRef.current.initialY + dy
-            });
+            const newX = dragRef.current.initialX + dx;
+            const newY = dragRef.current.initialY + dy;
+
+            dragRef.current.lastX = newX;
+            dragRef.current.lastY = newY;
+
+            if (overlayRef.current) {
+                if (rafId) cancelAnimationFrame(rafId);
+                rafId = requestAnimationFrame(() => {
+                    if (overlayRef.current) {
+                        overlayRef.current.style.left = `${newX}px`;
+                        overlayRef.current.style.top = `${newY}px`;
+                    }
+                });
+            }
         };
 
         const handleMouseUp = () => {
-            dragRef.current.isDragging = false;
+            if (dragRef.current.isDragging) {
+                dragRef.current.isDragging = false;
+                if (overlayRef.current) {
+                    overlayRef.current.style.transition = '';
+                }
+                if (dragRef.current.lastX !== undefined && dragRef.current.lastY !== undefined) {
+                    setPos({ x: dragRef.current.lastX, y: dragRef.current.lastY });
+                }
+            }
         };
 
         window.addEventListener('mousemove', handleMouseMove);
@@ -187,6 +211,7 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen, overlayStyle = 'thumbn
             window.removeEventListener('touchmove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
             window.removeEventListener('touchend', handleMouseUp);
+            if (rafId) cancelAnimationFrame(rafId);
         };
     }, []);
 

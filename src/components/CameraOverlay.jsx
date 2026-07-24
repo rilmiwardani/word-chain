@@ -148,6 +148,7 @@ const CameraOverlay = ({ isEnabled, setIsEnabled }) => {
     };
 
     useEffect(() => {
+        let rafId = null;
         const handleMouseMove = (e) => {
             if (!dragRef.current.isDragging) return;
             const clientX = e.clientX || (e.touches && e.touches[0].clientX);
@@ -156,16 +157,31 @@ const CameraOverlay = ({ isEnabled, setIsEnabled }) => {
             const dx = clientX - dragRef.current.startX;
             const dy = clientY - dragRef.current.startY;
             
-            const newPos = {
-                x: dragRef.current.initialX + dx,
-                y: dragRef.current.initialY + dy
-            };
-            setPos(newPos);
-            localStorage.setItem('cam_pos', JSON.stringify(newPos));
+            const newX = dragRef.current.initialX + dx;
+            const newY = dragRef.current.initialY + dy;
+            dragRef.current.lastX = newX;
+            dragRef.current.lastY = newY;
+
+            if (containerRef.current) {
+                if (rafId) cancelAnimationFrame(rafId);
+                rafId = requestAnimationFrame(() => {
+                    if (containerRef.current) {
+                        containerRef.current.style.left = `${newX}px`;
+                        containerRef.current.style.top = `${newY}px`;
+                    }
+                });
+            }
         };
 
         const handleMouseUp = () => {
-            dragRef.current.isDragging = false;
+            if (dragRef.current.isDragging) {
+                dragRef.current.isDragging = false;
+                if (dragRef.current.lastX !== undefined) {
+                    const newPos = { x: dragRef.current.lastX, y: dragRef.current.lastY };
+                    setPos(newPos);
+                    localStorage.setItem('cam_pos', JSON.stringify(newPos));
+                }
+            }
         };
 
         window.addEventListener('mousemove', handleMouseMove);
@@ -177,8 +193,9 @@ const CameraOverlay = ({ isEnabled, setIsEnabled }) => {
             window.removeEventListener('touchmove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
             window.removeEventListener('touchend', handleMouseUp);
+            if (rafId) cancelAnimationFrame(rafId);
         };
-    }, [pos]);
+    }, []);
 
     if (!isEnabled) return null;
 

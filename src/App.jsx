@@ -297,6 +297,9 @@ export default function App() {
         mainTableDragRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY);
         mainTableDragRef.current.initialX = mainTableOffset.x;
         mainTableDragRef.current.initialY = mainTableOffset.y;
+        if (mainTableRef.current) {
+            mainTableRef.current.style.transition = 'none';
+        }
     };
 
     const handleMiniGameDragStart = (e) => {
@@ -304,7 +307,8 @@ export default function App() {
         miniGameDragRef.current.startX = e.clientX || (e.touches && e.touches[0].clientX);
         miniGameDragRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY);
 
-        const rect = e.currentTarget.parentElement.getBoundingClientRect();
+        const targetEl = miniGameOverlayRef.current || e.currentTarget.parentElement;
+        const rect = targetEl.getBoundingClientRect();
         miniGameDragRef.current.initialX = rect.left;
         miniGameDragRef.current.initialY = rect.top;
 
@@ -312,8 +316,9 @@ export default function App() {
             setMiniGamePos({ x: rect.left, y: rect.top });
         }
 
-        // Apply fixed positioning directly to DOM for instant response
+        // Apply fixed positioning directly to DOM for instant response & disable transition lag
         if (miniGameOverlayRef.current) {
+            miniGameOverlayRef.current.style.transition = 'none';
             miniGameOverlayRef.current.style.position = 'fixed';
             miniGameOverlayRef.current.style.bottom = 'auto';
             miniGameOverlayRef.current.style.right = 'auto';
@@ -328,6 +333,9 @@ export default function App() {
     };
 
     useEffect(() => {
+        let miniGameRafId = null;
+        let mainTableRafId = null;
+
         const handleMouseMove = (e) => {
             if (miniGameDragRef.current.isDragging) {
                 if (e.cancelable && e.type === 'touchmove') e.preventDefault();
@@ -340,12 +348,18 @@ export default function App() {
                     let newY = miniGameDragRef.current.initialY + dy;
                     newX = Math.max(0, Math.min(window.innerWidth - 100, newX));
                     newY = Math.max(0, Math.min(window.innerHeight - 50, newY));
-                    if (miniGameOverlayRef.current) {
-                        miniGameOverlayRef.current.style.left = newX + 'px';
-                        miniGameOverlayRef.current.style.top = newY + 'px';
-                    }
                     miniGameDragRef.current.lastX = newX;
                     miniGameDragRef.current.lastY = newY;
+
+                    if (miniGameOverlayRef.current) {
+                        if (miniGameRafId) cancelAnimationFrame(miniGameRafId);
+                        miniGameRafId = requestAnimationFrame(() => {
+                            if (miniGameOverlayRef.current) {
+                                miniGameOverlayRef.current.style.left = newX + 'px';
+                                miniGameOverlayRef.current.style.top = newY + 'px';
+                            }
+                        });
+                    }
                 }
             }
 
@@ -358,12 +372,18 @@ export default function App() {
                     const dy = clientY - mainTableDragRef.current.startY;
                     const newX = mainTableDragRef.current.initialX + dx;
                     const newY = mainTableDragRef.current.initialY + dy;
-                    if (mainTableRef.current) {
-                        mainTableRef.current.style.left = `${newX}px`;
-                        mainTableRef.current.style.top = `${newY}px`;
-                    }
                     mainTableDragRef.current.lastX = newX;
                     mainTableDragRef.current.lastY = newY;
+
+                    if (mainTableRef.current) {
+                        if (mainTableRafId) cancelAnimationFrame(mainTableRafId);
+                        mainTableRafId = requestAnimationFrame(() => {
+                            if (mainTableRef.current) {
+                                mainTableRef.current.style.left = `${newX}px`;
+                                mainTableRef.current.style.top = `${newY}px`;
+                            }
+                        });
+                    }
                 }
             }
         };
@@ -371,12 +391,18 @@ export default function App() {
         const handleMouseUp = () => {
             if (miniGameDragRef.current.isDragging) {
                 miniGameDragRef.current.isDragging = false;
+                if (miniGameOverlayRef.current) {
+                    miniGameOverlayRef.current.style.transition = '';
+                }
                 if (miniGameDragRef.current.lastX !== undefined) {
                     setMiniGamePos({ x: miniGameDragRef.current.lastX, y: miniGameDragRef.current.lastY });
                 }
             }
             if (mainTableDragRef.current.isDragging) {
                 mainTableDragRef.current.isDragging = false;
+                if (mainTableRef.current) {
+                    mainTableRef.current.style.transition = '';
+                }
                 if (mainTableDragRef.current.lastX !== undefined) {
                     setMainTableOffset({ x: mainTableDragRef.current.lastX, y: mainTableDragRef.current.lastY });
                 }
@@ -393,6 +419,8 @@ export default function App() {
             document.removeEventListener('mouseup', handleMouseUp);
             document.removeEventListener('touchmove', handleMouseMove);
             document.removeEventListener('touchend', handleMouseUp);
+            if (miniGameRafId) cancelAnimationFrame(miniGameRafId);
+            if (mainTableRafId) cancelAnimationFrame(mainTableRafId);
         };
     }, []);
 
@@ -468,11 +496,129 @@ export default function App() {
         setAnagramFlipPhase(null);
     };
 
+    const computeWordleColors = (guessStr, targetStr) => {
+        if (!guessStr || !targetStr) return [];
+        const guess = guessStr.toUpperCase().split("");
+        const target = targetStr.toUpperCase().split("");
+        const len = target.length;
+        const colors = Array(len).fill("gray");
+        const targetMatched = Array(len).fill(false);
+        const guessMatched = Array(len).fill(false);
+
+        // 1. Green pass (exact position match)
+        for (let i = 0; i < len; i++) {
+            if (guess[i] === target[i]) {
+                colors[i] = "green";
+                targetMatched[i] = true;
+                guessMatched[i] = true;
+            }
+        }
+
+        // 2. Yellow pass (letter exists in target elsewhere)
+        for (let i = 0; i < len; i++) {
+            if (guessMatched[i]) continue;
+            for (let j = 0; j < len; j++) {
+                if (!targetMatched[j] && guess[i] === target[j]) {
+                    colors[i] = "yellow";
+                    targetMatched[j] = true;
+                    break;
+                }
+            }
+        }
+
+        return colors;
+    };
+
+    const checkWordleHardMode = (newGuessStr, targetStr, previousGuesses) => {
+        const newGuess = newGuessStr.toUpperCase();
+        const len = targetStr.length;
+
+        const greenReqs = Array(len).fill(null);
+        const yellowLetters = new Set();
+        const grayLetters = new Set();
+        const validLettersInTarget = new Set();
+
+        for (const prev of previousGuesses) {
+            const prevWord = prev.word.toUpperCase();
+            const prevColors = prev.colors || computeWordleColors(prevWord, targetStr);
+
+            for (let i = 0; i < len; i++) {
+                if (prevColors[i] === "green") {
+                    greenReqs[i] = prevWord[i];
+                    validLettersInTarget.add(prevWord[i]);
+                } else if (prevColors[i] === "yellow") {
+                    yellowLetters.add(prevWord[i]);
+                    validLettersInTarget.add(prevWord[i]);
+                }
+            }
+        }
+
+        for (const prev of previousGuesses) {
+            const prevWord = prev.word.toUpperCase();
+            const prevColors = prev.colors || computeWordleColors(prevWord, targetStr);
+
+            for (let i = 0; i < len; i++) {
+                if (prevColors[i] === "gray") {
+                    const char = prevWord[i];
+                    if (!validLettersInTarget.has(char)) {
+                        grayLetters.add(char);
+                    }
+                }
+            }
+        }
+
+        // 1. Green rule: Must reuse green letters in exact same position
+        for (let i = 0; i < len; i++) {
+            if (greenReqs[i] !== null && newGuess[i] !== greenReqs[i]) {
+                return {
+                    valid: false,
+                    reason: `Hard Mode: Huruf ke-${i + 1} harus '${greenReqs[i]}'!`
+                };
+            }
+        }
+
+        // 2. Yellow rule: Must include yellow letters in the new guess
+        for (const yellowChar of yellowLetters) {
+            if (!newGuess.includes(yellowChar)) {
+                return {
+                    valid: false,
+                    reason: `Hard Mode: Harus mengandung huruf '${yellowChar}'!`
+                };
+            }
+        }
+
+        // 3. Gray rule: Cannot use eliminated gray letters
+        for (let i = 0; i < len; i++) {
+            const char = newGuess[i];
+            if (grayLetters.has(char)) {
+                return {
+                    valid: false,
+                    reason: `Hard Mode: Huruf '${char}' sudah di-eliminasi (Abu)!`
+                };
+            }
+        }
+
+        return { valid: true };
+    };
+
+    const isWordInDictionary = (wordStr) => {
+        if (!wordStr) return false;
+        const word = wordStr.toLowerCase();
+        const activeDictHost = dictionaryCache.current[languageRef.current]?.dict || dictionaryCache.current.EN?.dict;
+        const isInEN = activeDictHost?.has(word) || false;
+        const isInID = dictionaryCache.current.ID?.dict?.has(word) || false;
+        const isInKamus = kamusTambahanRef.current?.has(word) || false;
+        const isInMinigame = miniGameWordsRef.current?.some(w => w.toLowerCase() === word) || false;
+        return isInEN || isInID || isInKamus || isInMinigame;
+    };
+
     const startNewWord500 = () => {
         if (miniGameWordsRef.current.length === 0) return;
 
         if (!unplayedWord500WordsRef.current || unplayedWord500WordsRef.current.length === 0) {
-            const validWords = miniGameWordsRef.current.filter(w => w.length >= 5 && w.length <= 6);
+            const validWords = activeMinigameRef.current === "WORDLE"
+                ? miniGameWordsRef.current.filter(w => w.length === 6)
+                : miniGameWordsRef.current.filter(w => w.length >= 5 && w.length <= 6);
             unplayedWord500WordsRef.current = validWords.length > 0 ? [...validWords] : [...miniGameWordsRef.current];
         }
 
@@ -523,7 +669,7 @@ export default function App() {
             playSound("wrong");
             
             if (activeMinigameRef.current === "WORDLE") {
-                setWord500Winner({ nickname: "Sistem (Spill)", profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=System" });
+                setWord500Winner({ nickname: "Sistem (Spill)", isFail: true, profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=System" });
                 setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
                 setTimeout(() => { setWord500FlipPhase("winner"); }, 1400);
                 setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
@@ -2404,57 +2550,83 @@ export default function App() {
                 lastWordleGuessRef.current = { uniqueId, word: cleanWordCheck, time: now };
                 const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
                 
-                if (activeMinigameRef.current === "WORD500" || activeMinigameRef.current === "WORDLE") {
-                    const targetArr = word500TargetRef.current.toUpperCase().split("");
-                    const guessArr = cleanWordCheck.toUpperCase().split("");
-                    const colors = guessArr.map((c, i) => c === targetArr[i] ? "green" : "gray");
+                if (activeMinigameRef.current === "WORDLE") {
+                    if (cleanWordCheck.length === 6) {
+                        if (word500GuessesRef.current.length >= 6) return;
 
+                        if (!isWordInDictionary(cleanWordCheck)) {
+                            showFeedback(`"${cleanWordCheck.toUpperCase()}" tidak ada di kamus!`, "warning");
+                            return;
+                        }
+
+                        const hardCheck = checkWordleHardMode(cleanWordCheck, word500TargetRef.current, word500GuessesRef.current);
+                        if (!hardCheck.valid) {
+                            showFeedback(hardCheck.reason, "warning");
+                            addLog("MiniGame", `⚠️ ${nickname}: ${hardCheck.reason}`);
+                            return;
+                        }
+
+                        const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
+                        const greenCount = colors.filter(c => c === "green").length;
+                        const yellowCount = colors.filter(c => c === "yellow").length;
+                        const redCount = colors.filter(c => c === "gray").length;
+
+                        const newGuess = {
+                            word: cleanWordCheck.toUpperCase(),
+                            green: greenCount,
+                            yellow: yellowCount,
+                            red: redCount,
+                            colors,
+                            nickname,
+                            profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
+                        };
+
+                        const nextGuesses = [...word500GuessesRef.current, newGuess];
+                        setWord500Guesses(nextGuesses);
+
+                        if (greenCount === 6) {
+                            setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
+                            addLog("MiniGame", `🎉 ${nickname} memenangkan Wordle: ${word500TargetRef.current}!`);
+                            setAutoWordleLeaderboard(prev => {
+                                const currentScore = prev[uniqueId]?.score || 0;
+                                return { ...prev, [uniqueId]: { score: currentScore + 1, nickname, avatar: profilePictureUrl || getAvatarUrl(uniqueId) } };
+                            });
+                            setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                            setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
+                            setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                        } else if (nextGuesses.length >= 6) {
+                            setWord500Winner({ nickname: "Gagal (6/6)", isFail: true, profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=Failed" });
+                            showFeedback(`❌ Gagal (6/6)! Jawaban: ${word500TargetRef.current}`, "warning");
+                            addLog("MiniGame", `❌ 6 Kesempatan Habis! Jawaban Wordle: ${word500TargetRef.current}`);
+                            playSound("wrong");
+                            setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                            setTimeout(() => { setWord500FlipPhase("winner"); }, 1400);
+                            setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                        } else {
+                            playSound("tick");
+                        }
+                    }
+                } else if (activeMinigameRef.current === "WORD500") {
                     const newGuess = {
                         word: cleanWordCheck.toUpperCase(),
                         green, yellow, red,
-                        colors, // For Wordle mode (only green/gray)
+                        colors: Array(word500TargetRef.current.length).fill("gray"),
                         nickname,
                         profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
                     };
-                    setWord500Guesses(prev => {
-                        const next = [...prev, newGuess];
-                        // Limit to 6 rows for WORDLE mode
-                        if (activeMinigameRef.current === "WORDLE" && next.length > 6) {
-                            return next.slice(next.length - 6);
-                        }
-                        return next;
-                    });
+                    setWord500Guesses(prev => [...prev, newGuess]);
                 }
-                
-                if (green === word500TargetRef.current.length) {
-                    setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
-                    const gameName = activeMinigameRef.current === "WORDLE" ? "Wordle?" : (activeMinigameRef.current === "AUTO_WORDLE" ? "Auto Wordle" : "Word500");
-                    addLog("MiniGame", `🎉 ${nickname} memenangkan ${gameName}: ${word500TargetRef.current}!`);
-                    
-                    if (activeMinigameRef.current === "AUTO_WORDLE" || activeMinigameRef.current === "WORDLE") {
-                        setAutoWordleLeaderboard(prev => {
-                            const currentScore = prev[uniqueId]?.score || 0;
-                            return { ...prev, [uniqueId]: { score: currentScore + 1, nickname, avatar: profilePictureUrl || getAvatarUrl(uniqueId) } };
-                        });
-                    }
-                    
-                    if (activeMinigameRef.current === "AUTO_WORDLE") {
-                        
-                        setAutoWordleGuess({
-                            word: word500TargetRef.current.toUpperCase(),
-                            colors: Array(word500TargetRef.current.length).fill("green")
-                        });
-                        setTimeout(() => { setWord500FlipPhase("flipping"); }, 1500);
-                        setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 2100);
-                        setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
-                    } else {
-                        // Show correct answer row first, then flip after 800ms
+
+                if (activeMinigameRef.current === "WORD500") {
+                    if (green === word500TargetRef.current.length) {
+                        setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
+                        addLog("MiniGame", `🎉 ${nickname} memenangkan Word500: ${word500TargetRef.current}!`);
                         setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
                         setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
                         setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                    } else {
+                        playSound("tick");
                     }
-                } else {
-                    playSound("tick");
                 }
             }
             // Removed return; so the input can also be processed for Sambung Kata
@@ -2512,6 +2684,68 @@ export default function App() {
                 startNewScramble();
             }, 5000);
             setManualInput("");
+            return;
+        }
+
+        if (activeMinigameRef.current === "WORDLE" && word500TargetRef.current && cleanWordCheck.length === 6 && !word500WinnerRef.current) {
+            if (word500GuessesRef.current.length >= 6) {
+                setManualInput("");
+                return;
+            }
+
+            if (!isWordInDictionary(cleanWordCheck)) {
+                showFeedback(`"${cleanWordCheck.toUpperCase()}" tidak ada di kamus!`, "warning");
+                setManualInput("");
+                return;
+            }
+
+            const hardCheck = checkWordleHardMode(cleanWordCheck, word500TargetRef.current, word500GuessesRef.current);
+            if (!hardCheck.valid) {
+                showFeedback(hardCheck.reason, "warning");
+                setManualInput("");
+                return;
+            }
+
+            const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
+            const greenCount = colors.filter(c => c === "green").length;
+            const yellowCount = colors.filter(c => c === "yellow").length;
+            const redCount = colors.filter(c => c === "gray").length;
+
+            const newGuess = {
+                word: cleanWordCheck.toUpperCase(),
+                green: greenCount,
+                yellow: yellowCount,
+                red: redCount,
+                colors,
+                nickname: "HOST (You)",
+                profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`
+            };
+
+            const nextGuesses = [...word500GuessesRef.current, newGuess];
+            setWord500Guesses(nextGuesses);
+            setManualInput("");
+
+            if (greenCount === 6) {
+                setWord500Winner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
+                addLog("MiniGame", `🎉 HOST memenangkan Wordle: ${word500TargetRef.current}!`);
+                setAutoWordleLeaderboard(prev => {
+                    const currentScore = prev["HOST"]?.score || 0;
+                    return { ...prev, ["HOST"]: { score: currentScore + 1, nickname: "HOST (You)", avatar: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` } };
+                });
+                setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
+                setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+            } else if (nextGuesses.length >= 6) {
+                setWord500Winner({ nickname: "Gagal (6/6)", isFail: true, profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=Failed" });
+                showFeedback(`❌ Gagal (6/6)! Jawaban: ${word500TargetRef.current}`, "warning");
+                addLog("MiniGame", `❌ 6 Kesempatan Habis! Jawaban Wordle: ${word500TargetRef.current}`);
+                playSound("wrong");
+                setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
+                setTimeout(() => { setWord500FlipPhase("winner"); }, 1400);
+                setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+            } else {
+                playSound("tick");
+            }
             return;
         }
 
@@ -2795,12 +3029,14 @@ export default function App() {
     // ==========================================
     return (
         <div ref={containerRef} className={`group min-h-screen ${bgColorMode === 'greenscreen' ? 'bg-[#00FF00]' : bgColorMode === 'darkblue' ? 'bg-[#1a1d27]' : 'bg-slate-950'} text-slate-200 font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative`}>
-            {/* Table Zoom Controls - Hidden until hover */}
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <button onClick={() => setTableScale(s => Math.min(2, s + 0.1))} className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Perbesar Meja"><Plus className="w-5 h-5" /></button>
-                <button onClick={() => setTableScale(s => Math.max(0.3, s - 0.1))} className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Perkecil Meja"><Minus className="w-5 h-5" /></button>
-                <button onClick={() => setTableScale(1)} className="bg-slate-800/80 hover:bg-slate-700/80 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Reset Ukuran"><RefreshCw className="w-4 h-4 m-0.5" /></button>
-            </div>
+            {/* Table Zoom Controls - Self-contained hover widget (hidden when settings panel is open) */}
+            {!showSettings && (
+                <div className="fixed left-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[80] opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-auto">
+                    <button onClick={() => setTableScale(s => Math.min(2, s + 0.1))} className="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Perbesar Meja"><Plus className="w-5 h-5" /></button>
+                    <button onClick={() => setTableScale(s => Math.max(0.3, s - 0.1))} className="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Perkecil Meja"><Minus className="w-5 h-5" /></button>
+                    <button onClick={() => setTableScale(1)} className="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Reset Ukuran"><RefreshCw className="w-4 h-4 m-0.5" /></button>
+                </div>
+            )}
             {/* Background Pattern Overlay - Subtle subtle texture */}
             <div className="absolute inset-0 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-[0.03]"></div>
             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 pointer-events-none">
@@ -2995,6 +3231,15 @@ export default function App() {
                                                 <button onClick={() => setBgColorMode("default")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "default" ? "bg-slate-700 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Default</button>
                                                 <button onClick={() => setBgColorMode("darkblue")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "darkblue" ? "bg-[#1a1d27] text-white shadow-sm border border-slate-600" : "text-slate-400 hover:text-white"}`}>Dark Blue</button>
                                                 <button onClick={() => setBgColorMode("greenscreen")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "greenscreen" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Green</button>
+                                            </div>
+                                        </div>
+                                        <div className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2"><Plus className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">Ukuran Meja</span></div>
+                                            <div className="flex items-center gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
+                                                <button onClick={() => setTableScale(s => Math.max(0.3, s - 0.1))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors"><Minus className="w-3 h-3" /></button>
+                                                <span className="w-9 text-center font-mono font-bold text-slate-200 text-[11px]">{Math.round(tableScale * 100)}%</span>
+                                                <button onClick={() => setTableScale(s => Math.min(2, s + 0.1))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors"><Plus className="w-3 h-3" /></button>
+                                                <button onClick={() => setTableScale(1)} title="Reset Ukuran" className="w-5 h-5 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors ml-0.5"><RefreshCw className="w-2.5 h-2.5" /></button>
                                             </div>
                                         </div>
                                     </div>
@@ -3227,7 +3472,7 @@ export default function App() {
                 style={{ position: 'relative', left: `${mainTableOffset.x}px`, top: `${mainTableOffset.y}px` }}
                 className="cursor-move transform scale-[0.85] -translate-y-12 sm:translate-y-0 sm:scale-100 transition-transform duration-300 z-10"
             >
-                <div className="relative w-[360px] h-[360px] sm:w-[500px] sm:h-[500px] flex items-center justify-center">
+                <div className={`relative transition-all duration-300 flex items-center justify-center ${activeMinigame !== "OFF" ? 'w-[320px] h-[320px] sm:w-[430px] sm:h-[430px]' : 'w-[350px] h-[350px] sm:w-[480px] sm:h-[480px]'}`}>
                     <div className={`absolute inset-0 transition-all duration-500 flex items-center justify-center overflow-hidden ${layoutStyle === "round" ? `rounded-full border-[8px] ${getTableStatusClass()}` : `bg-transparent`} ${tableStatus === 'success' ? 'scale-105' : 'scale-100'}`}>
                         {gameState === "PAUSED" && (
                             <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
@@ -4187,7 +4432,6 @@ export default function App() {
                 </div>
             )}
 
-
             {/* --- WORDLE MINIGAME OVERLAY --- */}
             {activeMinigame === "WORDLE" && word500Target && (
                 <div
@@ -4196,7 +4440,7 @@ export default function App() {
                     style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
                 >
                     <div
-                        className="pointer-events-auto bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-2xl flex flex-col p-1.5 sm:p-2 gap-1 w-max max-w-[90vw]"
+                        className="pointer-events-auto bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-2xl flex flex-col p-2 sm:p-2.5 gap-1.5 w-max max-w-[90vw]"
                         style={{
                             transform: `scale(${miniGameScale})`,
                             transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
@@ -4208,8 +4452,9 @@ export default function App() {
                         <div className="flex items-center justify-between mb-0.5 pb-1 border-b border-slate-700/50 cursor-move touch-none" onMouseDown={handleMiniGameDragStart} onTouchStart={handleMiniGameDragStart}>
                             <div className="flex items-center gap-1.5">
                                 <GripHorizontal className="w-3.5 h-3.5 text-slate-600" />
-                                <span className="text-[11px] font-bold text-emerald-400 tracking-wide uppercase">Wordle?</span>
-                                <span className="text-[9px] text-slate-600 font-mono bg-slate-800 px-1 rounded">{word500Target.length} HURUF</span>
+                                <span className="text-[11px] font-bold text-emerald-400 tracking-wide uppercase">Wordle</span>
+                                <span className="text-[9px] font-mono bg-emerald-950/80 border border-emerald-700/50 text-emerald-300 px-1.5 py-0.5 rounded-full font-bold">6 HURUF • HARD MODE</span>
+                                <span className="text-[9px] font-mono text-slate-400 ml-1">{word500Guesses.length}/6</span>
                                 {!word500Winner && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); handleRevealWord500(e); }}
@@ -4234,16 +4479,16 @@ export default function App() {
                                 transformStyle: 'preserve-3d',
                                 transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
                                 transform: word500FlipPhase === 'flipping' || word500FlipPhase === 'winner' ? 'rotateY(-180deg)' : 'rotateY(0deg)',
-                                minWidth: '170px'
+                                minWidth: '190px'
                             }}
                         >
-                            {/* Front: The Guesses */}
+                            {/* Front: 6 Rows Wordle Grid */}
                             <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }} className="flex flex-col gap-1 mt-1 mb-1">
                                 {(() => {
                                     const displayRows = [...word500Guesses];
                                     while (displayRows.length < 6) displayRows.push(null);
                                     
-                                    return displayRows.map((g, idx) => (
+                                    return displayRows.slice(0, 6).map((g, idx) => (
                                         <div key={idx} className="flex items-center gap-1.5 animate-in slide-in-from-right fade-in duration-200">
                                             <div className="flex-shrink-0 w-5 flex justify-center">
                                                 {g ? (
@@ -4257,18 +4502,22 @@ export default function App() {
                                                 )}
                                             </div>
                                             <div className="flex gap-1">
-                                                {Array(word500Target.length).fill(0).map((_, j) => {
+                                                {Array(6).fill(0).map((_, j) => {
                                                     if (g) {
                                                         const char = g.word[j];
-                                                        const colorClass = g.colors && g.colors[j] === 'green' ? 'bg-emerald-700 border-emerald-600 text-white shadow-[0_2px_4px_rgba(0,0,0,0.6)]' : 'bg-slate-700 border-slate-600 text-slate-300';
+                                                        const colorClass = g.colors && g.colors[j] === 'green'
+                                                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                                                            : g.colors && g.colors[j] === 'yellow'
+                                                                ? 'bg-amber-600 border-amber-500 text-white shadow-sm'
+                                                                : 'bg-slate-700/90 border-slate-600/80 text-slate-300';
                                                         return (
-                                                            <div key={j} className={`w-5 h-6 shrink-0 border rounded-[3px] flex items-center justify-center font-bold text-[15px] leading-none uppercase ${colorClass}`}>
+                                                            <div key={j} className={`w-6 h-7 shrink-0 border rounded-[3px] flex items-center justify-center font-black text-[15px] leading-none uppercase ${colorClass}`}>
                                                                 {char}
                                                             </div>
                                                         );
                                                     } else {
                                                         return (
-                                                            <div key={j} className="w-5 h-6 shrink-0 border border-slate-700/30 rounded-[3px] bg-slate-800/10"></div>
+                                                            <div key={j} className="w-6 h-7 shrink-0 border border-slate-700/40 rounded-[3px] bg-slate-900/40 flex items-center justify-center"></div>
                                                         );
                                                     }
                                                 })}
@@ -4278,63 +4527,100 @@ export default function App() {
                                 })()}
                             </div>
 
-                            {/* Back: The Winner Reveal */}
+                            {/* Back: The Winner / Fail Reveal + Top 5 Leaderboard */}
                             <div
-                                className="absolute inset-0 bg-emerald-950/90 rounded-lg border border-emerald-600/60 shadow-xl flex flex-col items-center justify-center p-2"
+                                className={`absolute inset-0 rounded-lg border shadow-xl flex flex-col items-center justify-between p-2 sm:p-2.5 transition-colors duration-500 overflow-hidden ${
+                                    word500Winner?.isFail
+                                        ? 'bg-slate-900/95 border-rose-600/70 shadow-rose-950/50'
+                                        : 'bg-slate-900/95 border-emerald-600/70 shadow-emerald-950/50'
+                                }`}
                                 style={{
                                     backfaceVisibility: 'hidden',
                                     WebkitBackfaceVisibility: 'hidden',
-                                    transform: 'rotateY(180deg)'
+                                    transform: 'rotateY(-180deg)'
                                 }}
                             >
-                                {word500Winner && (
-                                    <div className="flex items-center gap-2 sm:gap-3 w-full justify-center px-1">
-                                        <div className="relative shrink-0">
-                                            <div className="absolute -inset-1 rounded-full bg-emerald-500/30 animate-ping" />
-                                            <img src={word500Winner.profilePictureUrl} className="relative w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-emerald-400 shadow-lg object-cover bg-slate-800" alt={word500Winner.nickname} />
+                                {/* Answer & Winner Header */}
+                                <div className="w-full flex flex-col items-center gap-1">
+                                    {word500Winner && (
+                                        <div className="flex items-center gap-2 w-full justify-center px-1">
+                                            <div className="relative shrink-0">
+                                                <div className={`absolute -inset-1 rounded-full animate-ping ${word500Winner.isFail ? 'bg-rose-500/40' : 'bg-emerald-500/40'}`} />
+                                                <img
+                                                    src={word500Winner.profilePictureUrl}
+                                                    className={`relative w-7 h-7 sm:w-8 sm:h-8 rounded-full border-2 shadow-lg object-cover bg-slate-800 ${
+                                                        word500Winner.isFail ? 'border-rose-400' : 'border-emerald-400'
+                                                    }`}
+                                                    alt={word500Winner.nickname}
+                                                />
+                                            </div>
+                                            <div className="flex flex-col items-start min-w-0">
+                                                <span className={`text-[9px] font-black uppercase tracking-widest leading-none ${
+                                                    word500Winner.isFail ? 'text-rose-400' : 'text-emerald-400'
+                                                }`}>
+                                                    {word500Winner.isFail ? '❌ Gagal (6/6)' : '🎉 Menang!'}
+                                                </span>
+                                                <span className="text-xs font-bold text-white truncate max-w-[110px] mt-0.5">
+                                                    {word500Winner.isFail ? 'Jawaban Benar:' : word500Winner.nickname}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col items-start min-w-0">
-                                            <span className="text-[9px] sm:text-[10px] font-bold text-emerald-400 uppercase tracking-widest leading-none">Menang!</span>
-                                            <span className="text-xs sm:text-sm font-bold text-white truncate max-w-[100px] sm:max-w-[140px] mt-0.5">{word500Winner.nickname}</span>
-                                        </div>
+                                    )}
+
+                                    {/* 6 Target Letter Tiles */}
+                                    <div className="flex gap-1 mt-1">
+                                        {word500Winner && word500Target.split('').map((char, i) => (
+                                            <div
+                                                key={i}
+                                                className={`w-5 h-6 shrink-0 rounded-[3px] flex items-center justify-center font-black text-[14px] leading-none text-white shadow-md animate-in zoom-in duration-300 ${
+                                                    word500Winner?.isFail
+                                                        ? 'bg-rose-600 border border-rose-500 shadow-rose-900/50'
+                                                        : 'bg-emerald-600 border border-emerald-500 shadow-emerald-900/50'
+                                                }`}
+                                                style={{ animationDelay: `${i * 80}ms` }}
+                                            >
+                                                {char}
+                                            </div>
+                                        ))}
                                     </div>
-                                )}
-                                <div className="flex gap-1 mt-2.5">
-                                    {word500Winner && word500Target.split('').map((char, i) => (
-                                        <div key={i} className="w-5 h-6 shrink-0 bg-emerald-700 border border-emerald-600 rounded-[3px] flex items-center justify-center font-black text-[15px] leading-none text-white shadow-[0_2px_4px_rgba(0,0,0,0.6)] animate-in zoom-in duration-300" style={{ animationDelay: `${i * 100}ms` }}>
-                                            {char}
-                                        </div>
-                                    ))}
                                 </div>
+
+                                {/* Divider with Trophy Tag */}
+                                <div className="w-full border-t border-slate-700/60 my-1 relative flex items-center justify-center">
+                                    <span className="bg-slate-900 px-1.5 py-0.5 text-[8px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1 rounded-full border border-amber-500/30">
+                                        <Trophy className="w-2.5 h-2.5 text-amber-400" /> TOP 5 LEADERBOARD
+                                    </span>
+                                </div>
+
+                                {/* Top 5 List */}
+                                {Object.keys(autoWordleLeaderboard).length > 0 ? (
+                                    <div className="w-full flex flex-col gap-0.5">
+                                        {Object.values(autoWordleLeaderboard)
+                                            .sort((a, b) => b.score - a.score)
+                                            .slice(0, 5)
+                                            .map((user, idx) => (
+                                                <div key={idx} className="flex items-center justify-between bg-slate-800/60 hover:bg-slate-800 rounded px-1.5 py-0.5 border border-slate-700/40">
+                                                    <div className="flex items-center gap-1.5 min-w-0">
+                                                        <span className={`text-[9px] font-mono font-black w-3.5 text-center ${
+                                                            idx === 0 ? 'text-amber-400 font-extrabold' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600' : 'text-slate-500'
+                                                        }`}>
+                                                            #{idx + 1}
+                                                        </span>
+                                                        <img src={user.avatar} className="w-3.5 h-3.5 rounded-full border border-slate-700 object-cover bg-slate-800" alt={user.nickname} />
+                                                        <span className="text-[10px] font-semibold text-slate-200 truncate max-w-[85px] sm:max-w-[105px]">{user.nickname}</span>
+                                                    </div>
+                                                    <span className="text-[10px] font-mono font-bold text-emerald-400">{user.score} pt</span>
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                                ) : (
+                                    <div className="text-[9px] text-slate-500 italic py-1">Belum ada pemenang ronde</div>
+                                )}
                             </div>
                         </div>
 
-                        {/* Leaderboard Marquee */}
-                        {Object.keys(autoWordleLeaderboard).length > 0 && (
-                            <div className="mt-1 w-full overflow-hidden rounded bg-slate-950/60 border border-slate-700/50 relative flex items-center h-5 shrink-0">
-                                <div className="absolute whitespace-nowrap animate-marquee flex items-center gap-4 px-2" style={{ animationDuration: `${Math.max(10, Object.keys(autoWordleLeaderboard).length * 4)}s` }}>
-                                    {Object.values(autoWordleLeaderboard)
-                                        .sort((a, b) => b.score - a.score)
-                                        .slice(0, 10)
-                                        .map((user, idx, arr) => (
-                                            <div key={idx} className="flex items-center gap-1.5">
-                                                <span className={`text-[9px] font-black ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-orange-400' : 'text-slate-500'}`}>
-                                                    #{idx + 1}
-                                                </span>
-                                                <img src={user.avatar} className="w-3 h-3 rounded-full border border-slate-600 bg-slate-800 object-cover" />
-                                                <span className="text-[10px] font-bold text-slate-200">{user.nickname}</span>
-                                                <span className="text-[10px] font-black text-emerald-400">{user.score}</span>
-                                                
-                                                {/* Bullet Separator (kecuali item terakhir) */}
-                                                {idx < arr.length - 1 && (
-                                                    <span className="text-[8px] text-slate-700 ml-1 mr-0.5">●</span>
-                                                )}
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-                            </div>
-                        )}
+                        {/* Leaderboard Marquee Removed */}
                     </div>
                 </div>
             )}
