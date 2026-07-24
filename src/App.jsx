@@ -629,6 +629,7 @@ export default function App() {
     const unplayedMiniGameWordsRef = useRef([]);
     const unplayedWord500WordsRef = useRef([]);
     const wordListByLengthRef = useRef({});
+    const commonWordsByLengthRef = useRef({});
     const unplayedWordByLenRef = useRef({});
     const lastWordleLengthRef = useRef(null);
 
@@ -1013,7 +1014,7 @@ export default function App() {
         let word = "";
         if (activeMinigameRef.current === "WORDLE") {
             const possibleLengths = [4, 5, 6, 7, 8, 9].filter(l => {
-                const list = wordListByLengthRef.current[l] || miniGameWordsRef.current.filter(w => w.length === l);
+                const list = commonWordsByLengthRef.current[l] || wordListByLengthRef.current[l] || miniGameWordsRef.current.filter(w => w.length === l);
                 return list && list.length > 0;
             });
 
@@ -1025,7 +1026,7 @@ export default function App() {
                 lastWordleLengthRef.current = chosenLen;
 
                 if (!unplayedWordByLenRef.current[chosenLen] || unplayedWordByLenRef.current[chosenLen].length === 0) {
-                    const fullList = wordListByLengthRef.current[chosenLen] || miniGameWordsRef.current.filter(w => w.length === chosenLen);
+                    const fullList = commonWordsByLengthRef.current[chosenLen] || wordListByLengthRef.current[chosenLen] || miniGameWordsRef.current.filter(w => w.length === chosenLen);
                     unplayedWordByLenRef.current[chosenLen] = [...fullList];
                 }
 
@@ -1183,22 +1184,29 @@ export default function App() {
                 return res.json();
             })
             .then(data => {
-                const wordMap = {};
-                let allWords = [];
+                const commonMap = {};
+                const allWordsMap = {};
+                let allWordsFlat = [];
                 Object.keys(data).forEach(lenStr => {
                     const len = parseInt(lenStr, 10);
-                    if (data[lenStr] && Array.isArray(data[lenStr].words)) {
-                        const wordsList = data[lenStr].words.map(w => w.trim().toUpperCase());
-                        wordMap[len] = wordsList;
-                        allWords = allWords.concat(wordsList);
+                    const group = data[lenStr];
+                    if (group) {
+                        const commonList = Array.isArray(group.common) ? group.common.map(w => w.trim().toUpperCase()) : [];
+                        const wordsList = Array.isArray(group.words) ? group.words.map(w => w.trim().toUpperCase()) : [];
+
+                        commonMap[len] = commonList.length > 0 ? commonList : wordsList;
+                        allWordsMap[len] = wordsList;
+                        allWordsFlat = allWordsFlat.concat(wordsList);
                     }
                 });
-                wordListByLengthRef.current = wordMap;
-                const uniqueWords = Array.from(new Set(allWords));
+                commonWordsByLengthRef.current = commonMap;
+                wordListByLengthRef.current = allWordsMap;
+                const uniqueWords = Array.from(new Set(allWordsFlat));
                 if (uniqueWords.length > 0) {
                     miniGameWordsRef.current = uniqueWords;
                     unplayedMiniGameWordsRef.current = [...uniqueWords];
-                    addLog("System", `Berhasil memuat wordlist.json (${uniqueWords.length} kata)!`);
+                    const totalCommon = Object.values(commonMap).reduce((a, b) => a + b.length, 0);
+                    addLog("System", `Berhasil memuat wordlist.json (${uniqueWords.length} kata valid, ${totalCommon} kata umum target)!`);
                 }
                 startNewScramble();
                 startNewWord500();
