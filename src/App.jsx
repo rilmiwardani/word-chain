@@ -208,6 +208,23 @@ export default function App() {
     const [scrambleWinner, setScrambleWinner] = useState(null);
 
     const [activeMinigame, setActiveMinigame] = useState(() => localStorage.getItem("sk_activeMinigame") || "ANAGRAM"); // "OFF", "ANAGRAM", "WORD500", "AUTO_WORDLE"
+    const [allowedWordleLengths, setAllowedWordleLengths] = useState(() => {
+        try {
+            const saved = localStorage.getItem("sk_allowedWordleLengths");
+            return saved ? JSON.parse(saved) : { 4: true, 5: true, 6: true, 7: true, 8: true, 9: true };
+        } catch {
+            return { 4: true, 5: true, 6: true, 7: true, 8: true, 9: true };
+        }
+    });
+
+    const toggleWordleLength = (len) => {
+        setAllowedWordleLengths(prev => {
+            const next = { ...prev, [len]: !prev[len] };
+            const activeCount = Object.values(next).filter(Boolean).length;
+            if (activeCount === 0) return prev;
+            return next;
+        });
+    };
 
     useEffect(() => {
         localStorage.setItem("sk_gameMode", gameMode);
@@ -229,11 +246,12 @@ export default function App() {
         localStorage.setItem("sk_showPointGuide", showPointGuide.toString());
         localStorage.setItem("sk_guideLangTab", guideLangTab);
         localStorage.setItem("sk_activeMinigame", activeMinigame);
+        localStorage.setItem("sk_allowedWordleLengths", JSON.stringify(allowedWordleLengths));
     }, [
         gameMode, language, pointMode, isReversed, overlapLength, overlapMode,
         maxWordLength, autoRestartEnabled, gameDuration, targetScore, targetRounds,
         winCondition, maxPlayers, turnDuration, isMuted, showLogs, showPointGuide,
-        guideLangTab, activeMinigame
+        guideLangTab, activeMinigame, allowedWordleLengths
     ]);
     const [word500Target, setWord500Target] = useState("");
     const [word500Guesses, setWord500Guesses] = useState([]);
@@ -632,6 +650,7 @@ export default function App() {
     const commonWordsByLengthRef = useRef({});
     const unplayedWordByLenRef = useRef({});
     const lastWordleLengthRef = useRef(null);
+    const allowedWordleLengthsRef = useRef(allowedWordleLengths);
 
     // === EFFECTS ===
 
@@ -657,6 +676,7 @@ export default function App() {
         scrambleWordRef.current = scrambleWord;
         scrambleWinnerRef.current = scrambleWinner;
         activeMinigameRef.current = activeMinigame;
+        allowedWordleLengthsRef.current = allowedWordleLengths;
         word500TargetRef.current = word500Target;
         word500WinnerRef.current = word500Winner;
         word500GuessesRef.current = word500Guesses;
@@ -1012,7 +1032,10 @@ export default function App() {
         if (miniGameWordsRef.current.length === 0) return;
 
         let word = "";
-        const possibleLengths = [4, 5, 6, 7, 8, 9].filter(l => {
+        const activeAllowed = [4, 5, 6, 7, 8, 9].filter(l => allowedWordleLengthsRef.current[l] !== false);
+        const lengthsToUse = activeAllowed.length > 0 ? activeAllowed : [4, 5, 6, 7, 8, 9];
+
+        const possibleLengths = lengthsToUse.filter(l => {
             const list = commonWordsByLengthRef.current[l] || wordListByLengthRef.current[l] || miniGameWordsRef.current.filter(w => w.length === l);
             return list && list.length > 0;
         });
@@ -1037,7 +1060,7 @@ export default function App() {
 
         if (!word) {
             if (!unplayedWord500WordsRef.current || unplayedWord500WordsRef.current.length === 0) {
-                const validWords = miniGameWordsRef.current.filter(w => w.length >= 4 && w.length <= 9);
+                const validWords = miniGameWordsRef.current.filter(w => lengthsToUse.includes(w.length));
                 unplayedWord500WordsRef.current = validWords.length > 0 ? [...validWords] : [...miniGameWordsRef.current];
             }
             const randomIndex = Math.floor(Math.random() * unplayedWord500WordsRef.current.length);
@@ -3747,6 +3770,34 @@ export default function App() {
                                                 <button onClick={() => setActiveMinigame("WORDLE")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORDLE?</button>
                                                 <button onClick={() => setActiveMinigame("AUTO_WORDLE")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "AUTO_WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`} title="Auto Clue Wordle">AUTO</button>
                                             </div>
+                                            {activeMinigame !== "OFF" && activeMinigame !== "ANAGRAM" && (
+                                                <div className="mt-1.5 pt-1.5 border-t border-slate-700/50 flex flex-col gap-1">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Panjang Huruf Target</span>
+                                                        <span className="text-[9px] text-emerald-400 font-mono">
+                                                            {Object.keys(allowedWordleLengths).filter(k => allowedWordleLengths[k]).map(k => `${k}H`).join(", ")}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {[4, 5, 6, 7, 8, 9].map(len => {
+                                                            const isChecked = allowedWordleLengths[len] !== false;
+                                                            return (
+                                                                <button
+                                                                    key={len}
+                                                                    onClick={() => toggleWordleLength(len)}
+                                                                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all border ${
+                                                                        isChecked
+                                                                            ? "bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-sm"
+                                                                            : "bg-slate-900/60 border-slate-800 text-slate-500 hover:text-slate-400"
+                                                                    }`}
+                                                                >
+                                                                    {isChecked ? `✓ ${len}H` : `${len}H`}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
