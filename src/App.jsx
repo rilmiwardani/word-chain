@@ -160,6 +160,77 @@ export default function App() {
     const [mainTableOffset, setMainTableOffset] = useState({ x: 0, y: 0 });
 
 
+    const [topTickerPos, setTopTickerPos] = useState({ x: null, y: null });
+    const topTickerOverlayRef = useRef(null);
+    const topTickerDragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+
+    const handleTopTickerDragStart = (e) => {
+        topTickerDragRef.current.isDragging = true;
+        topTickerDragRef.current.startX = e.clientX || (e.touches && e.touches[0].clientX);
+        topTickerDragRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY);
+
+        const targetEl = topTickerOverlayRef.current || e.currentTarget;
+        const rect = targetEl.getBoundingClientRect();
+        topTickerDragRef.current.initialX = rect.left;
+        topTickerDragRef.current.initialY = rect.top;
+
+        if (topTickerPos.x === null) {
+            setTopTickerPos({ x: rect.left, y: rect.top });
+        }
+
+        if (topTickerOverlayRef.current) {
+            topTickerOverlayRef.current.style.transition = 'none';
+            topTickerOverlayRef.current.style.position = 'fixed';
+            topTickerOverlayRef.current.style.transform = 'none';
+            topTickerOverlayRef.current.style.left = rect.left + 'px';
+            topTickerOverlayRef.current.style.top = rect.top + 'px';
+        }
+
+        const handleMove = (moveEvent) => {
+            if (!topTickerDragRef.current.isDragging) return;
+            if (moveEvent.cancelable && moveEvent.type === 'touchmove') moveEvent.preventDefault();
+            const currentX = moveEvent.clientX || (moveEvent.touches && moveEvent.touches[0].clientX);
+            const currentY = moveEvent.clientY || (moveEvent.touches && moveEvent.touches[0].clientY);
+
+            const deltaX = currentX - topTickerDragRef.current.startX;
+            const deltaY = currentY - topTickerDragRef.current.startY;
+
+            const newX = topTickerDragRef.current.initialX + deltaX;
+            const newY = topTickerDragRef.current.initialY + deltaY;
+
+            if (topTickerOverlayRef.current) {
+                topTickerOverlayRef.current.style.left = newX + 'px';
+                topTickerOverlayRef.current.style.top = newY + 'px';
+            }
+        };
+
+        const handleEnd = (endEvent) => {
+            if (!topTickerDragRef.current.isDragging) return;
+            topTickerDragRef.current.isDragging = false;
+
+            const currentX = endEvent.clientX || (endEvent.changedTouches && endEvent.changedTouches[0].clientX) || topTickerDragRef.current.startX;
+            const currentY = endEvent.clientY || (endEvent.changedTouches && endEvent.changedTouches[0].clientY) || topTickerDragRef.current.startY;
+
+            const deltaX = currentX - topTickerDragRef.current.startX;
+            const deltaY = currentY - topTickerDragRef.current.startY;
+
+            const finalX = topTickerDragRef.current.initialX + deltaX;
+            const finalY = topTickerDragRef.current.initialY + deltaY;
+
+            setTopTickerPos({ x: finalX, y: finalY });
+
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleEnd);
+            window.removeEventListener('touchmove', handleMove);
+            window.removeEventListener('touchend', handleEnd);
+        };
+
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+    };
+
     const [topLikers, setTopLikers] = useState(() => {
         try { return JSON.parse(localStorage.getItem("sk_topLikers")) || {}; } catch { return {}; }
     });
@@ -4979,13 +5050,23 @@ export default function App() {
             {/* --- TOP LIKER & GIFTER MARQUEE OVERLAY --- */}
             {showTopLikerGifterTicker && getCombinedTopList().length > 0 && (
                 <div
-                    className="fixed top-2 left-1/2 -translate-x-1/2 z-[75] pointer-events-auto flex items-center shadow-2xl rounded-full border border-slate-700/60 p-0.5 max-w-[92vw] sm:max-w-[560px] overflow-hidden backdrop-blur-md transition-colors duration-500"
+                    ref={topTickerOverlayRef}
+                    className={`z-[75] pointer-events-auto flex items-center shadow-2xl rounded-full border border-slate-700/60 p-0.5 max-w-[92vw] sm:max-w-[560px] overflow-hidden backdrop-blur-md transition-colors duration-500 ${
+                        topTickerPos.x !== null ? 'fixed' : 'fixed top-2 left-1/2 -translate-x-1/2'
+                    }`}
                     style={{
+                        ...(topTickerPos.x !== null ? { left: topTickerPos.x, top: topTickerPos.y, transform: 'none' } : {}),
                         backgroundColor: bgColorMode === 'greenscreen' ? 'rgba(2, 31, 15, 0.92)' : bgColorMode === 'darkblue' ? 'rgba(20, 23, 34, 0.92)' : 'rgba(15, 23, 42, 0.92)'
                     }}
                 >
-                    {/* Left Badge */}
-                    <div className="flex items-center gap-1 bg-gradient-to-r from-rose-600 via-pink-600 to-amber-500 text-white text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 shadow-md">
+                    {/* Left Badge (Drag Handle) */}
+                    <div
+                        onMouseDown={handleTopTickerDragStart}
+                        onTouchStart={handleTopTickerDragStart}
+                        className="flex items-center gap-1 bg-gradient-to-r from-rose-600 via-pink-600 to-amber-500 text-white text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 shadow-md cursor-move touch-none select-none"
+                        title="Tahan dan geser posisi marquee"
+                    >
+                        <GripHorizontal className="w-3.5 h-3.5 text-white/90 shrink-0" />
                         <Heart className="w-3 h-3 fill-white animate-pulse" />
                         <Gift className="w-3 h-3 text-amber-200" />
                         <span className="hidden sm:inline">TOP SUPPORTER</span>
