@@ -106,23 +106,23 @@ export default function App() {
     const [currentWord, setCurrentWord] = useState("");
     const [lastInputWord, setLastInputWord] = useState("");
     const [usedWords, setUsedWords] = useState(new Set());
-    const [gameMode, setGameMode] = useState("LAST_LETTER");
-    const [language, setLanguage] = useState("EN");
+    const [gameMode, setGameMode] = useState(() => localStorage.getItem("sk_gameMode") || "LAST_LETTER");
+    const [language, setLanguage] = useState(() => localStorage.getItem("sk_language") || "EN");
     const [targetRhyme, setTargetRhyme] = useState("");
     const [tableStatus, setTableStatus] = useState("idle");
     const [feedbackMessage, setFeedbackMessage] = useState(null);
 
     const [actionCardsEnabled, setActionCardsEnabled] = useState(false);
-    const [pointMode, setPointMode] = useState("OFF"); // OFF, LENGTH, SCRABBLE, VOWELS
+    const [pointMode, setPointMode] = useState(() => localStorage.getItem("sk_pointMode") || "OFF"); // OFF, LENGTH, SCRABBLE, VOWELS
     const [musicState, setMusicState] = useState(null);
     const [musicOverlayStyle, setMusicOverlayStyle] = useState("thumbnail");
     const [isCamEnabled, setIsCamEnabled] = useState(() => localStorage.getItem("is_cam_enabled") === "true");
 
-    const [isReversed, setIsReversed] = useState(false);
-    const [overlapLength, setOverlapLength] = useState(1);
-    const [overlapMode, setOverlapMode] = useState("FIXED"); // FIXED, RANDOM, SEQUENTIAL
-    const [maxWordLength, setMaxWordLength] = useState(0);
-    const [autoRestartEnabled, setAutoRestartEnabled] = useState(false);
+    const [isReversed, setIsReversed] = useState(() => localStorage.getItem("sk_isReversed") === "true");
+    const [overlapLength, setOverlapLength] = useState(() => { const s = localStorage.getItem("sk_overlapLength"); return s ? parseInt(s, 10) : 1; });
+    const [overlapMode, setOverlapMode] = useState(() => localStorage.getItem("sk_overlapMode") || "FIXED"); // FIXED, RANDOM, SEQUENTIAL
+    const [maxWordLength, setMaxWordLength] = useState(() => { const s = localStorage.getItem("sk_maxWordLength"); return s ? parseInt(s, 10) : 0; });
+    const [autoRestartEnabled, setAutoRestartEnabled] = useState(() => localStorage.getItem("sk_autoRestartEnabled") === "true");
     const [restartLikes, setRestartLikes] = useState(0);
     const TARGET_RESTART_LIKES = 200;
     const restartLikesRef = useRef(0);
@@ -140,10 +140,10 @@ export default function App() {
     const [challengeQueue, setChallengeQueue] = useState([]);
     const [turnKey, setTurnKey] = useState(0);
 
-    const [gameDuration, setGameDuration] = useState(60);
-    const [targetScore, setTargetScore] = useState(50);
-    const [targetRounds, setTargetRounds] = useState(3);
-    const [winCondition, setWinCondition] = useState("TIME");
+    const [gameDuration, setGameDuration] = useState(() => { const s = localStorage.getItem("sk_gameDuration"); return s ? parseInt(s, 10) : 60; });
+    const [targetScore, setTargetScore] = useState(() => { const s = localStorage.getItem("sk_targetScore"); return s ? parseInt(s, 10) : 50; });
+    const [targetRounds, setTargetRounds] = useState(() => { const s = localStorage.getItem("sk_targetRounds"); return s ? parseInt(s, 10) : 3; });
+    const [winCondition, setWinCondition] = useState(() => localStorage.getItem("sk_winCondition") || "TIME");
     const [globalTimer, setGlobalTimer] = useState(null);
     const [roundStarterId, setRoundStarterId] = useState(null);
 
@@ -157,8 +157,8 @@ export default function App() {
     const [connectionStatus, setConnectionStatus] = useState("disconnected");
     const [connectionSource, setConnectionSource] = useState(() => localStorage.getItem("sk_conn_source") || "LOCAL"); // LOCAL | TIKFINITY
 
-    const [maxPlayers, setMaxPlayers] = useState(8);
-    const [turnDuration, setTurnDuration] = useState(15);
+    const [maxPlayers, setMaxPlayers] = useState(() => { const s = localStorage.getItem("sk_maxPlayers"); return s ? parseInt(s, 10) : 8; });
+    const [turnDuration, setTurnDuration] = useState(() => { const s = localStorage.getItem("sk_turnDuration"); return s ? parseInt(s, 10) : 15; });
     const [timer, setTimer] = useState(turnDuration);
     const [manualInput, setManualInput] = useState("");
     const [showVirtualKeyboard, setShowVirtualKeyboard] = useState(true);
@@ -198,20 +198,48 @@ export default function App() {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
-    const [isMuted, setIsMuted] = useState(false);
-    const [showLogs, setShowLogs] = useState(true);
-    const [showPointGuide, setShowPointGuide] = useState(false);
-    const [guideLangTab, setGuideLangTab] = useState("ID");
+    const [isMuted, setIsMuted] = useState(() => localStorage.getItem("sk_isMuted") === "true");
+    const [showLogs, setShowLogs] = useState(() => { const s = localStorage.getItem("sk_showLogs"); return s !== "false"; });
+    const [showPointGuide, setShowPointGuide] = useState(() => localStorage.getItem("sk_showPointGuide") === "true");
+    const [guideLangTab, setGuideLangTab] = useState(() => localStorage.getItem("sk_guideLangTab") || "ID");
 
     const [scrambleWord, setScrambleWord] = useState("");
     const [scrambledDisplay, setScrambledDisplay] = useState("");
     const [scrambleWinner, setScrambleWinner] = useState(null);
 
-    const [activeMinigame, setActiveMinigame] = useState("ANAGRAM"); // "OFF", "ANAGRAM", "WORD500", "AUTO_WORDLE"
+    const [activeMinigame, setActiveMinigame] = useState(() => localStorage.getItem("sk_activeMinigame") || "ANAGRAM"); // "OFF", "ANAGRAM", "WORD500", "AUTO_WORDLE"
+
+    useEffect(() => {
+        localStorage.setItem("sk_gameMode", gameMode);
+        localStorage.setItem("sk_language", language);
+        localStorage.setItem("sk_pointMode", pointMode);
+        localStorage.setItem("sk_isReversed", isReversed.toString());
+        localStorage.setItem("sk_overlapLength", overlapLength.toString());
+        localStorage.setItem("sk_overlapMode", overlapMode);
+        localStorage.setItem("sk_maxWordLength", maxWordLength.toString());
+        localStorage.setItem("sk_autoRestartEnabled", autoRestartEnabled.toString());
+        localStorage.setItem("sk_gameDuration", gameDuration.toString());
+        localStorage.setItem("sk_targetScore", targetScore.toString());
+        localStorage.setItem("sk_targetRounds", targetRounds.toString());
+        localStorage.setItem("sk_winCondition", winCondition);
+        localStorage.setItem("sk_maxPlayers", maxPlayers.toString());
+        localStorage.setItem("sk_turnDuration", turnDuration.toString());
+        localStorage.setItem("sk_isMuted", isMuted.toString());
+        localStorage.setItem("sk_showLogs", showLogs.toString());
+        localStorage.setItem("sk_showPointGuide", showPointGuide.toString());
+        localStorage.setItem("sk_guideLangTab", guideLangTab);
+        localStorage.setItem("sk_activeMinigame", activeMinigame);
+    }, [
+        gameMode, language, pointMode, isReversed, overlapLength, overlapMode,
+        maxWordLength, autoRestartEnabled, gameDuration, targetScore, targetRounds,
+        winCondition, maxPlayers, turnDuration, isMuted, showLogs, showPointGuide,
+        guideLangTab, activeMinigame
+    ]);
     const [word500Target, setWord500Target] = useState("");
     const [word500Guesses, setWord500Guesses] = useState([]);
     const [word500Winner, setWord500Winner] = useState(null);
     const [word500FlipPhase, setWord500FlipPhase] = useState(null); // null | "flipping" | "winner"
+    const [word500ErrorGuess, setWord500ErrorGuess] = useState(null);
     const [anagramFlipPhase, setAnagramFlipPhase] = useState(null); // null | "flipping" | "winner"
     const [autoWordleGuess, setAutoWordleGuess] = useState(null);
     const [autoWordleLeaderboard, setAutoWordleLeaderboard] = useState({});
@@ -497,6 +525,26 @@ export default function App() {
 
         return [...giftersList, ...likersList];
     }, [topLikers, topGifters]);
+
+    const combinedTopListRef = useRef(combinedTopList);
+    useEffect(() => {
+        combinedTopListRef.current = combinedTopList;
+    }, [combinedTopList]);
+
+    const [throttledTopList, setThrottledTopList] = useState(combinedTopList);
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setThrottledTopList(prev => {
+                const current = combinedTopListRef.current;
+                // Deep compare to avoid unnecessary re-renders
+                if (JSON.stringify(prev) !== JSON.stringify(current)) {
+                    return current;
+                }
+                return prev;
+            });
+        }, 5000); // Sync top list every 5 seconds to prevent marquee stutter
+        return () => clearInterval(interval);
+    }, []);
 
     const getOverlayBgClass = () => {
         if (bgColorMode === "greenscreen") return "bg-[#021f0f]/95 border-emerald-600/70 backdrop-blur-md text-slate-200";
@@ -974,6 +1022,7 @@ export default function App() {
         setWord500Target(word);
         setWord500Guesses([]);
         setWord500Winner(null);
+        setWord500ErrorGuess(null);
     };
 
     const checkWord500Guess = (guess, target) => {
@@ -2877,8 +2926,8 @@ export default function App() {
             const isInKamus = kamusTambahanRef.current.has(cleanWordCheck.toLowerCase());
             const isKnownWord = isInDict || isInKamus;
 
-            if (!isKnownWord) {
-                // Kata tidak dikenal — abaikan tanpa feedback agar tidak spam
+            if (!isKnownWord && activeMinigameRef.current !== "WORDLE") {
+                // Kata tidak dikenal — abaikan tanpa feedback agar tidak spam (kecuali mode WORDLE yang butuh pesan error)
                 return;
             }
 
@@ -2913,9 +2962,29 @@ export default function App() {
                             showFeedback(invalidReason, "warning");
                             addLog("MiniGame", `⚠️ ${nickname}: ${invalidReason}`);
                             playSound("wrong");
+                            
+                            setWord500ErrorGuess({
+                                word: cleanWordCheck.toUpperCase(),
+                                colors: Array(6).fill("gray"),
+                                nickname,
+                                profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId),
+                                isError: true,
+                                invalidReason
+                            });
+                            
+                            setTimeout(() => {
+                                setWord500ErrorGuess(prev => {
+                                    if (prev && prev.word === cleanWordCheck.toUpperCase() && prev.nickname === nickname) {
+                                        return null;
+                                    }
+                                    return prev;
+                                });
+                            }, 4000);
+                            
+                            return; // Do NOT consume a guess opportunity
                         }
 
-                        const colors = isError ? Array(6).fill("gray") : computeWordleColors(cleanWordCheck, word500TargetRef.current);
+                        const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
                         const greenCount = colors.filter(c => c === "green").length;
                         const yellowCount = colors.filter(c => c === "yellow").length;
                         const redCount = colors.filter(c => c === "gray").length;
@@ -2932,6 +3001,7 @@ export default function App() {
                             invalidReason
                         };
 
+                        setWord500ErrorGuess(null);
                         const nextGuesses = [...word500GuessesRef.current, newGuess];
                         setWord500Guesses(nextGuesses);
 
@@ -3055,9 +3125,30 @@ export default function App() {
                 showFeedback(invalidReason, "warning");
                 addLog("MiniGame", `⚠️ HOST: ${invalidReason}`);
                 playSound("wrong");
+
+                setWord500ErrorGuess({
+                    word: cleanWordCheck.toUpperCase(),
+                    colors: Array(6).fill("gray"),
+                    nickname: "HOST (You)",
+                    profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`,
+                    isError: true,
+                    invalidReason
+                });
+
+                setTimeout(() => {
+                    setWord500ErrorGuess(prev => {
+                        if (prev && prev.word === cleanWordCheck.toUpperCase() && prev.nickname === "HOST (You)") {
+                            return null;
+                        }
+                        return prev;
+                    });
+                }, 4000);
+
+                setManualInput("");
+                return;
             }
 
-            const colors = isError ? Array(6).fill("gray") : computeWordleColors(cleanWordCheck, word500TargetRef.current);
+            const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
             const greenCount = colors.filter(c => c === "green").length;
             const yellowCount = colors.filter(c => c === "yellow").length;
             const redCount = colors.filter(c => c === "gray").length;
@@ -3070,10 +3161,11 @@ export default function App() {
                 colors,
                 nickname: "HOST (You)",
                 profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`,
-                isError,
-                invalidReason
+                isError: false,
+                invalidReason: null
             };
 
+            setWord500ErrorGuess(null);
             const nextGuesses = [...word500GuessesRef.current, newGuess];
             setWord500Guesses(nextGuesses);
             setManualInput("");
@@ -4827,6 +4919,9 @@ export default function App() {
                             <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }} className="flex flex-col gap-1 mt-1 mb-1">
                                 {(() => {
                                     const displayRows = [...word500Guesses];
+                                    if (word500ErrorGuess && displayRows.length < 6) {
+                                        displayRows.push(word500ErrorGuess);
+                                    }
                                     while (displayRows.length < 6) displayRows.push(null);
                                     return displayRows.slice(0, 6).map((g, idx) => (
                                         <div key={idx} className="flex items-center gap-1.5 animate-in slide-in-from-right fade-in duration-200">
@@ -5288,7 +5383,7 @@ export default function App() {
                         {/* Scrolling Marquee Container */}
                         <div className="relative overflow-hidden flex-1 h-6 flex items-center ml-1">
                             <TopSupporterMarqueeTrack
-                                rawList={combinedTopList}
+                                rawList={throttledTopList}
                                 formatCount={formatCount}
                                 getAvatarUrl={getAvatarUrl}
                             />
