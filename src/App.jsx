@@ -628,6 +628,9 @@ export default function App() {
     const miniGameWordsRef = useRef(["KUCING", "ANJING", "SEPATU", "BENDERA", "PELANGI", "GARUDA", "KAMERA", "PENSIL", "LEMARI", "KERTAS", "BONEKA", "PANGGUNG", "KACAMATA", "BINGKAI", "LUKISAN", "DOMPET", "BANTAL", "GULING", "SELIMUT", "KASUR"]);
     const unplayedMiniGameWordsRef = useRef([]);
     const unplayedWord500WordsRef = useRef([]);
+    const wordListByLengthRef = useRef({});
+    const unplayedWordByLenRef = useRef({});
+    const lastWordleLengthRef = useRef(null);
 
     // === EFFECTS ===
 
@@ -1007,18 +1010,42 @@ export default function App() {
     const startNewWord500 = () => {
         if (miniGameWordsRef.current.length === 0) return;
 
-        if (!unplayedWord500WordsRef.current || unplayedWord500WordsRef.current.length === 0) {
-            const validWords = activeMinigameRef.current === "WORDLE"
-                ? miniGameWordsRef.current.filter(w => w.length === 6)
-                : miniGameWordsRef.current.filter(w => w.length >= 5 && w.length <= 6);
-            unplayedWord500WordsRef.current = validWords.length > 0 ? [...validWords] : [...miniGameWordsRef.current];
+        let word = "";
+        if (activeMinigameRef.current === "WORDLE") {
+            const possibleLengths = [4, 5, 6, 7, 8, 9].filter(l => {
+                const list = wordListByLengthRef.current[l] || miniGameWordsRef.current.filter(w => w.length === l);
+                return list && list.length > 0;
+            });
+
+            if (possibleLengths.length > 0) {
+                let validLengths = possibleLengths.filter(l => l !== lastWordleLengthRef.current);
+                if (validLengths.length === 0) validLengths = possibleLengths;
+
+                const chosenLen = validLengths[Math.floor(Math.random() * validLengths.length)];
+                lastWordleLengthRef.current = chosenLen;
+
+                if (!unplayedWordByLenRef.current[chosenLen] || unplayedWordByLenRef.current[chosenLen].length === 0) {
+                    const fullList = wordListByLengthRef.current[chosenLen] || miniGameWordsRef.current.filter(w => w.length === chosenLen);
+                    unplayedWordByLenRef.current[chosenLen] = [...fullList];
+                }
+
+                const pool = unplayedWordByLenRef.current[chosenLen];
+                const randomIndex = Math.floor(Math.random() * pool.length);
+                word = pool[randomIndex];
+                pool.splice(randomIndex, 1);
+            }
         }
 
-        const randomIndex = Math.floor(Math.random() * unplayedWord500WordsRef.current.length);
-        const word = unplayedWord500WordsRef.current[randomIndex];
-        
-        unplayedWord500WordsRef.current.splice(randomIndex, 1);
-        
+        if (!word) {
+            if (!unplayedWord500WordsRef.current || unplayedWord500WordsRef.current.length === 0) {
+                const validWords = miniGameWordsRef.current.filter(w => w.length >= 4 && w.length <= 9);
+                unplayedWord500WordsRef.current = validWords.length > 0 ? [...validWords] : [...miniGameWordsRef.current];
+            }
+            const randomIndex = Math.floor(Math.random() * unplayedWord500WordsRef.current.length);
+            word = unplayedWord500WordsRef.current[randomIndex];
+            unplayedWord500WordsRef.current.splice(randomIndex, 1);
+        }
+
         setWord500Target(word);
         setWord500Guesses([]);
         setWord500Winner(null);
@@ -1150,32 +1177,47 @@ export default function App() {
             kamusTambahanRef.current = combinedWords;
         });
 
-        fetch("/minigame.txt")
+        fetch("/wordlist.json")
             .then(res => {
-                if (!res.ok) throw new Error("File minigame.txt tidak ditemukan");
-                return res.text();
+                if (!res.ok) throw new Error("File wordlist.json tidak ditemukan");
+                return res.json();
             })
-            .then(text => {
-                const rawWords = text.split(/\r?\n/)
-                    .map(w => w.trim().toUpperCase())
-                    .filter(w => w.length > 0 && !w.includes(" "));
-
-                const uniqueWords = Array.from(new Set(rawWords));
-
+            .then(data => {
+                const wordMap = {};
+                let allWords = [];
+                Object.keys(data).forEach(lenStr => {
+                    const len = parseInt(lenStr, 10);
+                    if (data[lenStr] && Array.isArray(data[lenStr].words)) {
+                        const wordsList = data[lenStr].words.map(w => w.trim().toUpperCase());
+                        wordMap[len] = wordsList;
+                        allWords = allWords.concat(wordsList);
+                    }
+                });
+                wordListByLengthRef.current = wordMap;
+                const uniqueWords = Array.from(new Set(allWords));
                 if (uniqueWords.length > 0) {
                     miniGameWordsRef.current = uniqueWords;
                     unplayedMiniGameWordsRef.current = [...uniqueWords];
-                    addLog("System", `Berhasil memuat ${uniqueWords.length} kata minigame unik!`);
-                } else {
-                    unplayedMiniGameWordsRef.current = [...miniGameWordsRef.current];
+                    addLog("System", `Berhasil memuat wordlist.json (${uniqueWords.length} kata)!`);
                 }
                 startNewScramble();
                 startNewWord500();
             })
             .catch(() => {
-                unplayedMiniGameWordsRef.current = [...miniGameWordsRef.current];
-                startNewScramble();
-                startNewWord500();
+                fetch("/minigame.txt")
+                    .then(res => res.text())
+                    .then(text => {
+                        const rawWords = text.split(/\r?\n/)
+                            .map(w => w.trim().toUpperCase())
+                            .filter(w => w.length > 0 && !w.includes(" "));
+                        const uniqueWords = Array.from(new Set(rawWords));
+                        if (uniqueWords.length > 0) {
+                            miniGameWordsRef.current = uniqueWords;
+                            unplayedMiniGameWordsRef.current = [...uniqueWords];
+                        }
+                        startNewScramble();
+                        startNewWord500();
+                    });
             });
     }, []);
 
@@ -2948,7 +2990,7 @@ export default function App() {
                 const { green, yellow, red } = checkWord500Guess(cleanWordCheck, word500TargetRef.current);
                 
                 if (activeMinigameRef.current === "WORDLE") {
-                    if (cleanWordCheck.length === 6) {
+                    if (cleanWordCheck.length === word500TargetRef.current.length) {
                         if (word500GuessesRef.current.length >= 6) return;
 
                         const isInDict = isWordInDictionary(cleanWordCheck);
@@ -2965,7 +3007,7 @@ export default function App() {
                             
                             setWord500ErrorGuess({
                                 word: cleanWordCheck.toUpperCase(),
-                                colors: Array(6).fill("gray"),
+                                colors: Array(word500TargetRef.current.length).fill("gray"),
                                 nickname,
                                 profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId),
                                 isError: true,
@@ -3005,7 +3047,7 @@ export default function App() {
                         const nextGuesses = [...word500GuessesRef.current, newGuess];
                         setWord500Guesses(nextGuesses);
 
-                        if (greenCount === 6) {
+                        if (greenCount === word500TargetRef.current.length) {
                             setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
                             addLog("MiniGame", `🎉 ${nickname} memenangkan Wordle: ${word500TargetRef.current}!`);
                             setAutoWordleLeaderboard(prev => {
@@ -3108,7 +3150,7 @@ export default function App() {
             return;
         }
 
-        if (activeMinigameRef.current === "WORDLE" && word500TargetRef.current && cleanWordCheck.length === 6 && !word500WinnerRef.current) {
+        if (activeMinigameRef.current === "WORDLE" && word500TargetRef.current && cleanWordCheck.length === word500TargetRef.current.length && !word500WinnerRef.current) {
             if (word500GuessesRef.current.length >= 6) {
                 setManualInput("");
                 return;
@@ -3128,7 +3170,7 @@ export default function App() {
 
                 setWord500ErrorGuess({
                     word: cleanWordCheck.toUpperCase(),
-                    colors: Array(6).fill("gray"),
+                    colors: Array(word500TargetRef.current.length).fill("gray"),
                     nickname: "HOST (You)",
                     profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`,
                     isError: true,
@@ -3170,7 +3212,7 @@ export default function App() {
             setWord500Guesses(nextGuesses);
             setManualInput("");
 
-            if (greenCount === 6) {
+            if (greenCount === word500TargetRef.current.length) {
                 setWord500Winner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
                 addLog("MiniGame", `🎉 HOST memenangkan Wordle: ${word500TargetRef.current}!`);
                 setAutoWordleLeaderboard(prev => {
@@ -4899,7 +4941,7 @@ export default function App() {
                             <div className="flex items-center gap-1.5">
                                 <GripHorizontal className="w-3.5 h-3.5 text-slate-600" />
                                 <span className="text-[11px] font-bold text-emerald-400 tracking-wide uppercase">Wordle</span>
-                                <span className="text-[9px] font-mono bg-emerald-950/80 border border-emerald-700/50 text-emerald-300 px-1.5 py-0.5 rounded-full font-bold">6 HURUF • HARD MODE</span>
+                                <span className="text-[9px] font-mono bg-emerald-950/80 border border-emerald-700/50 text-emerald-300 px-1.5 py-0.5 rounded-full font-bold">{word500Target.length} HURUF • HARD MODE</span>
                                 <span className="text-[9px] font-mono text-slate-400 ml-1">{word500Guesses.length}/6</span>
                                 {!word500Winner && (
                                     <button
@@ -4955,7 +4997,7 @@ export default function App() {
                                                 }`}
                                                 title={g?.invalidReason || (g ? `${g.nickname}: ${g.word}` : '')}
                                             >
-                                                {Array(6).fill(0).map((_, j) => {
+                                                {Array(word500Target.length).fill(0).map((_, j) => {
                                                     if (g) {
                                                         const char = g.word[j];
                                                         const colorClass = g.isError
