@@ -441,9 +441,9 @@ export default function App() {
     };
 
     const getOverlayBgClass = () => {
-        if (bgColorMode === "greenscreen") return "bg-[#021f0f]/95 border-emerald-600/70 shadow-2xl backdrop-blur-md text-slate-200";
-        if (bgColorMode === "darkblue") return "bg-[#141722]/95 border-slate-700/70 shadow-2xl backdrop-blur-md text-slate-200";
-        return "bg-slate-900/95 border-slate-700/60 shadow-2xl backdrop-blur-md text-slate-200";
+        if (bgColorMode === "greenscreen") return "bg-[#021f0f]/95 border-emerald-600/70 backdrop-blur-md text-slate-200";
+        if (bgColorMode === "darkblue") return "bg-[#141722]/95 border-slate-700/70 backdrop-blur-md text-slate-200";
+        return "bg-slate-900/95 border-slate-700/60 backdrop-blur-md text-slate-200";
     };
 
     // === REFS ===
@@ -4429,7 +4429,7 @@ export default function App() {
                         SUSUN KATA
                     </div>
                     <div
-                        className={`backdrop-blur-md rounded-full border shadow-lg pointer-events-auto flex items-center p-1.5 gap-2 w-max ${getOverlayBgClass()}`}
+                        className={`backdrop-blur-md rounded-full border pointer-events-auto flex items-center p-1.5 gap-2 w-max ${getOverlayBgClass()}`}
                         style={{
                             transform: `scale(${miniGameScale})`,
                             transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
@@ -4559,7 +4559,7 @@ export default function App() {
                             >
                                 {/* ══ FRONT FACE — Guess Rows ══ */}
                                 <div
-                                    className={`backdrop-blur-md rounded-lg border shadow-xl flex flex-col p-1.5 w-max max-w-[90vw] ${getOverlayBgClass()}`}
+                                    className={`backdrop-blur-md rounded-lg border flex flex-col p-1.5 w-max max-w-[90vw] ${getOverlayBgClass()}`}
                                     style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
                                 >
                                     {/* Header */}
@@ -4915,7 +4915,7 @@ export default function App() {
                     style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
                 >
                     <div
-                        className="pointer-events-auto bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-2xl flex flex-col p-1.5 sm:p-2 gap-1"
+                        className="pointer-events-auto bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/50 flex flex-col p-1.5 sm:p-2 gap-1"
                         style={{
                             transform: `scale(${miniGameScale})`,
                             transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
