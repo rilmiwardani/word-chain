@@ -154,13 +154,22 @@ export default function App() {
     const [autoWordleGuess, setAutoWordleGuess] = useState(null);
     const [autoWordleLeaderboard, setAutoWordleLeaderboard] = useState({});
 
-    const [miniGamePos, setMiniGamePos] = useState({ x: null, y: null });
-    const [miniGameScale, setMiniGameScale] = useState(1);
-    const [tableScale, setTableScale] = useState(1);
-    const [mainTableOffset, setMainTableOffset] = useState({ x: 0, y: 0 });
+    const [miniGamePos, setMiniGamePos] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("sk_miniGamePos")) || { x: null, y: null }; } catch { return { x: null, y: null }; }
+    });
+    const [miniGameScale, setMiniGameScale] = useState(() => {
+        try { const saved = localStorage.getItem("sk_miniGameScale"); return saved ? parseFloat(saved) : 1; } catch { return 1; }
+    });
+    const [tableScale, setTableScale] = useState(() => {
+        try { const saved = localStorage.getItem("sk_tableScale"); return saved ? parseFloat(saved) : 1; } catch { return 1; }
+    });
+    const [mainTableOffset, setMainTableOffset] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("sk_mainTableOffset")) || { x: 0, y: 0 }; } catch { return { x: 0, y: 0 }; }
+    });
 
-
-    const [topTickerPos, setTopTickerPos] = useState({ x: null, y: null });
+    const [topTickerPos, setTopTickerPos] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("sk_topTickerPos")) || { x: null, y: null }; } catch { return { x: null, y: null }; }
+    });
     const topTickerOverlayRef = useRef(null);
     const topTickerDragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
 
@@ -253,6 +262,26 @@ export default function App() {
     useEffect(() => {
         localStorage.setItem("sk_showTopTicker", JSON.stringify(showTopLikerGifterTicker));
     }, [showTopLikerGifterTicker]);
+
+    useEffect(() => {
+        if (miniGamePos.x !== null) localStorage.setItem("sk_miniGamePos", JSON.stringify(miniGamePos));
+    }, [miniGamePos]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_miniGameScale", miniGameScale.toString());
+    }, [miniGameScale]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_mainTableOffset", JSON.stringify(mainTableOffset));
+    }, [mainTableOffset]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_tableScale", tableScale.toString());
+    }, [tableScale]);
+
+    useEffect(() => {
+        if (topTickerPos.x !== null) localStorage.setItem("sk_topTickerPos", JSON.stringify(topTickerPos));
+    }, [topTickerPos]);
 
     const recordLikeEvent = (data) => {
         if (!data || !data.uniqueId) return;
