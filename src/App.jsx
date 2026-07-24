@@ -160,6 +160,97 @@ export default function App() {
     const [mainTableOffset, setMainTableOffset] = useState({ x: 0, y: 0 });
 
 
+    const [topLikers, setTopLikers] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("sk_topLikers")) || {}; } catch { return {}; }
+    });
+    const [topGifters, setTopGifters] = useState(() => {
+        try { return JSON.parse(localStorage.getItem("sk_topGifters")) || {}; } catch { return {}; }
+    });
+    const [showTopLikerGifterTicker, setShowTopLikerGifterTicker] = useState(() => {
+        const saved = localStorage.getItem("sk_showTopTicker");
+        return saved !== null ? JSON.parse(saved) : true;
+    });
+
+    useEffect(() => {
+        localStorage.setItem("sk_topLikers", JSON.stringify(topLikers));
+    }, [topLikers]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_topGifters", JSON.stringify(topGifters));
+    }, [topGifters]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_showTopTicker", JSON.stringify(showTopLikerGifterTicker));
+    }, [showTopLikerGifterTicker]);
+
+    const recordLikeEvent = (data) => {
+        if (!data || !data.uniqueId) return;
+        const uid = data.uniqueId;
+        const count = data.likeCount || data.count || 1;
+        const nick = data.nickname || uid;
+        const avatar = data.profilePictureUrl || getAvatarUrl(uid);
+
+        setTopLikers(prev => {
+            const existing = prev[uid] || { nickname: nick, avatar, likes: 0 };
+            return {
+                ...prev,
+                [uid]: {
+                    nickname: nick || existing.nickname,
+                    avatar: avatar || existing.avatar,
+                    likes: existing.likes + count
+                }
+            };
+        });
+    };
+
+    const recordGiftEvent = (data) => {
+        if (!data || !data.uniqueId) return;
+        const uid = data.uniqueId;
+        const coins = data.diamondCount || data.coins || data.giftCount || 1;
+        const nick = data.nickname || uid;
+        const avatar = data.profilePictureUrl || getAvatarUrl(uid);
+
+        setTopGifters(prev => {
+            const existing = prev[uid] || { nickname: nick, avatar, coins: 0, count: 0 };
+            return {
+                ...prev,
+                [uid]: {
+                    nickname: nick || existing.nickname,
+                    avatar: avatar || existing.avatar,
+                    coins: existing.coins + coins,
+                    count: existing.count + 1
+                }
+            };
+        });
+    };
+
+    const formatCount = (num) => {
+        if (!num) return "0";
+        if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+        if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+        return num.toString();
+    };
+
+    const getCombinedTopList = () => {
+        const likersList = Object.entries(topLikers)
+            .map(([uid, data]) => ({ type: "liker", uid, ...data }))
+            .sort((a, b) => b.likes - a.likes)
+            .slice(0, 5);
+
+        const giftersList = Object.entries(topGifters)
+            .map(([uid, data]) => ({ type: "gifter", uid, ...data }))
+            .sort((a, b) => b.coins - a.coins)
+            .slice(0, 5);
+
+        const combined = [];
+        const maxLen = Math.max(likersList.length, giftersList.length);
+        for (let i = 0; i < maxLen; i++) {
+            if (likersList[i]) combined.push({ ...likersList[i], rank: i + 1 });
+            if (giftersList[i]) combined.push({ ...giftersList[i], rank: i + 1 });
+        }
+        return combined;
+    };
+
     const getOverlayBgClass = () => {
         if (bgColorMode === "greenscreen") return "bg-[#021f0f]/95 border-emerald-600/70 shadow-2xl backdrop-blur-md text-slate-200";
         if (bgColorMode === "darkblue") return "bg-[#141722]/95 border-slate-700/70 shadow-2xl backdrop-blur-md text-slate-200";
@@ -1182,13 +1273,17 @@ export default function App() {
                     const { event: eventName, data } = JSON.parse(event.data);
                     if (eventName === "chat" && chatHandlerRef.current) chatHandlerRef.current(data);
 
-                    if (eventName === "gift") triggerVisualEffect("gift", data.uniqueId, {
-                        nickname: data.nickname,
-                        profilePictureUrl: data.profilePictureUrl,
-                        giftName: data.giftName,
-                        giftPictureUrl: data.giftPictureUrl
-                    });
+                    if (eventName === "gift") {
+                        recordGiftEvent(data);
+                        triggerVisualEffect("gift", data.uniqueId, {
+                            nickname: data.nickname,
+                            profilePictureUrl: data.profilePictureUrl,
+                            giftName: data.giftName,
+                            giftPictureUrl: data.giftPictureUrl
+                        });
+                    }
                     if (eventName === "like") {
+                        recordLikeEvent(data);
                         const count = data.likeCount || 1;
                         triggerVisualEffect("like", data.uniqueId, {
                             nickname: data.nickname,
@@ -2897,14 +2992,16 @@ export default function App() {
         const targetAvatar = isPlayer ? "" : getAvatarUrl(targetUniqueId);
 
         if (type === 'like') {
+            recordLikeEvent({ uniqueId: targetUniqueId, nickname: targetNickname || "Penonton Setia", profilePictureUrl: targetAvatar, count: 50 });
             triggerVisualEffect("like", targetUniqueId, { count: 5, nickname: targetNickname, profilePictureUrl: targetAvatar });
         } else {
             const gifts = [
-                { name: "Mawar", pictureUrl: "https://cdn-icons-png.flaticon.com/512/126/126079.png" },
-                { name: "Kopi", pictureUrl: "https://cdn-icons-png.flaticon.com/512/3502/3502601.png" },
-                { name: "TikTok Universe", pictureUrl: "https://cdn-icons-png.flaticon.com/512/3176/3176335.png" }
+                { name: "Mawar", pictureUrl: "https://cdn-icons-png.flaticon.com/512/126/126079.png", coins: 1 },
+                { name: "Kopi", pictureUrl: "https://cdn-icons-png.flaticon.com/512/3502/3502601.png", coins: 5 },
+                { name: "TikTok Universe", pictureUrl: "https://cdn-icons-png.flaticon.com/512/3176/3176335.png", coins: 500 }
             ];
             const g = gifts[Math.floor(Math.random() * gifts.length)];
+            recordGiftEvent({ uniqueId: targetUniqueId, nickname: targetNickname || "Penonton Setia", profilePictureUrl: targetAvatar, diamondCount: g.coins });
             triggerVisualEffect("gift", targetUniqueId, { giftName: g.name, giftPictureUrl: g.pictureUrl, nickname: targetNickname, profilePictureUrl: targetAvatar });
         }
     };
@@ -3234,6 +3331,19 @@ export default function App() {
                                             </div>
                                             <span className={isCamEnabled ? "text-emerald-400" : "text-red-400"}>{isCamEnabled ? "ON" : "OFF"}</span>
                                         </button>
+                                        <button onClick={() => setShowTopLikerGifterTicker(!showTopLikerGifterTicker)} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-2">
+                                                <Heart className="w-3.5 h-3.5 text-rose-400" />
+                                                <span className="text-slate-300">Ticker Top Supporter</span>
+                                            </div>
+                                            <span className={showTopLikerGifterTicker ? "text-emerald-400" : "text-red-400"}>{showTopLikerGifterTicker ? "ON" : "OFF"}</span>
+                                        </button>
+                                        {showTopLikerGifterTicker && (
+                                            <div className="px-3 py-1.5 flex items-center justify-between bg-slate-900/40 border-t border-slate-800">
+                                                <span className="text-[10px] text-slate-400">Reset Data Supporter</span>
+                                                <button onClick={() => { setTopLikers({}); setTopGifters({}); showFeedback("Data Supporter di-reset!", "info"); }} className="px-2 py-0.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded text-[10px] font-bold transition-colors">Reset</button>
+                                            </div>
+                                        )}
                                         <div className="px-3 py-2 text-xs font-bold flex flex-col gap-1.5">
                                             <div className="flex items-center gap-2"><Gamepad2 className="w-3.5 h-3.5 text-purple-400" /><span className="text-slate-300">Minigame Overlay</span></div>
                                             <div className="flex flex-wrap gap-1">
@@ -4853,7 +4963,91 @@ export default function App() {
         .animate-marquee {
             animation: marquee linear infinite;
         }
+
+        @keyframes marquee-loop {
+            0% { transform: translateX(0%); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-marquee-loop {
+            animation: marquee-loop linear infinite;
+        }
+        .animate-marquee-loop:hover {
+            animation-play-state: paused;
+        }
       `}</style>
+
+            {/* --- TOP LIKER & GIFTER MARQUEE OVERLAY --- */}
+            {showTopLikerGifterTicker && getCombinedTopList().length > 0 && (
+                <div
+                    className="fixed top-2 left-1/2 -translate-x-1/2 z-[75] pointer-events-auto flex items-center shadow-2xl rounded-full border border-slate-700/60 p-0.5 max-w-[92vw] sm:max-w-[560px] overflow-hidden backdrop-blur-md transition-colors duration-500"
+                    style={{
+                        backgroundColor: bgColorMode === 'greenscreen' ? 'rgba(2, 31, 15, 0.92)' : bgColorMode === 'darkblue' ? 'rgba(20, 23, 34, 0.92)' : 'rgba(15, 23, 42, 0.92)'
+                    }}
+                >
+                    {/* Left Badge */}
+                    <div className="flex items-center gap-1 bg-gradient-to-r from-rose-600 via-pink-600 to-amber-500 text-white text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 shadow-md">
+                        <Heart className="w-3 h-3 fill-white animate-pulse" />
+                        <Gift className="w-3 h-3 text-amber-200" />
+                        <span className="hidden sm:inline">TOP SUPPORTER</span>
+                        <span className="sm:hidden">TOP</span>
+                    </div>
+
+                    {/* Scrolling Marquee Container */}
+                    <div className="relative overflow-hidden flex-1 h-6 flex items-center ml-1">
+                        {(() => {
+                            const rawList = getCombinedTopList();
+                            const displayList = [...rawList, ...rawList];
+                            const animDuration = Math.max(12, rawList.length * 4.5);
+
+                            return (
+                                <div
+                                    className="flex items-center gap-3 whitespace-nowrap animate-marquee-loop"
+                                    style={{ animationDuration: `${animDuration}s` }}
+                                >
+                                    {displayList.map((item, idx) => (
+                                        <div key={idx} className="flex items-center gap-1.5 shrink-0 bg-slate-800/50 hover:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/40 transition-colors">
+                                            {/* Rank badge */}
+                                            <span className={`text-[8px] font-black font-mono px-1 rounded ${
+                                                item.rank === 1 ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50' :
+                                                item.rank === 2 ? 'bg-slate-400/30 text-slate-200 border border-slate-400/50' :
+                                                item.rank === 3 ? 'bg-amber-700/30 text-amber-400 border border-amber-700/50' :
+                                                'text-slate-400'
+                                            }`}>
+                                                #{item.rank}
+                                            </span>
+
+                                            {/* Avatar */}
+                                            <img
+                                                src={item.avatar || getAvatarUrl(item.uid)}
+                                                className="w-4 h-4 rounded-full border border-slate-600 object-cover bg-slate-800"
+                                                alt={item.nickname}
+                                            />
+
+                                            {/* Nickname */}
+                                            <span className="text-[10px] font-bold text-slate-200 max-w-[85px] truncate">
+                                                {item.nickname}
+                                            </span>
+
+                                            {/* Score badge */}
+                                            {item.type === "liker" ? (
+                                                <span className="text-[9px] font-black text-rose-400 flex items-center gap-0.5 bg-rose-950/60 border border-rose-800/50 px-1.5 py-0.5 rounded-full">
+                                                    <Heart className="w-2.5 h-2.5 fill-rose-400" />
+                                                    {formatCount(item.likes)}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[9px] font-black text-amber-400 flex items-center gap-0.5 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.5 rounded-full">
+                                                    <Gift className="w-2.5 h-2.5 text-amber-400" />
+                                                    {formatCount(item.coins)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                </div>
+            )}
             
             {/* --- MUSIC PLAYER OVERLAY --- */}
             <MusicPlayer musicState={musicState} wsRef={backendWsRef} isKeyboardOpen={showVirtualKeyboard} overlayStyle={musicOverlayStyle} />
