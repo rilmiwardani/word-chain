@@ -2976,59 +2976,15 @@ export default function App() {
     };
 
     const handleAddRestartLikes = (count = 1) => {
-        if (!autoRestartEnabledRef.current) return;
-        if (gameStateRef.current !== "ENDED" && gameStateRef.current !== "WAITING") return;
-
-        setRestartLikes(prev => {
-            const nextVal = prev + count;
-            restartLikesRef.current = nextVal;
-            if (nextVal >= TARGET_RESTART_LIKES) {
-                setTimeout(() => {
-                    triggerAutoRestartGame();
-                }, 100);
-            }
-            return nextVal;
-        });
+        // Trigger auto-start via tap-tap likes disabled per request
+        return;
     };
 
     useEffect(() => {
         likeHandlerRef.current = handleAddRestartLikes;
     });
 
-    const renderLikeRestartMeter = () => {
-        if (!autoRestartEnabled) return null;
-        const progressPercent = Math.min(100, (restartLikes / TARGET_RESTART_LIKES) * 100);
-        return (
-            <div 
-                onClick={() => handleAddRestartLikes(10)}
-                title="Klik untuk simulasi +10 Likes"
-                className="relative w-full max-w-[280px] sm:max-w-[320px] mx-auto my-1 px-2.5 py-1.5 rounded-xl bg-slate-900/90 border border-amber-500/40 shadow-[0_0_15px_rgba(251,191,36,0.15)] backdrop-blur-md transition-all duration-300 hover:border-amber-400 cursor-pointer group select-none"
-            >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                    <div className="flex items-center gap-1.5">
-                        <Heart className="w-3.5 h-3.5 text-amber-400 fill-amber-400 animate-pulse shrink-0" />
-                        <span className="text-[9px] sm:text-[10px] font-black tracking-wider uppercase bg-gradient-to-r from-amber-200 via-yellow-300 to-emerald-300 bg-clip-text text-transparent truncate">
-                            TAP-TAP 200 LIKES UNTUK START
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-0.5 font-mono text-[10px] font-bold text-amber-300 shrink-0">
-                        <span>{Math.min(restartLikes, TARGET_RESTART_LIKES)}</span>
-                        <span className="text-amber-500/70">/{TARGET_RESTART_LIKES}</span>
-                    </div>
-                </div>
-
-                {/* Meter Track - Ultra Compact */}
-                <div className="relative w-full h-1.5 bg-slate-950 rounded-full overflow-hidden border border-amber-500/30">
-                    <div
-                        style={{ width: `${progressPercent}%` }}
-                        className="h-full rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 shadow-[0_0_8px_rgba(251,191,36,0.6)] transition-all duration-300 ease-out relative overflow-hidden"
-                    >
-                        <div className="absolute inset-0 bg-white/30 animate-pulse"></div>
-                    </div>
-                </div>
-            </div>
-        );
-    };
+    const renderLikeRestartMeter = () => null;
 
     // ==========================================
     // 4. RENDER UI
