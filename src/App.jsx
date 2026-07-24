@@ -1012,29 +1012,27 @@ export default function App() {
         if (miniGameWordsRef.current.length === 0) return;
 
         let word = "";
-        if (activeMinigameRef.current === "WORDLE") {
-            const possibleLengths = [4, 5, 6, 7, 8, 9].filter(l => {
-                const list = commonWordsByLengthRef.current[l] || wordListByLengthRef.current[l] || miniGameWordsRef.current.filter(w => w.length === l);
-                return list && list.length > 0;
-            });
+        const possibleLengths = [4, 5, 6, 7, 8, 9].filter(l => {
+            const list = commonWordsByLengthRef.current[l] || wordListByLengthRef.current[l] || miniGameWordsRef.current.filter(w => w.length === l);
+            return list && list.length > 0;
+        });
 
-            if (possibleLengths.length > 0) {
-                let validLengths = possibleLengths.filter(l => l !== lastWordleLengthRef.current);
-                if (validLengths.length === 0) validLengths = possibleLengths;
+        if (possibleLengths.length > 0) {
+            let validLengths = possibleLengths.filter(l => l !== lastWordleLengthRef.current);
+            if (validLengths.length === 0) validLengths = possibleLengths;
 
-                const chosenLen = validLengths[Math.floor(Math.random() * validLengths.length)];
-                lastWordleLengthRef.current = chosenLen;
+            const chosenLen = validLengths[Math.floor(Math.random() * validLengths.length)];
+            lastWordleLengthRef.current = chosenLen;
 
-                if (!unplayedWordByLenRef.current[chosenLen] || unplayedWordByLenRef.current[chosenLen].length === 0) {
-                    const fullList = commonWordsByLengthRef.current[chosenLen] || wordListByLengthRef.current[chosenLen] || miniGameWordsRef.current.filter(w => w.length === chosenLen);
-                    unplayedWordByLenRef.current[chosenLen] = [...fullList];
-                }
-
-                const pool = unplayedWordByLenRef.current[chosenLen];
-                const randomIndex = Math.floor(Math.random() * pool.length);
-                word = pool[randomIndex];
-                pool.splice(randomIndex, 1);
+            if (!unplayedWordByLenRef.current[chosenLen] || unplayedWordByLenRef.current[chosenLen].length === 0) {
+                const fullList = commonWordsByLengthRef.current[chosenLen] || wordListByLengthRef.current[chosenLen] || miniGameWordsRef.current.filter(w => w.length === chosenLen);
+                unplayedWordByLenRef.current[chosenLen] = [...fullList];
             }
+
+            const pool = unplayedWordByLenRef.current[chosenLen];
+            const randomIndex = Math.floor(Math.random() * pool.length);
+            word = pool[randomIndex];
+            pool.splice(randomIndex, 1);
         }
 
         if (!word) {
@@ -1201,6 +1199,8 @@ export default function App() {
                 });
                 commonWordsByLengthRef.current = commonMap;
                 wordListByLengthRef.current = allWordsMap;
+                unplayedWordByLenRef.current = {};
+                unplayedWord500WordsRef.current = [];
                 const uniqueWords = Array.from(new Set(allWordsFlat));
                 if (uniqueWords.length > 0) {
                     miniGameWordsRef.current = uniqueWords;
