@@ -240,6 +240,95 @@ export default function App() {
         window.addEventListener('touchend', handleEnd);
     };
 
+    const [showHostKeyboard, setShowHostKeyboard] = useState(() => {
+        const saved = localStorage.getItem("sk_showHostKb");
+        return saved !== null ? JSON.parse(saved) : false;
+    });
+
+    const [hostKbPos, setHostKbPos] = useState(() => {
+        try {
+            const saved = localStorage.getItem("sk_hostKbPos");
+            return saved ? JSON.parse(saved) : { x: null, y: null };
+        } catch {
+            return { x: null, y: null };
+        }
+    });
+    const hostKbRef = useRef(null);
+    const hostKbDragRef = useRef({ isDragging: false, startX: 0, startY: 0, initialX: 0, initialY: 0 });
+
+    useEffect(() => {
+        localStorage.setItem("sk_showHostKb", JSON.stringify(showHostKeyboard));
+    }, [showHostKeyboard]);
+
+    const handleHostKbDragStart = (e) => {
+        if (e.target.closest('input') || e.target.closest('button')) return;
+        hostKbDragRef.current.isDragging = true;
+        hostKbDragRef.current.startX = e.clientX || (e.touches && e.touches[0].clientX);
+        hostKbDragRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY);
+
+        const targetEl = hostKbRef.current || e.currentTarget;
+        const rect = targetEl.getBoundingClientRect();
+        hostKbDragRef.current.initialX = rect.left;
+        hostKbDragRef.current.initialY = rect.top;
+
+        if (hostKbPos.x === null) {
+            setHostKbPos({ x: rect.left, y: rect.top });
+        }
+
+        if (hostKbRef.current) {
+            hostKbRef.current.style.transition = 'none';
+            hostKbRef.current.style.position = 'fixed';
+            hostKbRef.current.style.transform = 'none';
+            hostKbRef.current.style.left = rect.left + 'px';
+            hostKbRef.current.style.top = rect.top + 'px';
+        }
+
+        const handleMove = (moveEvent) => {
+            if (!hostKbDragRef.current.isDragging) return;
+            if (moveEvent.cancelable && moveEvent.type === 'touchmove') moveEvent.preventDefault();
+            const currentX = moveEvent.clientX || (moveEvent.touches && moveEvent.touches[0].clientX);
+            const currentY = moveEvent.clientY || (moveEvent.touches && moveEvent.touches[0].clientY);
+
+            const deltaX = currentX - hostKbDragRef.current.startX;
+            const deltaY = currentY - hostKbDragRef.current.startY;
+
+            const newX = hostKbDragRef.current.initialX + deltaX;
+            const newY = hostKbDragRef.current.initialY + deltaY;
+
+            if (hostKbRef.current) {
+                hostKbRef.current.style.left = newX + 'px';
+                hostKbRef.current.style.top = newY + 'px';
+            }
+        };
+
+        const handleEnd = (endEvent) => {
+            if (!hostKbDragRef.current.isDragging) return;
+            hostKbDragRef.current.isDragging = false;
+
+            const currentX = endEvent.clientX || (endEvent.changedTouches && endEvent.changedTouches[0].clientX) || hostKbDragRef.current.startX;
+            const currentY = endEvent.clientY || (endEvent.changedTouches && endEvent.changedTouches[0].clientY) || hostKbDragRef.current.startY;
+
+            const deltaX = currentX - hostKbDragRef.current.startX;
+            const deltaY = currentY - hostKbDragRef.current.startY;
+
+            const finalX = hostKbDragRef.current.initialX + deltaX;
+            const finalY = hostKbDragRef.current.initialY + deltaY;
+
+            setHostKbPos({ x: finalX, y: finalY });
+            localStorage.setItem("sk_hostKbPos", JSON.stringify({ x: finalX, y: finalY }));
+
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleEnd);
+            window.removeEventListener('touchmove', handleMove);
+            window.removeEventListener('touchend', handleEnd);
+        };
+
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+    };
+
     const [topLikers, setTopLikers] = useState(() => {
         try { return JSON.parse(localStorage.getItem("sk_topLikers")) || {}; } catch { return {}; }
     });
@@ -4210,46 +4299,96 @@ export default function App() {
             </div>
             </div>
 
+            {/* --- FLOATING HOST INPUT & VIRTUAL KEYBOARD OVERLAY --- */}
+            {showHostKeyboard && (
+                <div
+                    ref={hostKbRef}
+                    className={`z-[200] pointer-events-auto flex flex-col items-center gap-2 p-3 bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-2xl backdrop-blur-md w-[92vw] sm:w-[420px] transition-colors duration-300 ${
+                        hostKbPos.x !== null ? 'fixed' : 'fixed bottom-4 left-1/2 -translate-x-1/2'
+                    }`}
+                    style={hostKbPos.x !== null ? { left: hostKbPos.x, top: hostKbPos.y, transform: 'none' } : {}}
+                >
+                    {/* Header Drag Handle */}
+                    <div
+                        onMouseDown={handleHostKbDragStart}
+                        onTouchStart={handleHostKbDragStart}
+                        className="flex items-center justify-between w-full pb-2 border-b border-slate-800 cursor-move touch-none select-none"
+                    >
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-sky-400">
+                            <GripHorizontal className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                            <Keyboard className="w-3.5 h-3.5 text-sky-400" />
+                            <span>Host Input & Virtual Keyboard</span>
+                        </div>
+                        <button
+                            onClick={() => setShowHostKeyboard(false)}
+                            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                            title="Sembunyikan Keyboard"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
 
-            {gameState === "PLAYING" && isHostJoined && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 w-full max-w-lg px-2 flex flex-col gap-2 items-center">
-                    <div className="flex items-center gap-2 bg-slate-900/95 border border-slate-700 rounded-full px-4 py-2 w-full sm:max-w-md shadow-lg backdrop-blur-md">
+                    {/* Input Box */}
+                    <div className="flex items-center gap-2 bg-slate-950 border border-slate-700/80 rounded-full px-3 py-1.5 w-full shadow-inner">
                         <input
                             type="text"
                             value={manualInput}
                             onChange={(e) => setManualInput(e.target.value)}
                             onKeyDown={(e) => { if (e.key === 'Enter') handleManualSubmit(e); }}
-                            placeholder="Ketik jawaban..."
-                            className="flex-1 bg-transparent text-center font-mono font-bold text-lg sm:text-xl text-slate-100 tracking-widest uppercase outline-none placeholder:text-slate-500 placeholder:text-sm placeholder:font-sans placeholder:lowercase placeholder:tracking-normal w-full min-w-0"
+                            placeholder="Ketik tebakan / kata..."
+                            className="flex-1 bg-transparent text-center font-mono font-bold text-sm sm:text-base text-slate-100 uppercase outline-none placeholder:text-slate-500 placeholder:text-xs placeholder:font-sans placeholder:normal-case min-w-0"
                         />
-                        {manualInput && <button onClick={() => setManualInput("")} className="text-slate-500 hover:text-slate-300 shrink-0"><X className="w-5 h-5" /></button>}
-                        <button onClick={handleManualSubmit} className="bg-sky-600 text-white p-2 rounded-full hover:bg-sky-500 shadow-sm active:scale-90 transition-transform shrink-0"><Send className="w-4 h-4" /></button>
+                        {manualInput && (
+                            <button onClick={() => setManualInput("")} className="text-slate-500 hover:text-slate-300 shrink-0">
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
+                        <button
+                            onClick={handleManualSubmit}
+                            className="bg-sky-600 hover:bg-sky-500 text-white p-1.5 rounded-full shadow-sm active:scale-90 transition-transform shrink-0"
+                            title="Kirim"
+                        >
+                            <Send className="w-3.5 h-3.5" />
+                        </button>
                     </div>
-                    <button onClick={() => setShowVirtualKeyboard(!showVirtualKeyboard)} className="text-[10px] text-slate-400 bg-slate-900 px-3 py-1 rounded-full hover:bg-slate-800 transition-colors flex items-center gap-1 shadow-sm border border-slate-700">
-                        <Keyboard className="w-3 h-3" /> {showVirtualKeyboard ? "Tutup Keyboard" : "Buka Keyboard"}
-                    </button>
-                    {showVirtualKeyboard && (
-                        <div className="bg-slate-800/90 p-2.5 sm:p-3 rounded-2xl border border-slate-700 shadow-xl w-full sm:w-[90%] animate-in slide-in-from-bottom-10 fade-in duration-300">
-                            {["QWERTYUIOP", "ASDFGHJKL", "!ZXCVBNM"].map((row, i) => (
-                                <div key={i} className="flex justify-center gap-1.5 sm:gap-2 mb-2 last:mb-0">
-                                    {row.split("").map((char) => (
-                                        <button key={char} onClick={() => setManualInput(prev => prev + char)} className="w-8 h-10 sm:w-11 sm:h-12 bg-slate-700 text-slate-200 rounded-lg font-bold text-sm sm:text-base shadow-sm active:scale-95 transition-all hover:bg-slate-600 active:bg-slate-500 border border-slate-600">{char}</button>
-                                    ))}
-                                </div>
-                            ))}
-                            <div className="flex justify-center gap-2 mt-2 px-0.5 sm:px-2">
-                                <button onClick={handleManualSubmit} className="flex-[1.5] bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-bold text-xs sm:text-sm h-11 sm:h-12 flex items-center justify-center shadow-sm active:scale-95 transition-colors uppercase">ENTER</button>
-                                <button onClick={() => setManualInput(prev => prev + " ")} className="flex-[4] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-bold text-xs sm:text-sm h-11 sm:h-12 flex items-center justify-center shadow-sm active:scale-95 transition-colors uppercase tracking-widest border border-slate-600">SPACE</button>
-                                <button onClick={() => setManualInput(prev => prev.slice(0, -1))} className="flex-[1.5] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-bold text-xs sm:text-sm h-11 sm:h-12 flex items-center justify-center shadow-sm active:scale-95 gap-1 transition-colors uppercase border border-slate-600"><Delete className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+
+                    {/* Virtual Keyboard Keys */}
+                    <div className="w-full flex flex-col gap-1.5 pt-1">
+                        {["QWERTYUIOP", "ASDFGHJKL", "!ZXCVBNM"].map((row, i) => (
+                            <div key={i} className="flex justify-center gap-1">
+                                {row.split("").map((char) => (
+                                    <button
+                                        key={char}
+                                        onClick={() => setManualInput(prev => prev + char)}
+                                        className="w-7 h-9 sm:w-9 sm:h-10 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 rounded font-bold text-xs sm:text-sm shadow-sm active:scale-95 transition-all border border-slate-700"
+                                    >
+                                        {char}
+                                    </button>
+                                ))}
                             </div>
+                        ))}
+                        <div className="flex justify-center gap-1.5 mt-1">
+                            <button onClick={handleManualSubmit} className="flex-[1.5] bg-sky-600 hover:bg-sky-500 text-white rounded font-bold text-xs h-9 flex items-center justify-center shadow-sm active:scale-95 transition-colors uppercase">ENTER</button>
+                            <button onClick={() => setManualInput(prev => prev + " ")} className="flex-[4] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-bold text-xs h-9 flex items-center justify-center shadow-sm active:scale-95 transition-colors uppercase tracking-widest border border-slate-700">SPACE</button>
+                            <button onClick={() => setManualInput(prev => prev.slice(0, -1))} className="flex-[1.5] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded font-bold text-xs h-9 flex items-center justify-center shadow-sm active:scale-95 gap-1 transition-colors uppercase border border-slate-700"><Delete className="w-4 h-4" /></button>
                         </div>
-                    )}
+                    </div>
                 </div>
             )}
 
-
-
             <div className="absolute bottom-12 left-2 sm:bottom-4 sm:left-4 z-40 flex flex-col gap-1 items-start">
+                <button
+                    onClick={() => setShowHostKeyboard(!showHostKeyboard)}
+                    className={`text-[10px] px-2 py-1 rounded-md transition-colors flex items-center gap-1.5 shadow-sm border ${
+                        showHostKeyboard
+                            ? 'bg-sky-600 text-white border-sky-400 font-bold'
+                            : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border-slate-800'
+                    }`}
+                    title={showHostKeyboard ? "Sembunyikan Keyboard Admin" : "Tampilkan Keyboard Admin"}
+                >
+                    <Keyboard className="w-3 h-3" />
+                    <span className="hidden sm:inline">{showHostKeyboard ? "Tutup Keyboard" : "Keyboard Admin"}</span>
+                </button>
                 <button
                     onClick={() => setShowLogs(!showLogs)}
                     className="text-[10px] text-slate-400 bg-slate-900 px-2 py-1 rounded-md hover:bg-slate-800 transition-colors flex items-center gap-1.5 shadow-sm border border-slate-800"
