@@ -483,23 +483,19 @@ export default function App() {
     };
 
     const combinedTopList = useMemo(() => {
-        const likersList = Object.entries(topLikers)
-            .map(([uid, data]) => ({ type: "liker", uid, ...data }))
-            .sort((a, b) => b.likes - a.likes)
-            .slice(0, 5);
-
         const giftersList = Object.entries(topGifters)
             .map(([uid, data]) => ({ type: "gifter", uid, ...data }))
             .sort((a, b) => b.coins - a.coins)
-            .slice(0, 5);
+            .slice(0, 5)
+            .map((item, idx) => ({ ...item, rank: idx + 1 }));
 
-        const combined = [];
-        const maxLen = Math.max(likersList.length, giftersList.length);
-        for (let i = 0; i < maxLen; i++) {
-            if (likersList[i]) combined.push({ ...likersList[i], rank: i + 1 });
-            if (giftersList[i]) combined.push({ ...giftersList[i], rank: i + 1 });
-        }
-        return combined;
+        const likersList = Object.entries(topLikers)
+            .map(([uid, data]) => ({ type: "liker", uid, ...data }))
+            .sort((a, b) => b.likes - a.likes)
+            .slice(0, 5)
+            .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+        return [...giftersList, ...likersList];
     }, [topLikers, topGifters]);
 
     const getOverlayBgClass = () => {
