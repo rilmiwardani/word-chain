@@ -3122,6 +3122,10 @@ export default function App() {
                     if (green === word500TargetRef.current.length) {
                         setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
                         addLog("MiniGame", `🎉 ${nickname} memenangkan Word500: ${word500TargetRef.current}!`);
+                        setAutoWordleLeaderboard(prev => {
+                            const currentScore = prev[uniqueId]?.score || 0;
+                            return { ...prev, [uniqueId]: { score: currentScore + 1, nickname, avatar: profilePictureUrl || getAvatarUrl(uniqueId) } };
+                        });
                         setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
                         setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
                         setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
@@ -3309,7 +3313,7 @@ export default function App() {
                     setWord500Winner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
                     addLog("MiniGame", `🎉 HOST memenangkan Word500: ${word500TargetRef.current}!`);
                     
-                    if (activeMinigameRef.current === "AUTO_WORDLE" || activeMinigameRef.current === "WORDLE") {
+                    if (activeMinigameRef.current === "AUTO_WORDLE" || activeMinigameRef.current === "WORDLE" || activeMinigameRef.current === "WORD500") {
                         setAutoWordleLeaderboard(prev => {
                             const currentScore = prev["HOST"]?.score || 0;
                             return { ...prev, ["HOST"]: { score: currentScore + 1, nickname: "HOST (You)", avatar: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` } };
@@ -5198,7 +5202,30 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Leaderboard Marquee Removed */}
+                        {/* Leaderboard Marquee */}
+                        {Object.keys(autoWordleLeaderboard).length > 0 && (
+                            <div className="mt-1 w-full overflow-hidden rounded bg-slate-950/60 border border-slate-700/50 relative flex items-center h-5 shrink-0">
+                                <div className="absolute whitespace-nowrap animate-marquee flex items-center gap-4 px-2" style={{ animationDuration: `${Math.max(10, Object.keys(autoWordleLeaderboard).length * 4)}s` }}>
+                                    {Object.values(autoWordleLeaderboard)
+                                        .sort((a, b) => b.score - a.score)
+                                        .slice(0, 10)
+                                        .map((user, idx, arr) => (
+                                            <div key={idx} className="flex items-center gap-1.5">
+                                                <span className={`text-[9px] font-black ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-orange-400' : 'text-slate-500'}`}>
+                                                    #{idx + 1}
+                                                </span>
+                                                <img src={user.avatar} className="w-3 h-3 rounded-full border border-slate-600 bg-slate-800 object-cover" />
+                                                <span className="text-[10px] font-bold text-slate-200">{user.nickname}</span>
+                                                <span className="text-[10px] font-black text-emerald-400">{user.score}</span>
+                                                {idx < arr.length - 1 && (
+                                                    <span className="text-[8px] text-slate-700 ml-1 mr-0.5">●</span>
+                                                )}
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
