@@ -3054,7 +3054,7 @@ export default function App() {
                                 });
                             }, 4000);
                             
-                            return; // Do NOT consume a guess opportunity
+                            if (!isCurrentPlayerTurn) return;
                         }
 
                         const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
@@ -3217,8 +3217,10 @@ export default function App() {
                     });
                 }, 4000);
 
-                setManualInput("");
-                return;
+                if (!isHostTurn || gameStateRef.current !== "PLAYING") {
+                    setManualInput("");
+                    return;
+                }
             }
 
             const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
@@ -3264,7 +3266,10 @@ export default function App() {
             } else {
                 playSound("tick");
             }
-            return;
+            if (!isHostTurn || gameStateRef.current !== "PLAYING") {
+                setManualInput("");
+                return;
+            }
         }
 
         if ((activeMinigameRef.current === "WORD500" || activeMinigameRef.current === "AUTO_WORDLE") && word500TargetRef.current && cleanWordCheck.length === word500TargetRef.current.length && !word500WinnerRef.current) {
