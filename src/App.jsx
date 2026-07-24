@@ -4741,7 +4741,7 @@ export default function App() {
                                     </div>
 
                                     {/* Guess rows */}
-                                    <div className="flex flex-col gap-1 max-h-[140px] overflow-y-auto custom-scrollbar pr-0.5 w-full" style={{ scrollBehavior: 'smooth' }}>
+                                    <div className="flex flex-col gap-1 max-h-[220px] overflow-y-auto custom-scrollbar pr-0.5 w-full" style={{ scrollBehavior: 'smooth' }}>
                                         {word500Guesses.length === 0 ? (
                                             <div className="text-[9px] text-slate-600 italic text-center py-1.5 min-w-[160px]">Ketik kata {word500Target.length} huruf!</div>
                                         ) : (() => {
@@ -4749,17 +4749,19 @@ export default function App() {
                                             const prevGuesses = word500Guesses.slice(0, -1);
                                             const bestGuesses = [...prevGuesses]
                                                 .sort((a, b) => b.green - a.green || b.yellow - a.yellow)
-                                                .slice(0, 2);
+                                                .slice(0, 5);
                                             const displayRows = [
                                                 { guess: latestGuess, isLatest: true },
                                                 ...bestGuesses.map(g => ({ guess: g, isLatest: false }))
                                             ];
                                             const isWinRow = latestGuess?.green === word500Target.length;
                                             const renderRow = (g, isLatest, idx) => (
-                                                <div key={`${isLatest ? 'latest' : 'best'}-${idx}`} className={`flex items-center gap-1 animate-in slide-in-from-right fade-in duration-200 rounded-[3px] ${
+                                                <div key={`${isLatest ? 'latest' : 'best'}-${idx}`} className={`flex items-center gap-1 animate-in slide-in-from-right fade-in duration-200 rounded-[3px] px-1 py-0.5 ${
                                                     isLatest && isWinRow
-                                                        ? 'bg-emerald-950/60 ring-1 ring-emerald-600/60 px-0.5'
-                                                        : isLatest ? 'bg-sky-950/40 ring-1 ring-sky-800/50 px-0.5' : ''
+                                                        ? 'bg-emerald-950/60 ring-1 ring-emerald-600/60'
+                                                        : isLatest 
+                                                            ? 'bg-sky-950/40 ring-1 ring-sky-800/50' 
+                                                            : 'bg-slate-900/40 border border-slate-800/50'
                                                 }`}>
                                                     <div className="flex-shrink-0 w-3 flex items-center justify-center">
                                                         {isLatest && isWinRow
