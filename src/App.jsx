@@ -4245,40 +4245,7 @@ export default function App() {
                 )}
             </div>
 
-            {/* --- GLOBAL TOAST UNTUK PENONTON (NON-PLAYERS) --- */}
-            <div className="absolute top-24 right-4 z-[60] flex flex-col gap-2 pointer-events-none items-end">
-                {activeEffects
-                    .filter(e => !players.some(p => p.uniqueId === e.uniqueId))
-                    .slice(-1) // Membatasi agar hanya menampilkan 1 notifikasi terbaru (satu baris)
-                    .map(effect => {
-                        if (effect.type === 'like') {
-                            return (
-                                <div key="toast-like-viewer" className="bg-slate-900 text-slate-300 px-3 py-1.5 rounded-full border border-rose-900/50 flex items-center gap-2 shadow-sm animate-in slide-in-from-right fade-in fade-out duration-300">
-                                    <img src={effect.profilePictureUrl || getAvatarUrl(effect.uniqueId)} alt="avatar" className="w-5 h-5 rounded-full border border-slate-700 object-cover bg-slate-800" />
-                                    <div className="flex flex-col leading-tight">
-                                        <span className="text-[10px] font-bold truncate max-w-[80px] text-slate-200">{effect.nickname || "Penonton"}</span>
-                                        <span className="text-[8px] text-slate-400">Kirim likes <Heart className="w-2.5 h-2.5 inline text-rose-500 animate-pulse" fill="currentColor" /></span>
-                                    </div>
-                                </div>
-                            )
-                        }
-                        if (effect.type === 'gift') {
-                            return (
-                                <div key="toast-gift-viewer" className="bg-slate-900 text-slate-300 p-2 rounded-lg border border-pink-900/50 flex items-center gap-3 shadow-md animate-in slide-in-from-right fade-in fade-out duration-300">
-                                    <img src={effect.profilePictureUrl || getAvatarUrl(effect.uniqueId)} alt="avatar" className="w-8 h-8 rounded-full border-2 border-slate-700 object-cover bg-slate-800" />
-                                    <div className="flex flex-col">
-                                        <span className="text-xs font-bold truncate max-w-[100px] text-slate-200">{effect.nickname || "Penonton"}</span>
-                                        <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                            Kirim: {effect.giftName}
-                                            {effect.giftPictureUrl ? <img src={effect.giftPictureUrl} className="w-4 h-4 object-contain inline" alt="gift" /> : <Gift className="w-4 h-4 inline text-pink-400" />}
-                                        </span>
-                                    </div>
-                                </div>
-                            )
-                        }
-                        return null;
-                    })}
-            </div>
+            {/* Old global viewer toast removed (relocated to Top Supporter Ticker) */}
 
             {/* Old footer position removed */}
 
@@ -5051,82 +5018,115 @@ export default function App() {
             {showTopLikerGifterTicker && getCombinedTopList().length > 0 && (
                 <div
                     ref={topTickerOverlayRef}
-                    className={`z-[75] pointer-events-auto flex items-center shadow-2xl rounded-full border border-slate-700/60 p-0.5 max-w-[92vw] sm:max-w-[560px] overflow-hidden backdrop-blur-md transition-colors duration-500 ${
+                    className={`z-[75] pointer-events-auto flex flex-col items-center transition-colors duration-500 ${
                         topTickerPos.x !== null ? 'fixed' : 'fixed top-2 left-1/2 -translate-x-1/2'
                     }`}
-                    style={{
-                        ...(topTickerPos.x !== null ? { left: topTickerPos.x, top: topTickerPos.y, transform: 'none' } : {}),
-                        backgroundColor: bgColorMode === 'greenscreen' ? 'rgba(2, 31, 15, 0.92)' : bgColorMode === 'darkblue' ? 'rgba(20, 23, 34, 0.92)' : 'rgba(15, 23, 42, 0.92)'
-                    }}
+                    style={topTickerPos.x !== null ? { left: topTickerPos.x, top: topTickerPos.y, transform: 'none' } : {}}
                 >
-                    {/* Left Badge (Drag Handle) */}
+                    {/* Main Marquee Ticker Bar */}
                     <div
-                        onMouseDown={handleTopTickerDragStart}
-                        onTouchStart={handleTopTickerDragStart}
-                        className="flex items-center gap-1 bg-gradient-to-r from-rose-600 via-pink-600 to-amber-500 text-white text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 shadow-md cursor-move touch-none select-none"
-                        title="Tahan dan geser posisi marquee"
+                        className="flex items-center shadow-2xl rounded-full border border-slate-700/60 p-0.5 max-w-[92vw] sm:max-w-[560px] overflow-hidden backdrop-blur-md transition-colors duration-500 w-full"
+                        style={{
+                            backgroundColor: bgColorMode === 'greenscreen' ? 'rgba(2, 31, 15, 0.92)' : bgColorMode === 'darkblue' ? 'rgba(20, 23, 34, 0.92)' : 'rgba(15, 23, 42, 0.92)'
+                        }}
                     >
-                        <GripHorizontal className="w-3.5 h-3.5 text-white/90 shrink-0" />
-                        <Heart className="w-3 h-3 fill-white animate-pulse" />
-                        <Gift className="w-3 h-3 text-amber-200" />
-                        <span className="hidden sm:inline">TOP SUPPORTER</span>
-                        <span className="sm:hidden">TOP</span>
+                        {/* Left Badge (Drag Handle) */}
+                        <div
+                            onMouseDown={handleTopTickerDragStart}
+                            onTouchStart={handleTopTickerDragStart}
+                            className="flex items-center gap-1 bg-gradient-to-r from-rose-600 via-pink-600 to-amber-500 text-white text-[9px] sm:text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 shadow-md cursor-move touch-none select-none"
+                            title="Tahan dan geser posisi marquee"
+                        >
+                            <GripHorizontal className="w-3.5 h-3.5 text-white/90 shrink-0" />
+                            <Heart className="w-3 h-3 fill-white animate-pulse" />
+                            <Gift className="w-3 h-3 text-amber-200" />
+                            <span className="hidden sm:inline">TOP SUPPORTER</span>
+                            <span className="sm:hidden">TOP</span>
+                        </div>
+
+                        {/* Scrolling Marquee Container */}
+                        <div className="relative overflow-hidden flex-1 h-6 flex items-center ml-1">
+                            {(() => {
+                                const rawList = getCombinedTopList();
+                                const displayList = [...rawList, ...rawList];
+                                const animDuration = Math.max(12, rawList.length * 4.5);
+
+                                return (
+                                    <div
+                                        className="flex items-center gap-3 whitespace-nowrap animate-marquee-loop"
+                                        style={{ animationDuration: `${animDuration}s` }}
+                                    >
+                                        {displayList.map((item, idx) => (
+                                            <div key={`${item.type}-${item.uid}-${idx}`} className="flex items-center gap-1.5 shrink-0 bg-slate-800/50 hover:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/40 transition-colors">
+                                                {/* Rank badge */}
+                                                <span className={`text-[8px] font-black font-mono px-1 rounded ${
+                                                    item.rank === 1 ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50' :
+                                                    item.rank === 2 ? 'bg-slate-400/30 text-slate-200 border border-slate-400/50' :
+                                                    item.rank === 3 ? 'bg-amber-700/30 text-amber-400 border border-amber-700/50' :
+                                                    'text-slate-400'
+                                                }`}>
+                                                    #{item.rank}
+                                                </span>
+
+                                                {/* Avatar */}
+                                                <img
+                                                    src={item.avatar || getAvatarUrl(item.uid)}
+                                                    className="w-4 h-4 rounded-full border border-slate-600 object-cover bg-slate-800"
+                                                    alt={item.nickname}
+                                                />
+
+                                                {/* Nickname */}
+                                                <span className="text-[10px] font-bold text-slate-200 max-w-[85px] truncate">
+                                                    {item.nickname}
+                                                </span>
+
+                                                {/* Score badge */}
+                                                {item.type === "liker" ? (
+                                                    <span className="text-[9px] font-black text-rose-400 flex items-center gap-0.5 bg-rose-950/60 border border-rose-800/50 px-1.5 py-0.5 rounded-full">
+                                                        <Heart className="w-2.5 h-2.5 fill-rose-400" />
+                                                        {formatCount(item.likes)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-[9px] font-black text-amber-400 flex items-center gap-0.5 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.5 rounded-full">
+                                                        <Gift className="w-2.5 h-2.5 text-amber-400" />
+                                                        {formatCount(item.coins)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
                     </div>
 
-                    {/* Scrolling Marquee Container */}
-                    <div className="relative overflow-hidden flex-1 h-6 flex items-center ml-1">
-                        {(() => {
-                            const rawList = getCombinedTopList();
-                            const displayList = [...rawList, ...rawList];
-                            const animDuration = Math.max(12, rawList.length * 4.5);
+                    {/* Pop-Up Toast Attached Directly Underneath Ticker Bar */}
+                    {(() => {
+                        const latestEffect = activeEffects.slice(-1)[0];
+                        if (!latestEffect || (latestEffect.type !== 'like' && latestEffect.type !== 'gift')) return null;
 
-                            return (
-                                <div
-                                    className="flex items-center gap-3 whitespace-nowrap animate-marquee-loop"
-                                    style={{ animationDuration: `${animDuration}s` }}
-                                >
-                                    {displayList.map((item, idx) => (
-                                        <div key={idx} className="flex items-center gap-1.5 shrink-0 bg-slate-800/50 hover:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/40 transition-colors">
-                                            {/* Rank badge */}
-                                            <span className={`text-[8px] font-black font-mono px-1 rounded ${
-                                                item.rank === 1 ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50' :
-                                                item.rank === 2 ? 'bg-slate-400/30 text-slate-200 border border-slate-400/50' :
-                                                item.rank === 3 ? 'bg-amber-700/30 text-amber-400 border border-amber-700/50' :
-                                                'text-slate-400'
-                                            }`}>
-                                                #{item.rank}
-                                            </span>
-
-                                            {/* Avatar */}
-                                            <img
-                                                src={item.avatar || getAvatarUrl(item.uid)}
-                                                className="w-4 h-4 rounded-full border border-slate-600 object-cover bg-slate-800"
-                                                alt={item.nickname}
-                                            />
-
-                                            {/* Nickname */}
-                                            <span className="text-[10px] font-bold text-slate-200 max-w-[85px] truncate">
-                                                {item.nickname}
-                                            </span>
-
-                                            {/* Score badge */}
-                                            {item.type === "liker" ? (
-                                                <span className="text-[9px] font-black text-rose-400 flex items-center gap-0.5 bg-rose-950/60 border border-rose-800/50 px-1.5 py-0.5 rounded-full">
-                                                    <Heart className="w-2.5 h-2.5 fill-rose-400" />
-                                                    {formatCount(item.likes)}
-                                                </span>
-                                            ) : (
-                                                <span className="text-[9px] font-black text-amber-400 flex items-center gap-0.5 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.5 rounded-full">
-                                                    <Gift className="w-2.5 h-2.5 text-amber-400" />
-                                                    {formatCount(item.coins)}
-                                                </span>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        })()}
-                    </div>
+                        return (
+                            <div key={latestEffect.id} className="mt-1 flex items-center gap-2 bg-slate-950/95 backdrop-blur-md px-3 py-1 rounded-full border border-amber-500/50 shadow-xl animate-in slide-in-from-top-2 fade-in duration-300 pointer-events-none">
+                                <img
+                                    src={latestEffect.profilePictureUrl || getAvatarUrl(latestEffect.uniqueId)}
+                                    alt="avatar"
+                                    className="w-5 h-5 rounded-full border border-amber-400 object-cover bg-slate-800 shrink-0"
+                                />
+                                <span className="text-[10px] font-bold text-slate-200 max-w-[90px] truncate">
+                                    {latestEffect.nickname || "Penonton"}
+                                </span>
+                                {latestEffect.type === 'like' ? (
+                                    <span className="text-[9px] font-black text-rose-400 flex items-center gap-1 bg-rose-950/80 px-2 py-0.5 rounded-full border border-rose-700/50">
+                                        +{latestEffect.count || 1} Likes <Heart className="w-2.5 h-2.5 fill-rose-500 animate-pulse" />
+                                    </span>
+                                ) : (
+                                    <span className="text-[9px] font-black text-amber-300 flex items-center gap-1 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-700/50">
+                                        Kirim {latestEffect.giftName || "Gift"} (+{latestEffect.diamondCount || 1} 🎁)
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
             
