@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
     AlertTriangle, BarChart2, Bot, Clock, Crown, Delete, FastForward,
     FileJson, Flag, FlipHorizontal, Gamepad2, Gift, Globe, GripHorizontal, Hash, Heart, Info,
@@ -33,6 +33,68 @@ const THEME_LABELS = {
     ocean: "Ocean Blue",
     wood: "Classic Wood"
 };
+
+const TopSupporterMarqueeTrack = React.memo(({ rawList, formatCount, getAvatarUrl }) => {
+    const displayList = useMemo(() => {
+        if (!rawList || rawList.length === 0) return [];
+        let list = [...rawList];
+        while (list.length < 8) {
+            list = [...list, ...rawList];
+        }
+        return [...list, ...list];
+    }, [rawList]);
+
+    if (displayList.length === 0) return null;
+
+    return (
+        <div
+            className="flex items-center gap-3 whitespace-nowrap animate-marquee-loop"
+            style={{ animationDuration: '30s' }}
+        >
+            {displayList.map((item, idx) => (
+                <div
+                    key={`${item.type}-${item.uid}-${idx}`}
+                    className="flex items-center gap-1.5 shrink-0 bg-slate-800/50 hover:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/40 transition-colors"
+                >
+                    {/* Rank badge */}
+                    <span className={`text-[8px] font-black font-mono px-1 rounded ${
+                        item.rank === 1 ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50' :
+                        item.rank === 2 ? 'bg-slate-400/30 text-slate-200 border border-slate-400/50' :
+                        item.rank === 3 ? 'bg-amber-700/30 text-amber-400 border border-amber-700/50' :
+                        'text-slate-400'
+                    }`}>
+                        #{item.rank}
+                    </span>
+
+                    {/* Avatar */}
+                    <img
+                        src={item.avatar || getAvatarUrl(item.uid)}
+                        className="w-4 h-4 rounded-full border border-slate-600 object-cover bg-slate-800"
+                        alt={item.nickname}
+                    />
+
+                    {/* Nickname */}
+                    <span className="text-[10px] font-bold text-slate-200 max-w-[85px] truncate">
+                        {item.nickname}
+                    </span>
+
+                    {/* Score badge */}
+                    {item.type === "liker" ? (
+                        <span className="text-[9px] font-black text-rose-400 flex items-center gap-0.5 bg-rose-950/60 border border-rose-800/50 px-1.5 py-0.5 rounded-full">
+                            <Heart className="w-2.5 h-2.5 fill-rose-400" />
+                            {formatCount(item.likes)}
+                        </span>
+                    ) : (
+                        <span className="text-[9px] font-black text-amber-400 flex items-center gap-0.5 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.5 rounded-full">
+                            <Gift className="w-2.5 h-2.5 text-amber-400" />
+                            {formatCount(item.coins)}
+                        </span>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+});
 
 // 3. MAIN COMPONENT
 // ==========================================
@@ -420,7 +482,7 @@ export default function App() {
         return num.toString();
     };
 
-    const getCombinedTopList = () => {
+    const combinedTopList = useMemo(() => {
         const likersList = Object.entries(topLikers)
             .map(([uid, data]) => ({ type: "liker", uid, ...data }))
             .sort((a, b) => b.likes - a.likes)
@@ -438,7 +500,7 @@ export default function App() {
             if (giftersList[i]) combined.push({ ...giftersList[i], rank: i + 1 });
         }
         return combined;
-    };
+    }, [topLikers, topGifters]);
 
     const getOverlayBgClass = () => {
         if (bgColorMode === "greenscreen") return "bg-[#021f0f]/95 border-emerald-600/70 backdrop-blur-md text-slate-200";
@@ -5171,11 +5233,15 @@ export default function App() {
         }
 
         @keyframes marquee-loop {
-            0% { transform: translateX(0%); }
-            100% { transform: translateX(-50%); }
+            0% { transform: translate3d(0%, 0, 0); }
+            100% { transform: translate3d(-50%, 0, 0); }
         }
         .animate-marquee-loop {
             animation: marquee-loop linear infinite;
+            will-change: transform;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
         }
         .animate-marquee-loop:hover {
             animation-play-state: paused;
@@ -5183,7 +5249,7 @@ export default function App() {
       `}</style>
 
             {/* --- TOP LIKER & GIFTER MARQUEE OVERLAY --- */}
-            {showTopLikerGifterTicker && getCombinedTopList().length > 0 && (
+            {showTopLikerGifterTicker && combinedTopList.length > 0 && (
                 <div
                     ref={topTickerOverlayRef}
                     className={`z-[75] pointer-events-auto flex flex-col items-center transition-colors duration-500 ${
@@ -5214,58 +5280,11 @@ export default function App() {
 
                         {/* Scrolling Marquee Container */}
                         <div className="relative overflow-hidden flex-1 h-6 flex items-center ml-1">
-                            {(() => {
-                                const rawList = getCombinedTopList();
-                                const displayList = [...rawList, ...rawList];
-
-                                return (
-                                    <div
-                                        className="flex items-center gap-3 whitespace-nowrap animate-marquee-loop"
-                                        style={{ animationDuration: '30s' }}
-                                    >
-                                        {displayList.map((item, idx) => {
-                                            const isClone = idx >= rawList.length;
-                                            return (
-                                                <div key={`${item.type}-${item.uid}-${isClone ? 'clone' : 'orig'}`} className="flex items-center gap-1.5 shrink-0 bg-slate-800/50 hover:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/40 transition-colors">
-                                                    {/* Rank badge */}
-                                                    <span className={`text-[8px] font-black font-mono px-1 rounded ${
-                                                        item.rank === 1 ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50' :
-                                                        item.rank === 2 ? 'bg-slate-400/30 text-slate-200 border border-slate-400/50' :
-                                                        item.rank === 3 ? 'bg-amber-700/30 text-amber-400 border border-amber-700/50' :
-                                                        'text-slate-400'
-                                                    }`}>
-                                                        #{item.rank}
-                                                    </span>
-
-                                                {/* Avatar */}
-                                                <img
-                                                    src={item.avatar || getAvatarUrl(item.uid)}
-                                                    className="w-4 h-4 rounded-full border border-slate-600 object-cover bg-slate-800"
-                                                    alt={item.nickname}
-                                                />
-
-                                                {/* Nickname */}
-                                                <span className="text-[10px] font-bold text-slate-200 max-w-[85px] truncate">
-                                                    {item.nickname}
-                                                </span>
-
-                                                {/* Score badge */}
-                                                {item.type === "liker" ? (
-                                                    <span className="text-[9px] font-black text-rose-400 flex items-center gap-0.5 bg-rose-950/60 border border-rose-800/50 px-1.5 py-0.5 rounded-full">
-                                                        <Heart className="w-2.5 h-2.5 fill-rose-400" />
-                                                        {formatCount(item.likes)}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-[9px] font-black text-amber-400 flex items-center gap-0.5 bg-amber-950/60 border border-amber-800/50 px-1.5 py-0.5 rounded-full">
-                                                        <Gift className="w-2.5 h-2.5 text-amber-400" />
-                                                        {formatCount(item.coins)}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ); })}
-                                    </div>
-                                );
-                            })()}
+                            <TopSupporterMarqueeTrack
+                                rawList={combinedTopList}
+                                formatCount={formatCount}
+                                getAvatarUrl={getAvatarUrl}
+                            />
                         </div>
                     </div>
 
