@@ -3054,7 +3054,14 @@ export default function App() {
                                 });
                             }, 4000);
                             
-                            if (!isCurrentPlayerTurn) return;
+                            if (isCurrentPlayerTurn) {
+                                let cleanWord = cleanWordCheck;
+                                if (gameModeRef.current !== "PHRASE_CHAIN" && gameModeRef.current !== "CITIES") {
+                                    cleanWord = cleanWord.split(" ")[0];
+                                }
+                                if (cleanWord.length > 0) submitAnswer(cleanWord);
+                            }
+                            return;
                         }
 
                         const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
@@ -3217,10 +3224,16 @@ export default function App() {
                     });
                 }, 4000);
 
-                if (!isHostTurn || gameStateRef.current !== "PLAYING") {
-                    setManualInput("");
-                    return;
+                setManualInput("");
+
+                if (gameStateRef.current === "PLAYING" && isHostTurn) {
+                    let cleanWord = normalizeWord(rawInput);
+                    if (gameModeRef.current !== "PHRASE_CHAIN" && gameModeRef.current !== "CITIES") {
+                        cleanWord = cleanWord.split(" ")[0];
+                    }
+                    if (cleanWord.length > 0) submitAnswer(cleanWord);
                 }
+                return;
             }
 
             const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
