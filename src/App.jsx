@@ -4745,6 +4745,12 @@ export default function App() {
                                         {word500Guesses.length === 0 ? (
                                             <div className="text-[9px] text-slate-600 italic text-center py-1.5 min-w-[160px]">Ketik kata {word500Target.length} huruf!</div>
                                         ) : (() => {
+                                            const deadLetters = new Set();
+                                            word500Guesses.forEach(g => {
+                                                if (g.green === 0 && g.yellow === 0 && g.red > 0) {
+                                                    g.word.toUpperCase().split('').forEach(ch => deadLetters.add(ch));
+                                                }
+                                            });
                                             const latestGuess = word500Guesses[word500Guesses.length - 1];
                                             const prevGuesses = word500Guesses.slice(0, -1);
                                             const bestGuesses = [...prevGuesses]
@@ -4781,15 +4787,20 @@ export default function App() {
                                                         )}
                                                     </div>
                                                     <div className="flex gap-px">
-                                                        {g.word.split('').map((char, j) => (
-                                                            <div key={j} className={`w-4 h-5 shrink-0 border rounded-[2px] flex items-center justify-center font-bold text-[9px] uppercase transition-colors duration-300 ${
-                                                                isLatest && isWinRow
-                                                                    ? 'bg-emerald-700 border-emerald-500 text-white'
-                                                                    : isLatest ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-slate-800 border-slate-700 text-slate-300'
-                                                            }`}>
-                                                                {char}
-                                                            </div>
-                                                        ))}
+                                                        {g.word.split('').map((char, j) => {
+                                                            const isDead = deadLetters.has(char.toUpperCase());
+                                                            return (
+                                                                <div key={j} className={`w-4 h-5 shrink-0 border rounded-[2px] flex items-center justify-center font-bold text-[9px] uppercase transition-colors duration-300 ${
+                                                                    isDead
+                                                                        ? 'bg-rose-950/90 border-rose-600/80 text-rose-300 shadow-sm shadow-rose-950/50'
+                                                                        : isLatest && isWinRow
+                                                                            ? 'bg-emerald-700 border-emerald-500 text-white'
+                                                                            : isLatest ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-slate-800 border-slate-700 text-slate-300'
+                                                                }`} title={isDead ? `Huruf '${char}' mati (0 poin)` : ''}>
+                                                                    {char}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                     <div className="flex gap-px ml-0.5">
                                                         <div className="w-4 h-5 shrink-0 bg-emerald-700 border border-emerald-600 rounded-[2px] flex items-center justify-center font-bold text-[9px] text-white">{g.green}</div>
