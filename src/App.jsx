@@ -3564,7 +3564,7 @@ export default function App() {
                             <button onClick={() => setSettingsTab('dev')} title="Simulasi/Dev" className={`flex-1 flex justify-center py-1.5 rounded-md transition-all duration-200 ${settingsTab === 'dev' ? 'bg-amber-600 text-white shadow-sm scale-95' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><Bot className="w-4 h-4" /></button>
                         </div>
 
-                        <div className="flex flex-col gap-2 min-h-[190px]">
+                        <div className="flex flex-col gap-2 max-h-[65vh] sm:max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
                             {settingsTab === 'rules' && (
                                 <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
                                     <button onClick={cycleGameMode} className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-1.5 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group">
@@ -3681,99 +3681,99 @@ export default function App() {
                                 </div>
                             )}
                             {settingsTab === 'general' && (
-                                <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
+                                <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-1.5">
                                     {/* Display Settings Group */}
                                     <div className="w-full bg-slate-800/30 rounded border border-slate-700/50 flex flex-col divide-y divide-slate-700/50">
-                                        <button onClick={() => toggleLanguage()} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2"><Globe className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">{t("language")}</span></div>
-                                            <span className="text-slate-100 group-hover:text-sky-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix"}</span>
+                                        <button onClick={() => toggleLanguage()} className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5"><Globe className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">{t("language")}</span></div>
+                                            <span className="text-[11px] text-slate-100 group-hover:text-sky-300">{language === "EN" ? "English" : language === "ID" ? "Indonesia" : "Mix"}</span>
                                         </button>
-                                        <div className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-amber-400" /><span className="text-slate-300">Tema Meja</span></div>
-                                            <select value={tableTheme} onChange={(e) => setTableTheme(e.target.value)} className="bg-transparent text-slate-200 text-right outline-none cursor-pointer">
+                                        <div className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5 text-amber-400" /><span className="text-slate-300">Tema Meja</span></div>
+                                            <select value={tableTheme} onChange={(e) => setTableTheme(e.target.value)} className="bg-transparent text-slate-200 text-right outline-none cursor-pointer text-[11px]">
                                                 {Object.keys(TABLE_THEMES).map(themeKey => ( <option key={themeKey} value={themeKey} className="bg-slate-900">{THEME_LABELS[themeKey]}</option> ))}
                                             </select>
                                         </div>
-                                        <div className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2"><Users className="w-3.5 h-3.5 text-amber-400" /><span className="text-slate-300">Layout Pemain</span></div>
+                                        <div className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-amber-400" /><span className="text-slate-300">Layout Pemain</span></div>
                                             <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
-                                                <button onClick={() => setLayoutStyle("round")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${layoutStyle === "round" ? "bg-sky-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Bundar</button>
-                                                <button onClick={() => setLayoutStyle("fut")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${layoutStyle === "fut" ? "bg-amber-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>FUT Card</button>
+                                                <button onClick={() => setLayoutStyle("round")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${layoutStyle === "round" ? "bg-sky-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Bundar</button>
+                                                <button onClick={() => setLayoutStyle("fut")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${layoutStyle === "fut" ? "bg-amber-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>FUT Card</button>
                                             </div>
                                         </div>
-                                        <div className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2"><Maximize className="w-3.5 h-3.5 text-emerald-400" /><span className="text-slate-300">Warna Latar</span></div>
+                                        <div className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5"><Maximize className="w-3.5 h-3.5 text-emerald-400" /><span className="text-slate-300">Warna Latar</span></div>
                                             <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
-                                                <button onClick={() => setBgColorMode("default")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "default" ? "bg-slate-700 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Default</button>
-                                                <button onClick={() => setBgColorMode("darkblue")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "darkblue" ? "bg-[#1a1d27] text-white shadow-sm border border-slate-600" : "text-slate-400 hover:text-white"}`}>Dark Blue</button>
-                                                <button onClick={() => setBgColorMode("greenscreen")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${bgColorMode === "greenscreen" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Green</button>
+                                                <button onClick={() => setBgColorMode("default")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${bgColorMode === "default" ? "bg-slate-700 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Default</button>
+                                                <button onClick={() => setBgColorMode("darkblue")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${bgColorMode === "darkblue" ? "bg-[#1a1d27] text-white shadow-sm border border-slate-600" : "text-slate-400 hover:text-white"}`}>Dark Blue</button>
+                                                <button onClick={() => setBgColorMode("greenscreen")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${bgColorMode === "greenscreen" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Green</button>
                                             </div>
                                         </div>
-                                        <div className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2"><Plus className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">Ukuran Meja</span></div>
+                                        <div className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5"><Plus className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">Ukuran Meja</span></div>
                                             <div className="flex items-center gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
-                                                <button onClick={() => setTableScale(s => Math.max(0.3, s - 0.1))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors"><Minus className="w-3 h-3" /></button>
-                                                <span className="w-9 text-center font-mono font-bold text-slate-200 text-[11px]">{Math.round(tableScale * 100)}%</span>
-                                                <button onClick={() => setTableScale(s => Math.min(2, s + 0.1))} className="w-5 h-5 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors"><Plus className="w-3 h-3" /></button>
-                                                <button onClick={() => setTableScale(1)} title="Reset Ukuran" className="w-5 h-5 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors ml-0.5"><RefreshCw className="w-2.5 h-2.5" /></button>
+                                                <button onClick={() => setTableScale(s => Math.max(0.3, s - 0.1))} className="w-4 h-4 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors"><Minus className="w-2.5 h-2.5" /></button>
+                                                <span className="w-8 text-center font-mono font-bold text-slate-200 text-[10px]">{Math.round(tableScale * 100)}%</span>
+                                                <button onClick={() => setTableScale(s => Math.min(2, s + 0.1))} className="w-4 h-4 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors"><Plus className="w-2.5 h-2.5" /></button>
+                                                <button onClick={() => setTableScale(1)} title="Reset Ukuran" className="w-4 h-4 flex items-center justify-center hover:bg-slate-800 rounded text-slate-400 hover:text-slate-200 transition-colors ml-0.5"><RefreshCw className="w-2 h-2" /></button>
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Media & Overlay Group */}
                                     <div className="w-full bg-slate-800/30 rounded border border-slate-700/50 flex flex-col divide-y divide-slate-700/50">
-                                        <button onClick={() => setIsMuted(!isMuted)} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2">{isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-500" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}<span className="text-slate-300">{t("sound")}</span></div>
-                                            <span className={isMuted ? "text-red-400" : "text-emerald-400"}>{isMuted ? "Off" : "On"}</span>
+                                        <button onClick={() => setIsMuted(!isMuted)} className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5">{isMuted ? <VolumeX className="w-3.5 h-3.5 text-red-500" /> : <Volume2 className="w-3.5 h-3.5 text-emerald-400" />}<span className="text-slate-300">{t("sound")}</span></div>
+                                            <span className={isMuted ? "text-red-400 text-[11px]" : "text-emerald-400 text-[11px]"}>{isMuted ? "Off" : "On"}</span>
                                         </button>
-                                        <div className="px-3 py-2 text-xs font-bold flex items-center justify-between">
-                                            <div className="flex items-center gap-2"><Music className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">Tampilan Musik</span></div>
+                                        <div className="px-2.5 py-1.5 text-xs font-bold flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5"><Music className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">Tampilan Musik</span></div>
                                             <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
-                                                <button onClick={() => setMusicOverlayStyle("thumbnail")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${musicOverlayStyle === "thumbnail" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"}`}>Standar</button>
-                                                <button onClick={() => setMusicOverlayStyle("video")} className={`px-2 py-0.5 rounded text-[10px] transition-colors ${musicOverlayStyle === "video" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"}`}>Video</button>
+                                                <button onClick={() => setMusicOverlayStyle("thumbnail")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${musicOverlayStyle === "thumbnail" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"}`}>Standar</button>
+                                                <button onClick={() => setMusicOverlayStyle("video")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${musicOverlayStyle === "video" ? "bg-sky-600 text-white" : "text-slate-400 hover:text-white"}`}>Video</button>
                                             </div>
                                         </div>
                                         <button onClick={() => {
                                             if (backendWsRef.current && backendWsRef.current.readyState === WebSocket.OPEN) {
                                                 backendWsRef.current.send(JSON.stringify({ event: "toggle_music_requests", data: { enabled: !(musicState?.requestsEnabled ?? true) } }));
                                             }
-                                        }} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2"><Play className="w-3.5 h-3.5 text-fuchsia-400" /><span className="text-slate-300">Request Musik</span></div>
-                                            <span className={(musicState?.requestsEnabled ?? true) ? "text-emerald-400" : "text-red-400"}>{(musicState?.requestsEnabled ?? true) ? "ON" : "OFF"}</span>
+                                        }} className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5"><Play className="w-3.5 h-3.5 text-fuchsia-400" /><span className="text-slate-300">Request Musik</span></div>
+                                            <span className={(musicState?.requestsEnabled ?? true) ? "text-emerald-400 text-[11px]" : "text-red-400 text-[11px]"}>{(musicState?.requestsEnabled ?? true) ? "ON" : "OFF"}</span>
                                         </button>
-                                        <button onClick={() => setIsCamEnabled(!isCamEnabled)} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2">
+                                        <button onClick={() => setIsCamEnabled(!isCamEnabled)} className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5">
                                                 <Camera className="w-3.5 h-3.5 text-cyan-400" />
                                                 <span className="text-slate-300">Kamera Overlay</span>
                                             </div>
-                                            <span className={isCamEnabled ? "text-emerald-400" : "text-red-400"}>{isCamEnabled ? "ON" : "OFF"}</span>
+                                            <span className={isCamEnabled ? "text-emerald-400 text-[11px]" : "text-red-400 text-[11px]"}>{isCamEnabled ? "ON" : "OFF"}</span>
                                         </button>
-                                        <button onClick={() => setShowTopLikerGifterTicker(!showTopLikerGifterTicker)} className="px-3 py-2 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
-                                            <div className="flex items-center gap-2">
+                                        <button onClick={() => setShowTopLikerGifterTicker(!showTopLikerGifterTicker)} className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
+                                            <div className="flex items-center gap-1.5">
                                                 <Heart className="w-3.5 h-3.5 text-rose-400" />
-                                                <span className="text-slate-300">Ticker Top Supporter</span>
+                                                <span className="text-slate-300">Ticker Supporter</span>
                                             </div>
-                                            <span className={showTopLikerGifterTicker ? "text-emerald-400" : "text-red-400"}>{showTopLikerGifterTicker ? "ON" : "OFF"}</span>
+                                            <span className={showTopLikerGifterTicker ? "text-emerald-400 text-[11px]" : "text-red-400 text-[11px]"}>{showTopLikerGifterTicker ? "ON" : "OFF"}</span>
                                         </button>
                                         {showTopLikerGifterTicker && (
-                                            <div className="px-3 py-1.5 flex items-center justify-between bg-slate-900/40 border-t border-slate-800">
-                                                <span className="text-[10px] text-slate-400">Reset Data Supporter</span>
-                                                <button onClick={() => { setTopLikers({}); setTopGifters({}); showFeedback("Data Supporter di-reset!", "info"); }} className="px-2 py-0.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded text-[10px] font-bold transition-colors">Reset</button>
+                                            <div className="px-2.5 py-1 flex items-center justify-between bg-slate-900/40 border-t border-slate-800">
+                                                <span className="text-[10px] text-slate-400">Reset Supporter</span>
+                                                <button onClick={() => { setTopLikers({}); setTopGifters({}); showFeedback("Data Supporter di-reset!", "info"); }} className="px-2 py-0.5 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded text-[9px] font-bold transition-colors">Reset</button>
                                             </div>
                                         )}
-                                        <div className="px-3 py-2 text-xs font-bold flex flex-col gap-1.5">
-                                            <div className="flex items-center gap-2"><Gamepad2 className="w-3.5 h-3.5 text-purple-400" /><span className="text-slate-300">Minigame Overlay</span></div>
+                                        <div className="px-2.5 py-1.5 text-xs font-bold flex flex-col gap-1">
+                                            <div className="flex items-center gap-1.5"><Gamepad2 className="w-3.5 h-3.5 text-purple-400" /><span className="text-slate-300">Minigame Overlay</span></div>
                                             <div className="flex flex-wrap gap-1">
-                                                <button onClick={() => setActiveMinigame("OFF")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "OFF" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>OFF</button>
-                                                <button onClick={() => setActiveMinigame("ANAGRAM")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "ANAGRAM" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>ANAGRAM</button>
-                                                <button onClick={() => setActiveMinigame("WORD500")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORD500" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORD500</button>
-                                                <button onClick={() => setActiveMinigame("WORDLE")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORDLE?</button>
-                                                <button onClick={() => setActiveMinigame("AUTO_WORDLE")} className={`flex-1 py-1 rounded text-[10px] transition-colors ${activeMinigame === "AUTO_WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`} title="Auto Clue Wordle">AUTO</button>
+                                                <button onClick={() => setActiveMinigame("OFF")} className={`flex-1 py-0.5 rounded text-[9px] font-bold transition-colors ${activeMinigame === "OFF" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>OFF</button>
+                                                <button onClick={() => setActiveMinigame("ANAGRAM")} className={`flex-1 py-0.5 rounded text-[9px] font-bold transition-colors ${activeMinigame === "ANAGRAM" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>ANAGRAM</button>
+                                                <button onClick={() => setActiveMinigame("WORD500")} className={`flex-1 py-0.5 rounded text-[9px] font-bold transition-colors ${activeMinigame === "WORD500" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORD500</button>
+                                                <button onClick={() => setActiveMinigame("WORDLE")} className={`flex-1 py-0.5 rounded text-[9px] font-bold transition-colors ${activeMinigame === "WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>WORDLE?</button>
+                                                <button onClick={() => setActiveMinigame("AUTO_WORDLE")} className={`flex-1 py-0.5 rounded text-[9px] font-bold transition-colors ${activeMinigame === "AUTO_WORDLE" ? "bg-purple-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`} title="Auto Clue Wordle">AUTO</button>
                                             </div>
                                             {activeMinigame !== "OFF" && activeMinigame !== "ANAGRAM" && (
-                                                <div className="mt-1.5 pt-1.5 border-t border-slate-700/50 flex flex-col gap-1">
+                                                <div className="mt-1 pt-1 border-t border-slate-700/50 flex flex-col gap-1">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Panjang Huruf Target</span>
+                                                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Panjang Huruf Target</span>
                                                         <span className="text-[9px] text-emerald-400 font-mono">
                                                             {Object.keys(allowedWordleLengths).filter(k => allowedWordleLengths[k]).map(k => `${k}H`).join(", ")}
                                                         </span>
@@ -3785,7 +3785,7 @@ export default function App() {
                                                                 <button
                                                                     key={len}
                                                                     onClick={() => toggleWordleLength(len)}
-                                                                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-all border ${
+                                                                    className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold transition-all border ${
                                                                         isChecked
                                                                             ? "bg-emerald-950/80 border-emerald-500 text-emerald-300 shadow-sm"
                                                                             : "bg-slate-900/60 border-slate-800 text-slate-500 hover:text-slate-400"
