@@ -2902,19 +2902,20 @@ export default function App() {
                     if (cleanWordCheck.length === 6) {
                         if (word500GuessesRef.current.length >= 6) return;
 
-                        if (!isWordInDictionary(cleanWordCheck)) {
-                            showFeedback(`"${cleanWordCheck.toUpperCase()}" tidak ada di kamus!`, "warning");
-                            return;
-                        }
-
+                        const isInDict = isWordInDictionary(cleanWordCheck);
                         const hardCheck = checkWordleHardMode(cleanWordCheck, word500TargetRef.current, word500GuessesRef.current);
-                        if (!hardCheck.valid) {
-                            showFeedback(hardCheck.reason, "warning");
-                            addLog("MiniGame", `⚠️ ${nickname}: ${hardCheck.reason}`);
-                            return;
+                        const isError = !isInDict || !hardCheck.valid;
+                        const invalidReason = !isInDict
+                            ? `"${cleanWordCheck.toUpperCase()}" tidak ada di kamus!`
+                            : hardCheck.reason;
+
+                        if (isError) {
+                            showFeedback(invalidReason, "warning");
+                            addLog("MiniGame", `⚠️ ${nickname}: ${invalidReason}`);
+                            playSound("wrong");
                         }
 
-                        const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
+                        const colors = isError ? Array(6).fill("gray") : computeWordleColors(cleanWordCheck, word500TargetRef.current);
                         const greenCount = colors.filter(c => c === "green").length;
                         const yellowCount = colors.filter(c => c === "yellow").length;
                         const redCount = colors.filter(c => c === "gray").length;
@@ -2926,7 +2927,9 @@ export default function App() {
                             red: redCount,
                             colors,
                             nickname,
-                            profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
+                            profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId),
+                            isError,
+                            invalidReason
                         };
 
                         const nextGuesses = [...word500GuessesRef.current, newGuess];
@@ -3041,20 +3044,20 @@ export default function App() {
                 return;
             }
 
-            if (!isWordInDictionary(cleanWordCheck)) {
-                showFeedback(`"${cleanWordCheck.toUpperCase()}" tidak ada di kamus!`, "warning");
-                setManualInput("");
-                return;
-            }
-
+            const isInDict = isWordInDictionary(cleanWordCheck);
             const hardCheck = checkWordleHardMode(cleanWordCheck, word500TargetRef.current, word500GuessesRef.current);
-            if (!hardCheck.valid) {
-                showFeedback(hardCheck.reason, "warning");
-                setManualInput("");
-                return;
+            const isError = !isInDict || !hardCheck.valid;
+            const invalidReason = !isInDict
+                ? `"${cleanWordCheck.toUpperCase()}" tidak ada di kamus!`
+                : hardCheck.reason;
+
+            if (isError) {
+                showFeedback(invalidReason, "warning");
+                addLog("MiniGame", `⚠️ HOST: ${invalidReason}`);
+                playSound("wrong");
             }
 
-            const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
+            const colors = isError ? Array(6).fill("gray") : computeWordleColors(cleanWordCheck, word500TargetRef.current);
             const greenCount = colors.filter(c => c === "green").length;
             const yellowCount = colors.filter(c => c === "yellow").length;
             const redCount = colors.filter(c => c === "gray").length;
@@ -3066,7 +3069,9 @@ export default function App() {
                 red: redCount,
                 colors,
                 nickname: "HOST (You)",
-                profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`
+                profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST`,
+                isError,
+                invalidReason
             };
 
             const nextGuesses = [...word500GuessesRef.current, newGuess];
@@ -4823,7 +4828,6 @@ export default function App() {
                                 {(() => {
                                     const displayRows = [...word500Guesses];
                                     while (displayRows.length < 6) displayRows.push(null);
-                                    
                                     return displayRows.slice(0, 6).map((g, idx) => (
                                         <div key={idx} className="flex items-center gap-1.5 animate-in slide-in-from-right fade-in duration-200">
                                             <div className="flex-shrink-0 w-5 flex justify-center">
@@ -4837,15 +4841,22 @@ export default function App() {
                                                     <div className="w-5 h-6 shrink-0" />
                                                 )}
                                             </div>
-                                            <div className="flex gap-1">
+                                            <div
+                                                className={`flex gap-1 p-0.5 rounded-[4px] transition-all ${
+                                                    g?.isError ? 'ring-2 ring-rose-500 bg-rose-950/40 shadow-sm shadow-rose-950/50' : ''
+                                                }`}
+                                                title={g?.invalidReason || (g ? `${g.nickname}: ${g.word}` : '')}
+                                            >
                                                 {Array(6).fill(0).map((_, j) => {
                                                     if (g) {
                                                         const char = g.word[j];
-                                                        const colorClass = g.colors && g.colors[j] === 'green'
-                                                            ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
-                                                            : g.colors && g.colors[j] === 'yellow'
-                                                                ? 'bg-amber-600 border-amber-500 text-white shadow-sm'
-                                                                : 'bg-slate-700/90 border-slate-600/80 text-slate-300';
+                                                        const colorClass = g.isError
+                                                            ? 'bg-rose-950/90 border-rose-500 text-rose-200 shadow-sm'
+                                                            : g.colors && g.colors[j] === 'green'
+                                                                ? 'bg-emerald-600 border-emerald-500 text-white shadow-sm'
+                                                                : g.colors && g.colors[j] === 'yellow'
+                                                                    ? 'bg-amber-600 border-amber-500 text-white shadow-sm'
+                                                                    : 'bg-slate-700/90 border-slate-600/80 text-slate-300';
                                                         return (
                                                             <div key={j} className={`w-6 h-7 shrink-0 border rounded-[3px] flex items-center justify-center font-black text-[15px] leading-none uppercase ${colorClass}`}>
                                                                 {char}
