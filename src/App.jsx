@@ -5217,24 +5217,25 @@ export default function App() {
                             {(() => {
                                 const rawList = getCombinedTopList();
                                 const displayList = [...rawList, ...rawList];
-                                const animDuration = Math.max(12, rawList.length * 4.5);
 
                                 return (
                                     <div
                                         className="flex items-center gap-3 whitespace-nowrap animate-marquee-loop"
-                                        style={{ animationDuration: `${animDuration}s` }}
+                                        style={{ animationDuration: '30s' }}
                                     >
-                                        {displayList.map((item, idx) => (
-                                            <div key={`${item.type}-${item.uid}-${idx}`} className="flex items-center gap-1.5 shrink-0 bg-slate-800/50 hover:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/40 transition-colors">
-                                                {/* Rank badge */}
-                                                <span className={`text-[8px] font-black font-mono px-1 rounded ${
-                                                    item.rank === 1 ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50' :
-                                                    item.rank === 2 ? 'bg-slate-400/30 text-slate-200 border border-slate-400/50' :
-                                                    item.rank === 3 ? 'bg-amber-700/30 text-amber-400 border border-amber-700/50' :
-                                                    'text-slate-400'
-                                                }`}>
-                                                    #{item.rank}
-                                                </span>
+                                        {displayList.map((item, idx) => {
+                                            const isClone = idx >= rawList.length;
+                                            return (
+                                                <div key={`${item.type}-${item.uid}-${isClone ? 'clone' : 'orig'}`} className="flex items-center gap-1.5 shrink-0 bg-slate-800/50 hover:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-700/40 transition-colors">
+                                                    {/* Rank badge */}
+                                                    <span className={`text-[8px] font-black font-mono px-1 rounded ${
+                                                        item.rank === 1 ? 'bg-amber-500/30 text-amber-300 border border-amber-500/50' :
+                                                        item.rank === 2 ? 'bg-slate-400/30 text-slate-200 border border-slate-400/50' :
+                                                        item.rank === 3 ? 'bg-amber-700/30 text-amber-400 border border-amber-700/50' :
+                                                        'text-slate-400'
+                                                    }`}>
+                                                        #{item.rank}
+                                                    </span>
 
                                                 {/* Avatar */}
                                                 <img
@@ -5261,7 +5262,7 @@ export default function App() {
                                                     </span>
                                                 )}
                                             </div>
-                                        ))}
+                                        ); })}
                                     </div>
                                 );
                             })()}
