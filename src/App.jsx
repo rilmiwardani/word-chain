@@ -160,6 +160,12 @@ export default function App() {
     const [mainTableOffset, setMainTableOffset] = useState({ x: 0, y: 0 });
 
 
+    const getOverlayBgClass = () => {
+        if (bgColorMode === "greenscreen") return "bg-[#021f0f]/95 border-emerald-600/70 shadow-2xl backdrop-blur-md text-slate-200";
+        if (bgColorMode === "darkblue") return "bg-[#141722]/95 border-slate-700/70 shadow-2xl backdrop-blur-md text-slate-200";
+        return "bg-slate-900/95 border-slate-700/60 shadow-2xl backdrop-blur-md text-slate-200";
+    };
+
     // === REFS ===
     const lastLikeTimeRef = useRef(0);
     const quitHistoryRef = useRef({});
@@ -4151,7 +4157,7 @@ export default function App() {
                         SUSUN KATA
                     </div>
                     <div
-                        className="bg-slate-900/80 backdrop-blur-md rounded-full border border-slate-700/50 shadow-lg pointer-events-auto flex items-center p-1.5 gap-2 w-max"
+                        className={`backdrop-blur-md rounded-full border shadow-lg pointer-events-auto flex items-center p-1.5 gap-2 w-max ${getOverlayBgClass()}`}
                         style={{
                             transform: `scale(${miniGameScale})`,
                             transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
@@ -4281,7 +4287,7 @@ export default function App() {
                             >
                                 {/* ══ FRONT FACE — Guess Rows ══ */}
                                 <div
-                                    className="bg-slate-900/90 backdrop-blur-md rounded-lg border border-slate-700/50 shadow-xl flex flex-col p-1.5 w-max max-w-[90vw]"
+                                    className={`backdrop-blur-md rounded-lg border shadow-xl flex flex-col p-1.5 w-max max-w-[90vw] ${getOverlayBgClass()}`}
                                     style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
                                 >
                                     {/* Header */}
@@ -4440,7 +4446,7 @@ export default function App() {
                     style={miniGamePos.x !== null ? { left: miniGamePos.x, top: miniGamePos.y, bottom: 'auto', right: 'auto' } : {}}
                 >
                     <div
-                        className="pointer-events-auto bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/50 shadow-2xl flex flex-col p-2 sm:p-2.5 gap-1.5 w-max max-w-[90vw]"
+                        className={`pointer-events-auto rounded-xl flex flex-col p-2 sm:p-2.5 gap-1.5 w-max max-w-[90vw] ${getOverlayBgClass()}`}
                         style={{
                             transform: `scale(${miniGameScale})`,
                             transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
@@ -4531,8 +4537,12 @@ export default function App() {
                             <div
                                 className={`absolute inset-0 rounded-lg border shadow-xl flex flex-col items-center justify-between p-2 sm:p-2.5 transition-colors duration-500 overflow-hidden ${
                                     word500Winner?.isFail
-                                        ? 'bg-slate-900/95 border-rose-600/70 shadow-rose-950/50'
-                                        : 'bg-slate-900/95 border-emerald-600/70 shadow-emerald-950/50'
+                                        ? 'bg-rose-950/95 border-rose-600/70 shadow-rose-950/50'
+                                        : bgColorMode === 'greenscreen'
+                                            ? 'bg-[#022410]/95 border-emerald-500/70 shadow-emerald-950/50'
+                                            : bgColorMode === 'darkblue'
+                                                ? 'bg-[#10131d]/95 border-emerald-500/70 shadow-emerald-950/50'
+                                                : 'bg-slate-900/95 border-emerald-600/70 shadow-emerald-950/50'
                                 }`}
                                 style={{
                                     backfaceVisibility: 'hidden',
