@@ -796,7 +796,7 @@ export default function App() {
     useEffect(() => {
         let interval;
         if (gameState === "ENDED" && autoRestartEnabled) {
-            setRestartCountdown(35);
+            setRestartCountdown(10);
             interval = setInterval(() => {
                 setRestartCountdown(prev => {
                     if (prev !== null && prev <= 1) {
