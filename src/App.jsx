@@ -219,6 +219,7 @@ export default function App() {
     const [isMuted, setIsMuted] = useState(() => localStorage.getItem("sk_isMuted") === "true");
     const [showLogs, setShowLogs] = useState(() => { const s = localStorage.getItem("sk_showLogs"); return s !== "false"; });
     const [showPointGuide, setShowPointGuide] = useState(() => localStorage.getItem("sk_showPointGuide") === "true");
+    const [showActionCardGuide, setShowActionCardGuide] = useState(() => localStorage.getItem("sk_showActionCardGuide") === "true");
     const [guideLangTab, setGuideLangTab] = useState(() => localStorage.getItem("sk_guideLangTab") || "ID");
 
     const [scrambleWord, setScrambleWord] = useState("");
@@ -262,6 +263,7 @@ export default function App() {
         localStorage.setItem("sk_isMuted", isMuted.toString());
         localStorage.setItem("sk_showLogs", showLogs.toString());
         localStorage.setItem("sk_showPointGuide", showPointGuide.toString());
+        localStorage.setItem("sk_showActionCardGuide", showActionCardGuide.toString());
         localStorage.setItem("sk_guideLangTab", guideLangTab);
         localStorage.setItem("sk_activeMinigame", activeMinigame);
         localStorage.setItem("sk_allowedWordleLengths", JSON.stringify(allowedWordleLengths));
@@ -2738,6 +2740,30 @@ export default function App() {
         }
     }
 
+    function handleOpenActionCardGuide() {
+        if (gameState === "PLAYING") {
+            setGameState("PAUSED");
+            addLog("System", "Game Paused ⏸️ (Melihat Panduan Kartu)");
+            triggerTableEffect("warning");
+            playSound("notification");
+        }
+        setShowActionCardGuide(true);
+    }
+
+    function handleCloseActionCardGuide() {
+        setShowActionCardGuide(false);
+        if (gameState === "PAUSED") {
+            setGameState("PLAYING");
+            addLog("System", "Game Resumed ▶️");
+            triggerTableEffect("success");
+            playSound("start");
+        }
+    }
+            triggerTableEffect("success");
+            playSound("start");
+        }
+    }
+
     function clearLobby() {
         setGameState("WAITING"); setPlayers([]); playersRef.current = []; setUsedWords(new Set());
         setPlayerQueue([]); playerQueueRef.current = [];
@@ -3633,17 +3659,27 @@ export default function App() {
                                         <span className="text-slate-300">{t("mode")}:</span><span className="text-sky-400 group-hover:text-sky-300">{getModeLabel()}</span>
                                     </button>
                                     <div className="flex flex-col gap-1.5">
-                                        <button onClick={() => setActionCardsEnabled(!actionCardsEnabled)} className={`w-full ${actionCardsEnabled ? 'bg-amber-900/30 hover:bg-amber-900/50 border-amber-700/50' : 'bg-slate-800/50 hover:bg-slate-800 border-slate-700'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
-                                            <div className="flex items-center gap-2"><Sparkles className={`w-3 h-3 ${actionCardsEnabled ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} /><span className={actionCardsEnabled ? "text-amber-300" : "text-slate-400"}>Kartu Aksi</span></div>
-                                            <span className={actionCardsEnabled ? "text-amber-400" : "text-slate-500"}>{actionCardsEnabled ? "ON" : "OFF"}</span>
-                                        </button>
+                                        <div className={`w-full flex rounded overflow-hidden border transition-colors ${actionCardsEnabled ? 'border-amber-700/50 bg-amber-900/30' : 'border-slate-700 bg-slate-800/50'}`}>
+                                            <button onClick={() => setActionCardsEnabled(!actionCardsEnabled)} className={`flex-1 px-3 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group ${actionCardsEnabled ? 'hover:bg-amber-900/50' : 'hover:bg-slate-800'}`}>
+                                                <div className="flex items-center gap-2"><Sparkles className={`w-3 h-3 ${actionCardsEnabled ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} /><span className={actionCardsEnabled ? "text-amber-300" : "text-slate-400"}>Kartu Aksi</span></div>
+                                                <span className={actionCardsEnabled ? "text-amber-400" : "text-slate-500"}>{actionCardsEnabled ? "ON" : "OFF"}</span>
+                                            </button>
+                                            <button onClick={handleOpenActionCardGuide} className={`px-2.5 py-1.5 transition-colors border-l flex items-center justify-center ${actionCardsEnabled ? 'border-amber-700/30 hover:bg-amber-800/50 text-amber-400' : 'border-slate-700 hover:bg-slate-700/50 text-slate-400'}`}>
+                                                <Info className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                         {/* BUTTON POINT MODE */}
-                                        <button onClick={cyclePointMode} className={`w-full ${pointMode !== 'OFF' ? 'bg-emerald-900/30 hover:bg-emerald-900/50 border-emerald-700/50' : 'bg-slate-800/50 hover:bg-slate-800 border-slate-700'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
-                                            <div className="flex items-center gap-2"><Target className={`w-3 h-3 ${pointMode !== 'OFF' ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} /><span className={pointMode !== 'OFF' ? "text-emerald-300" : "text-slate-400"}>Point Mode</span></div>
-                                            <span className={pointMode !== 'OFF' ? "text-emerald-400" : "text-slate-500"}>
-                                                {pointMode === 'OFF' ? 'OFF' : pointMode === 'LENGTH' ? 'LEN (1pt)' : pointMode === 'SCRABBLE' ? 'SCRABBLE' : 'VOWELS (+3)'}
-                                            </span>
-                                        </button>
+                                        <div className={`w-full flex rounded overflow-hidden border transition-colors ${pointMode !== 'OFF' ? 'border-emerald-700/50 bg-emerald-900/30' : 'border-slate-700 bg-slate-800/50'}`}>
+                                            <button onClick={cyclePointMode} className={`flex-1 px-3 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group ${pointMode !== 'OFF' ? 'hover:bg-emerald-900/50' : 'hover:bg-slate-800'}`}>
+                                                <div className="flex items-center gap-2"><Target className={`w-3 h-3 ${pointMode !== 'OFF' ? 'text-emerald-400 animate-pulse' : 'text-slate-500'}`} /><span className={pointMode !== 'OFF' ? "text-emerald-300" : "text-slate-400"}>Point Mode</span></div>
+                                                <span className={pointMode !== 'OFF' ? "text-emerald-400" : "text-slate-500"}>
+                                                    {pointMode === 'OFF' ? 'OFF' : pointMode === 'LENGTH' ? 'LEN (1pt)' : pointMode === 'SCRABBLE' ? 'SCRABBLE' : 'VOWELS (+3)'}
+                                                </span>
+                                            </button>
+                                            <button onClick={handleOpenPointGuide} className={`px-2.5 py-1.5 transition-colors border-l flex items-center justify-center ${pointMode !== 'OFF' ? 'border-emerald-700/30 hover:bg-emerald-800/50 text-emerald-400' : 'border-slate-700 hover:bg-slate-700/50 text-slate-400'}`}>
+                                                <Info className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                         <button onClick={() => setAutoRestartEnabled(!autoRestartEnabled)} className={`w-full ${autoRestartEnabled ? 'bg-indigo-900/30 hover:bg-indigo-900/50 border-indigo-700/50' : 'bg-slate-800/50 hover:bg-slate-800 border-slate-700'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
                                             <div className="flex items-center gap-2"><FastForward className={`w-3 h-3 ${autoRestartEnabled ? 'text-indigo-400 animate-pulse' : 'text-slate-500'}`} /><span className={autoRestartEnabled ? "text-indigo-300" : "text-slate-400"}>{t("auto_restart")}</span></div>
                                             <span className={autoRestartEnabled ? "text-indigo-400" : "text-slate-500"}>{autoRestartEnabled ? "ON" : "OFF"}</span>
@@ -5621,6 +5657,34 @@ export default function App() {
             
             {/* --- MUSIC PLAYER OVERLAY --- */}
             <MusicPlayer musicState={musicState} wsRef={backendWsRef} isKeyboardOpen={showVirtualKeyboard} overlayStyle={musicOverlayStyle} />
+
+            {/* --- ACTION CARD GUIDE MODAL --- */}
+            {showActionCardGuide && (
+                <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4" onClick={handleCloseActionCardGuide}>
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl max-w-sm w-full relative" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-black text-amber-400 flex items-center gap-2">
+                                <Sparkles className="w-6 h-6 text-amber-500" />
+                                Panduan Kartu Aksi
+                            </h2>
+                            <button onClick={handleCloseActionCardGuide} className="text-slate-500 hover:text-white bg-slate-800 hover:bg-slate-700 p-1.5 rounded-full transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="space-y-4 text-slate-300 text-sm">
+                            <p>Saat Kartu Aksi diaktifkan, pemain dapat memperoleh dan menggunakan efek spesial selama permainan.</p>
+                            <ul className="list-disc pl-4 space-y-2">
+                                <li>Pemain mendapatkan kartu secara acak saat menjawab dengan cepat (di bawah 3 detik) atau membuat kata yang panjang.</li>
+                                <li>Terdapat beberapa jenis kartu seperti <b>Skip</b> (melewati giliran pemain berikutnya), <b>Reverse</b> (memutar arah putaran), <b>Bomb</b> (menghancurkan kata saat ini), dan <b>Heal</b> (mendapatkan nyawa/immunity).</li>
+                                <li>Host dapat mematikan fitur ini jika ingin bermain klasik tanpa gangguan efek.</li>
+                            </ul>
+                        </div>
+                        <button onClick={handleCloseActionCardGuide} className="mt-6 w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition-all shadow-md active:scale-95 uppercase tracking-widest text-sm">
+                            Mengerti
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* --- CAMERA OVERLAY --- */}
             <CameraOverlay isEnabled={isCamEnabled} setIsEnabled={setIsCamEnabled} />
