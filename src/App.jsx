@@ -5668,12 +5668,25 @@ export default function App() {
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
-                        <div className="space-y-4 text-slate-300 text-sm">
-                            <p>Saat Kartu Aksi diaktifkan, pemain dapat memperoleh dan menggunakan efek spesial selama permainan.</p>
-                            <ul className="list-disc pl-4 space-y-2">
-                                <li>Pemain mendapatkan kartu secara acak saat menjawab dengan cepat (di bawah 3 detik) atau membuat kata yang panjang.</li>
-                                <li>Terdapat beberapa jenis kartu seperti <b>Skip</b> (melewati giliran pemain berikutnya), <b>Reverse</b> (memutar arah putaran), <b>Bomb</b> (menghancurkan kata saat ini), dan <b>Heal</b> (mendapatkan nyawa/immunity).</li>
-                                <li>Host dapat mematikan fitur ini jika ingin bermain klasik tanpa gangguan efek.</li>
+                        <div className="space-y-3 text-slate-300 text-sm">
+                            <p>Saat Kartu Aksi diaktifkan, efek spesial akan terpicu secara otomatis berdasarkan <b>akhiran huruf</b> dari kata yang Anda mainkan!</p>
+                            <ul className="list-none space-y-2">
+                                <li className="bg-slate-800/50 p-2 rounded border border-slate-700">
+                                    <b className="text-sky-400">⏭️ SKIP (Akhiran ...SK)</b><br/>
+                                    Melewati giliran pemain berikutnya. <i>(Contoh: Kio<b>sk</b>)</i>
+                                </li>
+                                <li className="bg-slate-800/50 p-2 rounded border border-slate-700">
+                                    <b className="text-amber-400">🔄 REVERSE (Akhiran ...RV)</b><br/>
+                                    Memutar balik arah putaran permainan. <i>(Contoh: Rese<b>rv</b>)</i>
+                                </li>
+                                <li className="bg-slate-800/50 p-2 rounded border border-slate-700">
+                                    <b className="text-rose-400">💣 BOM WAKTU (Akhiran ...BO)</b><br/>
+                                    Pemain berikutnya diberi waktu sangat singkat untuk menjawab. <i>(Contoh: Rebo, Kebo)</i>
+                                </li>
+                                <li className="bg-slate-800/50 p-2 rounded border border-slate-700">
+                                    <b className="text-purple-400">💀 RACUN (Akhiran ...PO)</b><br/>
+                                    Pemain berikutnya akan terkena penalti <b>-5 Poin</b>, atau waktunya dipotong (di mode tanpa skor). <i>(Contoh: Opo, Kepo)</i>
+                                </li>
                             </ul>
                         </div>
                         <button onClick={handleCloseActionCardGuide} className="mt-6 w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition-all shadow-md active:scale-95 uppercase tracking-widest text-sm">
