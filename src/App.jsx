@@ -2759,10 +2759,7 @@ export default function App() {
             playSound("start");
         }
     }
-            triggerTableEffect("success");
-            playSound("start");
-        }
-    }
+
 
     function clearLobby() {
         setGameState("WAITING"); setPlayers([]); playersRef.current = []; setUsedWords(new Set());
