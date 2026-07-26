@@ -1568,18 +1568,24 @@ export default function App() {
         let reconnectTimeout;
         const connectBackendWs = () => {
             const host = wsHostRef.current?.trim() || window.location.hostname || "localhost";
-            backendWsRef.current = new WebSocket(`ws://${host}:62024`);
-            backendWsRef.current.onmessage = (event) => {
-                try {
-                    const { event: eventName, data } = JSON.parse(event.data);
-                    if (eventName === "music_state") {
-                        setMusicState(data);
-                    }
-                } catch(err) {}
-            };
-            backendWsRef.current.onclose = () => {
+            const protocol = window.location.protocol === 'https:' && host !== 'localhost' && host !== '127.0.0.1' ? 'wss:' : 'ws:';
+            try {
+                backendWsRef.current = new WebSocket(`${protocol}//${host}:62024`);
+                backendWsRef.current.onmessage = (event) => {
+                    try {
+                        const { event: eventName, data } = JSON.parse(event.data);
+                        if (eventName === "music_state") {
+                            setMusicState(data);
+                        }
+                    } catch(err) {}
+                };
+                backendWsRef.current.onclose = () => {
+                    reconnectTimeout = setTimeout(connectBackendWs, 3000);
+                };
+            } catch (err) {
+                console.warn("Backend WS Error:", err);
                 reconnectTimeout = setTimeout(connectBackendWs, 3000);
-            };
+            }
         };
         connectBackendWs();
         return () => {
@@ -1609,7 +1615,8 @@ export default function App() {
             }
         }
 
-        const url = `ws://${hostname}:${port}`;
+        const protocol = window.location.protocol === 'https:' && hostname !== 'localhost' && hostname !== '127.0.0.1' ? 'wss:' : 'ws:';
+        const url = `${protocol}//${hostname}:${port}`;
         try {
             wsRef.current = new WebSocket(url);
             wsRef.current.onopen = () => {
