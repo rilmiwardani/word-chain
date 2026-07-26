@@ -1420,6 +1420,7 @@ export default function App() {
                 const startIndex = Math.floor(Math.random() * dictArray.length);
                 for (let i = 0; i < dictArray.length; i++) {
                     const word = dictArray[(startIndex + i) % dictArray.length];
+                    if (gameModeRef.current !== "PHRASE_CHAIN" && word.includes(" ")) continue;
                     if (usedWordsRef.current.has(word) || word === currentWordRef.current) continue;
                     if (maxWordLengthRef.current > 0 && word.length > maxWordLengthRef.current) continue;
                     if (validateConnection(currentWordRef.current, word, getLogicOptions())) {
@@ -2170,6 +2171,11 @@ export default function App() {
         if (forcedUniqueId) {
             const idx = playersRef.current.findIndex(p => p.uniqueId === forcedUniqueId);
             if (idx !== -1) playerIndex = idx;
+        }
+        if (gameModeRef.current !== "PHRASE_CHAIN" && word.includes(" ")) {
+            addLog("Game", `❌ "${word}" mengandung spasi (Hanya 1 kata).`);
+            playSound("wrong"); triggerTableEffect("error"); showFeedback(`Hanya 1 kata!`, "error");
+            return;
         }
         if (gameModeRef.current !== "PHRASE_CHAIN" && !dictionary.has(word)) {
             addLog("Game", `❌ "${word}" ${t("log_invalid")}.`);
