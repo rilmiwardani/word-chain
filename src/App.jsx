@@ -34,6 +34,23 @@ const THEME_LABELS = {
     wood: "Classic Wood"
 };
 
+const GAME_MODES_LIST = [
+    { id: "LAST_LETTER", name: "LAST LETTER", icon: Target, desc: "Sambung kata dari huruf terakhir." },
+    { id: "SECOND_LETTER", name: "2ND LETTER", icon: FastForward, desc: "Sambung dari huruf kedua (sebelum huruf terakhir)." },
+    { id: "WRAP_AROUND", name: "WRAP AROUND", icon: Repeat2, desc: "Kata baru harus mengandung huruf pertama dan terakhir kata sebelumnya." },
+    { id: "STEP_UP", name: "STEP UP", icon: MoveUpRight, desc: "Panjang kata baru harus lebih panjang dari kata sebelumnya." },
+    { id: "RHYME", name: "RHYME RUSH", icon: Hash, desc: "Semua kata harus memiliki rima akhir yang sama." },
+    { id: "MIRROR", name: "MIRROR", icon: FlipHorizontal, desc: "Kata dibalik dari belakang ke depan." },
+    { id: "PHRASE_CHAIN", name: "PHRASE", icon: Link, desc: "Menyambung kata menjadi sebuah kalimat beruntun." },
+    { id: "DYNAMIC", name: "DYNAMIC", icon: AlertTriangle, desc: "Aturan dapat berubah-ubah secara mendadak." },
+    { id: "SYLLABLE", name: "SYLLABLE", icon: GripHorizontal, desc: "Sambung suku kata terakhir." },
+    { id: "LONGER_WORD", name: "LONGER", icon: Maximize, desc: "Kata yang dibuat harus terus lebih panjang." },
+    { id: "CITIES", name: "CITIES", icon: MapPin, desc: "Nama-nama Kota Dunia." },
+    { id: "FILL_BLANK", name: "LENGKAPI", icon: Keyboard, desc: "Isi huruf yang rumpang." },
+    { id: "INFIKS", name: "INFIKS", icon: TrendingUpIcon, desc: "Kata harus mengandung pola huruf tertentu di dalamnya." },
+    { id: "RANDOM", name: "RANDOM", icon: Sparkles, desc: "Mode Acak." }
+];
+
 const TopSupporterMarqueeTrack = React.memo(({ rawList, formatCount, getAvatarUrl }) => {
     const displayList = useMemo(() => {
         if (!rawList || rawList.length === 0) return [];
@@ -107,6 +124,7 @@ export default function App() {
     const [lastInputWord, setLastInputWord] = useState("");
     const [usedWords, setUsedWords] = useState(new Set());
     const [gameMode, setGameMode] = useState(() => localStorage.getItem("sk_gameMode") || "LAST_LETTER");
+    const [isModeModalOpen, setIsModeModalOpen] = useState(false);
     const [language, setLanguage] = useState(() => localStorage.getItem("sk_language") || "EN");
     const [targetRhyme, setTargetRhyme] = useState("");
     const [tableStatus, setTableStatus] = useState("idle");
@@ -2748,6 +2766,15 @@ export default function App() {
         setGameMode(modes[(modes.indexOf(gameMode) + 1) % modes.length]);
     }
 
+    function handleSelectMode(modeId) {
+        if (gameState === "PLAYING" && gameMode !== modeId) {
+            resetGame();
+            addLog("System", "Game Reset due to Mode Change");
+        }
+        setGameMode(modeId);
+        setIsModeModalOpen(false);
+    }
+
     const cyclePointMode = () => {
         const modes = ["OFF", "LENGTH", "SCRABBLE", "VOWELS"];
         setPointMode(modes[(modes.indexOf(pointMode) + 1) % modes.length]);
@@ -3602,7 +3629,7 @@ export default function App() {
                         <div className="flex flex-col gap-2 max-h-[65vh] sm:max-h-[70vh] overflow-y-auto custom-scrollbar pr-1">
                             {settingsTab === 'rules' && (
                                 <div className="animate-in fade-in zoom-in-95 duration-200 flex flex-col gap-2">
-                                    <button onClick={cycleGameMode} className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-1.5 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group">
+                                    <button onClick={() => setIsModeModalOpen(true)} className="w-full bg-slate-800/50 hover:bg-slate-800 px-3 py-1.5 rounded text-xs font-bold border border-slate-700 transition-colors flex items-center justify-between group">
                                         <span className="text-slate-300">{t("mode")}:</span><span className="text-sky-400 group-hover:text-sky-300">{getModeLabel()}</span>
                                     </button>
                                     <div className="flex flex-col gap-1.5">
@@ -5597,6 +5624,57 @@ export default function App() {
 
             {/* --- CAMERA OVERLAY --- */}
             <CameraOverlay isEnabled={isCamEnabled} setIsEnabled={setIsCamEnabled} />
+
+            {/* --- GAME MODE MODAL --- */}
+            {isModeModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
+                        <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50">
+                            <div className="flex items-center gap-2">
+                                <Gamepad2 className="w-5 h-5 text-sky-400" />
+                                <h2 className="text-lg font-bold text-slate-100">Pilih Mode Permainan</h2>
+                            </div>
+                            <button onClick={() => setIsModeModalOpen(false)} className="text-slate-400 hover:text-rose-400 transition-colors p-1 rounded-md hover:bg-slate-800">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto custom-scrollbar flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {GAME_MODES_LIST.map((mode) => {
+                                const Icon = mode.icon;
+                                const isActive = gameMode === mode.id;
+                                return (
+                                    <button
+                                        key={mode.id}
+                                        onClick={() => handleSelectMode(mode.id)}
+                                        className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all duration-200 ${
+                                            isActive 
+                                                ? 'bg-sky-900/30 border-sky-500/50 shadow-lg shadow-sky-900/20' 
+                                                : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600'
+                                        }`}
+                                    >
+                                        <div className={`p-2 rounded-lg ${isActive ? 'bg-sky-500/20 text-sky-400' : 'bg-slate-700/50 text-slate-400'}`}>
+                                            <Icon className="w-5 h-5" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className={`font-bold text-sm ${isActive ? 'text-sky-300' : 'text-slate-200'}`}>
+                                                {mode.name}
+                                            </div>
+                                            <div className="text-xs text-slate-400 mt-1 leading-relaxed">
+                                                {mode.desc}
+                                            </div>
+                                        </div>
+                                        {isActive && (
+                                            <div className="text-xs font-bold text-sky-400 bg-sky-950/50 px-2 py-0.5 rounded-full border border-sky-800/50">
+                                                Aktif
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
 
         </div>
     );
