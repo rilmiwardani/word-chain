@@ -141,6 +141,7 @@ export default function App() {
     const [overlapMode, setOverlapMode] = useState(() => localStorage.getItem("sk_overlapMode") || "FIXED"); // FIXED, RANDOM, SEQUENTIAL
     const [maxWordLength, setMaxWordLength] = useState(() => { const s = localStorage.getItem("sk_maxWordLength"); return s ? parseInt(s, 10) : 0; });
     const [autoRestartEnabled, setAutoRestartEnabled] = useState(() => localStorage.getItem("sk_autoRestartEnabled") === "true");
+    const [useTierDifficulty, setUseTierDifficulty] = useState(() => localStorage.getItem("sk_useTierDifficulty") !== "false");
     const [restartLikes, setRestartLikes] = useState(0);
     const TARGET_RESTART_LIKES = 200;
     const restartLikesRef = useRef(0);
@@ -267,11 +268,12 @@ export default function App() {
         localStorage.setItem("sk_guideLangTab", guideLangTab);
         localStorage.setItem("sk_activeMinigame", activeMinigame);
         localStorage.setItem("sk_allowedWordleLengths", JSON.stringify(allowedWordleLengths));
+        localStorage.setItem("sk_useTierDifficulty", useTierDifficulty.toString());
     }, [
         gameMode, language, pointMode, isReversed, overlapLength, overlapMode,
         maxWordLength, autoRestartEnabled, gameDuration, targetScore, targetRounds,
         winCondition, maxPlayers, turnDuration, isMuted, showLogs, showPointGuide,
-        guideLangTab, activeMinigame, allowedWordleLengths
+        guideLangTab, activeMinigame, allowedWordleLengths, useTierDifficulty
     ]);
     const [word500Target, setWord500Target] = useState("");
     const [word500Guesses, setWord500Guesses] = useState([]);
@@ -643,6 +645,7 @@ export default function App() {
     const maxWordLengthRef = useRef(maxWordLength);
     const activeChallengeRef = useRef(activeChallenge);
     const autoRestartEnabledRef = useRef(autoRestartEnabled);
+    const useTierDifficultyRef = useRef(useTierDifficulty);
     const playerQueueRef = useRef(playerQueue);
     const lastPatternTypeRef = useRef(null);
     const playedWordsHistoryRef = useRef([]);
@@ -701,10 +704,11 @@ export default function App() {
         word500WinnerRef.current = word500Winner;
         word500GuessesRef.current = word500Guesses;
         wsHostRef.current = wsHost;
+        useTierDifficultyRef.current = useTierDifficulty;
     }, [
         players, currentTurnIndex, turnDuration, usedWords, syllableMap, isMuted,
         cityMetadata, challengeQueue, language, gameMode, currentWord, targetRhyme,
-        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner, activeMinigame, word500Target, word500Winner, word500Guesses, wsHost
+        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner, activeMinigame, word500Target, word500Winner, word500Guesses, wsHost, useTierDifficulty
     ]);
 
 
@@ -1237,7 +1241,7 @@ export default function App() {
 
                         commonMap[len] = commonList.length > 0 ? commonList : wordsList;
                         allWordsMap[len] = wordsList;
-                        allWordsFlat = allWordsFlat.concat(wordsList);
+                        allWordsFlat = allWordsFlat.concat(commonList.length > 0 ? commonList : wordsList);
                     }
                 });
                 commonWordsByLengthRef.current = commonMap;
@@ -1249,7 +1253,7 @@ export default function App() {
                     miniGameWordsRef.current = uniqueWords;
                     unplayedMiniGameWordsRef.current = [...uniqueWords];
                     const totalCommon = Object.values(commonMap).reduce((a, b) => a + b.length, 0);
-                    addLog("System", `Berhasil memuat wordlist.json (${uniqueWords.length} kata valid, ${totalCommon} kata umum target)!`);
+                    addLog("System", `Berhasil memuat wordlist.json (${uniqueWords.length} kata minigame umum)!`);
                 }
                 startNewScramble();
                 startNewWord500();
@@ -1899,7 +1903,7 @@ export default function App() {
                 const nextPlayerTierObj = nextPlayerObj.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (nextPlayerObj.botDifficulty || 3) - 1))] : getPlayerTier(nextPlayerObj.stats);
 
                 const baseW = getNewRandomWord();
-                const pat = generatePattern(baseW, dictionary, usedWordsRef.current, lastPatternTypeRef.current, nextPlayerTierObj.level);
+                const pat = generatePattern(baseW, dictionary, usedWordsRef.current, lastPatternTypeRef.current, useTierDifficultyRef.current ? nextPlayerTierObj.level : null);
                 setCurrentWord(pat.display);
                 currentWordRef.current = pat.display;
                 lastPatternTypeRef.current = pat.type;
@@ -2369,7 +2373,7 @@ export default function App() {
                 }
                 const nextPlayerObj = modifiedPlayers[nextTargetIdx];
                 const nextPlayerTierObj = nextPlayerObj.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (nextPlayerObj.botDifficulty || 3) - 1))] : getPlayerTier(nextPlayerObj.stats);
-                const pat = generatePattern(word, dictionary, usedWordsRef.current, lastPatternTypeRef.current, nextPlayerTierObj.level);
+                const pat = generatePattern(word, dictionary, usedWordsRef.current, lastPatternTypeRef.current, useTierDifficultyRef.current ? nextPlayerTierObj.level : null);
                 nextWord = pat.display;
                 lastPatternTypeRef.current = pat.type;
             } else if (gameModeRef.current === "INFIKS") {
@@ -3681,6 +3685,10 @@ export default function App() {
                                             <div className="flex items-center gap-2"><FastForward className={`w-3 h-3 ${autoRestartEnabled ? 'text-indigo-400 animate-pulse' : 'text-slate-500'}`} /><span className={autoRestartEnabled ? "text-indigo-300" : "text-slate-400"}>{t("auto_restart")}</span></div>
                                             <span className={autoRestartEnabled ? "text-indigo-400" : "text-slate-500"}>{autoRestartEnabled ? "ON" : "OFF"}</span>
                                         </button>
+                                        <button onClick={() => setUseTierDifficulty(!useTierDifficulty)} className={`w-full ${useTierDifficulty ? 'bg-sky-900/30 hover:bg-sky-900/50 border-sky-700/50' : 'bg-slate-800/50 hover:bg-slate-800 border-slate-700'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
+                                            <div className="flex items-center gap-2"><Crown className={`w-3 h-3 ${useTierDifficulty ? 'text-sky-400 animate-pulse' : 'text-slate-500'}`} /><span className={useTierDifficulty ? "text-sky-300" : "text-slate-400"}>Kesulitan Tier</span></div>
+                                            <span className={useTierDifficulty ? "text-sky-400" : "text-slate-500"}>{useTierDifficulty ? "ON" : "OFF"}</span>
+                                        </button>
                                     </div>
                                     <div className="w-full bg-slate-800/50 p-2 rounded border border-slate-700 flex flex-col gap-1.5 mt-0.5">
                                         <div className="flex items-center justify-between text-[11px] text-slate-400 font-bold mb-0.5">
@@ -4473,7 +4481,7 @@ export default function App() {
                         const xOffset = Math.sign(diff) * geometricX;
                         
                         // Push them slightly down for perspective curve
-                        const baseFutY = isMobile ? 150 : 220; 
+                        const baseFutY = isMobile ? 190 : 280; 
                         const perspectiveY = absDiff * 5; 
                         const yOffset = baseFutY + perspectiveY;
                         
