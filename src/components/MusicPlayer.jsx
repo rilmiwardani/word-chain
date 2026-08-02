@@ -4,7 +4,11 @@ import { SoundManager } from '../utils/constants';
 
 const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen, overlayStyle = 'thumbnail' }) => {
     const { current, queue } = musicState || { current: null, queue: [] };
-    const [isMuted, setIsMuted] = useState(false);
+    const [isMuted, setIsMuted] = useState(() => localStorage.getItem("sk_music_isMuted") === "true");
+
+    useEffect(() => {
+        localStorage.setItem("sk_music_isMuted", isMuted.toString());
+    }, [isMuted]);
     const [playerReady, setPlayerReady] = useState(false);
     const [isFlipped, setIsFlipped] = useState(false);
     const [toast, setToast] = useState(null);
@@ -94,7 +98,7 @@ const MusicPlayer = ({ musicState, wsRef, isKeyboardOpen, overlayStyle = 'thumbn
                 playerRef.current.setVolume(100);
             }
         }
-    }, [isMuted, playerReady]);
+    }, [isMuted, playerReady, current?.videoId]);
 
     const handleSkip = () => {
         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {

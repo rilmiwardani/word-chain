@@ -6,7 +6,7 @@ import {
     MoveUpRight, Plus, RefreshCw, Repeat2, Send, Settings,
     Star, Target, TrendingUp as TrendingUpIcon, Trophy, Unlink,
     User, Users, Volume2, VolumeX, X, Sparkles, MessageSquare, MessageSquareOff,
-    Pause, Play, Music, Camera, CameraOff
+    Pause, Play, Music, Camera, CameraOff, Smartphone, Monitor
 } from "lucide-react";
 
 import { TRANSLATIONS, TIER_LEVELS, getPlayerTier, FALLBACK_DICTIONARY_EN, FALLBACK_PHRASES_ID, FALLBACK_PHRASES_EN, FALLBACK_DICTIONARY_ID_DATA, FALLBACK_CITIES, DYNAMIC_CHALLENGES, BOT_PROFILES, getRandomColor, getAvatarUrl, normalizeWord, generatePattern, getEnglishSyllableSuffix, StatsManager, SoundManager } from "./utils/constants";
@@ -17,12 +17,12 @@ import MusicPlayer from "./components/MusicPlayer";
 import CameraOverlay from "./components/CameraOverlay";
 
 const TABLE_THEMES = {
-    midnight: "border-slate-800 bg-slate-900 shadow-2xl shadow-black/20",
-    emerald: "border-emerald-800 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-emerald-800 to-emerald-950 shadow-2xl shadow-emerald-900/20",
-    crimson: "border-rose-800 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-rose-800 to-rose-950 shadow-2xl shadow-rose-900/20",
-    cyber: "border-indigo-700 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-fuchsia-900 via-indigo-950 to-slate-950 shadow-2xl shadow-indigo-900/40",
-    ocean: "border-sky-800 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-sky-800 via-cyan-900 to-blue-950 shadow-2xl shadow-sky-900/30",
-    wood: "border-amber-900 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-800 to-stone-900 shadow-2xl shadow-amber-950/40"
+    midnight: "border-slate-700/40 bg-slate-900/70 backdrop-blur-2xl shadow-[0_0_40px_rgba(15,23,42,0.7)] ring-1 ring-white/5",
+    emerald: "border-emerald-700/40 bg-gradient-to-b from-[#022c22]/90 to-[#064e3b]/80 backdrop-blur-2xl shadow-[0_0_50px_rgba(4,120,87,0.3)] ring-1 ring-emerald-500/10",
+    crimson: "border-rose-800/40 bg-gradient-to-b from-[#4c0519]/90 to-[#881337]/80 backdrop-blur-2xl shadow-[0_0_50px_rgba(159,18,57,0.3)] ring-1 ring-rose-500/10",
+    cyber: "border-fuchsia-800/40 bg-gradient-to-br from-[#1e1b4b]/90 via-[#312e81]/80 to-[#4a044e]/80 backdrop-blur-2xl shadow-[0_0_50px_rgba(139,92,246,0.25)] ring-1 ring-fuchsia-500/20",
+    ocean: "border-sky-800/40 bg-gradient-to-b from-[#082f49]/90 to-[#0c4a6e]/80 backdrop-blur-2xl shadow-[0_0_50px_rgba(2,132,199,0.3)] ring-1 ring-sky-500/10",
+    wood: "border-amber-900/40 bg-gradient-to-b from-[#290f02]/90 to-[#451a03]/80 backdrop-blur-2xl shadow-[0_0_50px_rgba(180,83,9,0.25)] ring-1 ring-amber-500/10"
 };
 
 const THEME_LABELS = {
@@ -192,6 +192,7 @@ export default function App() {
         if (saved) return saved;
         return localStorage.getItem("sk_greenscreen") === "true" ? "greenscreen" : "default";
     });
+    const [viewMode, setViewMode] = useState(() => localStorage.getItem("sk_viewMode") || "landscape");
 
     useEffect(() => {
         localStorage.setItem("sk_tableTheme", tableTheme);
@@ -204,6 +205,10 @@ export default function App() {
     useEffect(() => {
         localStorage.setItem("sk_bgColorMode", bgColorMode);
     }, [bgColorMode]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_viewMode", viewMode);
+    }, [viewMode]);
 
     useEffect(() => {
         localStorage.setItem("is_cam_enabled", isCamEnabled);
@@ -2986,7 +2991,7 @@ export default function App() {
 
     function toggleFullscreen() {
         if (!document.fullscreenElement) {
-            if (containerRef.current) containerRef.current.requestFullscreen().catch(() => { });
+            document.documentElement.requestFullscreen().catch(() => { });
             setIsFullscreen(true);
         } else {
             if (document.exitFullscreen) document.exitFullscreen();
@@ -3593,7 +3598,7 @@ export default function App() {
     // 4. RENDER UI
     // ==========================================
     return (
-        <div ref={containerRef} className={`group min-h-screen ${bgColorMode === 'greenscreen' ? 'bg-[#00FF00]' : bgColorMode === 'darkblue' ? 'bg-[#1a1d27]' : 'bg-slate-950'} text-slate-200 font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative`}>
+        <div ref={containerRef} className={`group ${viewMode !== 'auto' ? 'portrait-container' : 'min-h-screen'} ${bgColorMode === 'greenscreen' ? 'bg-[#00FF00]' : bgColorMode === 'darkblue' ? 'bg-[#1a1d27]' : 'bg-slate-950'} text-slate-200 font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative`} style={viewMode !== 'auto' ? { '--portrait-ratio': viewMode } : undefined}>
             {/* Table Zoom Controls - Self-contained hover widget (hidden when settings panel is open) */}
             {!showSettings && (
                 <div className="fixed left-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[80] opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-auto">
@@ -3811,6 +3816,19 @@ export default function App() {
                                                 <button onClick={() => setBgColorMode("darkblue")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${bgColorMode === "darkblue" ? "bg-[#1a1d27] text-white shadow-sm border border-slate-600" : "text-slate-400 hover:text-white"}`}>Dark Blue</button>
                                                 <button onClick={() => setBgColorMode("greenscreen")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${bgColorMode === "greenscreen" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Green</button>
                                             </div>
+                                        </div>
+                                        <div className="px-2.5 py-1.5 text-xs font-bold transition-colors flex flex-col gap-1.5 group hover:bg-slate-800/50">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5 text-fuchsia-400" /><span className="text-slate-300">Rasio Tampilan</span></div>
+                                                <span className="text-[9px] text-slate-500 font-mono">{viewMode === 'auto' ? 'Full' : viewMode}</span>
+                                            </div>
+                                            <div className="flex gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-0.5">
+                                                <button onClick={() => setViewMode("auto")} className={`flex-1 py-0.5 rounded text-[9px] transition-colors text-center ${viewMode === "auto" ? "bg-sky-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Auto</button>
+                                                <button onClick={() => setViewMode("3/4")} className={`flex-1 py-0.5 rounded text-[9px] transition-colors text-center ${viewMode === "3/4" ? "bg-fuchsia-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>3:4</button>
+                                                <button onClick={() => setViewMode("2/3")} className={`flex-1 py-0.5 rounded text-[9px] transition-colors text-center ${viewMode === "2/3" ? "bg-fuchsia-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>2:3</button>
+                                                <button onClick={() => setViewMode("9/16")} className={`flex-1 py-0.5 rounded text-[9px] transition-colors text-center ${viewMode === "9/16" ? "bg-fuchsia-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>9:16</button>
+                                            </div>
+                                            <p className="text-[8px] text-slate-500 leading-tight">Gunakan 3:4 atau 2:3 untuk TikTok Live agar mudah di-crop di browser.</p>
                                         </div>
                                         <div className="px-2.5 py-1.5 text-xs font-bold transition-colors flex items-center justify-between group hover:bg-slate-800/50">
                                             <div className="flex items-center gap-1.5"><Plus className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">Ukuran Meja</span></div>
@@ -4914,6 +4932,7 @@ export default function App() {
                                     transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
                                     transform: word500FlipPhase === 'flipping' || word500FlipPhase === 'winner' ? 'rotateY(-180deg)' : 'rotateY(0deg)',
                                     minWidth: '210px',
+                                    minHeight: word500FlipPhase === 'flipping' || word500FlipPhase === 'winner' ? '280px' : 'auto'
                                 }}
                             >
                                 {/* ══ FRONT FACE — Guess Rows ══ */}
@@ -5049,23 +5068,25 @@ export default function App() {
                                     </div>
 
                                     {word500Winner && (
-                                        <>
-                                            <div className="relative">
-                                                <div className="absolute -inset-1.5 rounded-full bg-emerald-400/20 animate-ping" />
-                                                <img
-                                                    src={word500Winner.profilePictureUrl}
-                                                    className="relative w-9 h-9 rounded-full border-2 border-emerald-400 object-cover bg-slate-800 shadow-lg shadow-emerald-900/50"
-                                                    alt={word500Winner.nickname}
-                                                />
-                                            </div>
-                                            <div className="flex flex-col items-center gap-0.5 text-center">
-                                                <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest">PEMENANG!</span>
+                                        <div className="flex flex-col w-full h-full justify-center">
+                                            <div className="flex flex-col items-center gap-0.5 text-center mt-2 mb-1">
+                                                <div className="relative mb-1">
+                                                    <div className={`absolute -inset-1.5 rounded-full animate-ping ${word500Winner.isFail ? 'bg-rose-400/20' : 'bg-emerald-400/20'}`} />
+                                                    <img
+                                                        src={word500Winner.profilePictureUrl}
+                                                        className={`relative w-8 h-8 rounded-full border-2 object-cover bg-slate-800 shadow-lg ${word500Winner.isFail ? 'border-rose-400 shadow-rose-900/50' : 'border-emerald-400 shadow-emerald-900/50'}`}
+                                                        alt={word500Winner.nickname}
+                                                    />
+                                                </div>
+                                                <span className={`text-[9px] font-black uppercase tracking-widest ${word500Winner.isFail ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                    {word500Winner.isFail ? 'Gagal' : 'PEMENANG!'}
+                                                </span>
                                                 <span className="text-[11px] font-bold text-white max-w-[140px] truncate">{word500Winner.nickname}</span>
-                                                <div className="flex gap-px mt-1">
+                                                <div className="flex gap-px mt-1 mb-2">
                                                     {word500Target.split('').map((char, i) => (
                                                         <div
                                                             key={i}
-                                                            className="w-5 h-6 shrink-0 bg-emerald-700 border border-emerald-500 rounded-[3px] flex items-center justify-center font-black text-[10px] text-white shadow-sm"
+                                                            className={`w-5 h-6 shrink-0 border rounded-[3px] flex items-center justify-center font-black text-[10px] text-white shadow-sm ${word500Winner.isFail ? 'bg-rose-700 border-rose-500' : 'bg-emerald-700 border-emerald-500'}`}
                                                             style={{ animationDelay: `${i * 60}ms` }}
                                                         >
                                                             {char.toUpperCase()}
@@ -5073,7 +5094,40 @@ export default function App() {
                                                     ))}
                                                 </div>
                                             </div>
-                                        </>
+
+                                            {/* Divider with Trophy Tag */}
+                                            <div className="w-full border-t border-slate-700/60 my-1 relative flex items-center justify-center">
+                                                <span className="bg-slate-900 px-1.5 py-0.5 text-[8px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1 rounded-full border border-amber-500/30">
+                                                    <Trophy className="w-2.5 h-2.5 text-amber-400" /> TOP 5 LEADERBOARD
+                                                </span>
+                                            </div>
+
+                                            {/* Top 5 List */}
+                                            {Object.keys(autoWordleLeaderboard).length > 0 ? (
+                                                <div className="w-full flex flex-col gap-0.5 mt-1">
+                                                    {Object.values(autoWordleLeaderboard)
+                                                        .sort((a, b) => b.score - a.score)
+                                                        .slice(0, 5)
+                                                        .map((user, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between bg-slate-800/60 hover:bg-slate-800 rounded px-1.5 py-0.5 border border-slate-700/40">
+                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                    <span className={`text-[9px] font-mono font-black w-3.5 text-center ${
+                                                                        idx === 0 ? 'text-amber-400 font-extrabold' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600' : 'text-slate-500'
+                                                                    }`}>
+                                                                        #{idx + 1}
+                                                                    </span>
+                                                                    <img src={user.avatar} className="w-3.5 h-3.5 rounded-full border border-slate-700 object-cover bg-slate-800" alt={user.nickname} />
+                                                                    <span className="text-[10px] font-semibold text-slate-200 truncate max-w-[85px] sm:max-w-[105px]">{user.nickname}</span>
+                                                                </div>
+                                                                <span className="text-[10px] font-mono font-bold text-emerald-400">{user.score} pt</span>
+                                                            </div>
+                                                        ))
+                                                    }
+                                                </div>
+                                            ) : (
+                                                <div className="text-[9px] text-slate-500 italic py-1 text-center">Belum ada skor</div>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -5283,30 +5337,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Leaderboard Marquee */}
-                        {Object.keys(autoWordleLeaderboard).length > 0 && (
-                            <div className="mt-1 w-full overflow-hidden rounded bg-slate-950/60 border border-slate-700/50 relative flex items-center h-5 shrink-0">
-                                <div className="absolute whitespace-nowrap animate-marquee flex items-center gap-4 px-2" style={{ animationDuration: `${Math.max(10, Object.keys(autoWordleLeaderboard).length * 4)}s` }}>
-                                    {Object.values(autoWordleLeaderboard)
-                                        .sort((a, b) => b.score - a.score)
-                                        .slice(0, 10)
-                                        .map((user, idx, arr) => (
-                                            <div key={idx} className="flex items-center gap-1.5">
-                                                <span className={`text-[9px] font-black ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-orange-400' : 'text-slate-500'}`}>
-                                                    #{idx + 1}
-                                                </span>
-                                                <img src={user.avatar} className="w-3 h-3 rounded-full border border-slate-600 bg-slate-800 object-cover" />
-                                                <span className="text-[10px] font-bold text-slate-200">{user.nickname}</span>
-                                                <span className="text-[10px] font-black text-emerald-400">{user.score}</span>
-                                                {idx < arr.length - 1 && (
-                                                    <span className="text-[8px] text-slate-700 ml-1 mr-0.5">●</span>
-                                                )}
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             )}
