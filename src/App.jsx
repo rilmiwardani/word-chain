@@ -142,6 +142,7 @@ export default function App() {
     const [maxWordLength, setMaxWordLength] = useState(() => { const s = localStorage.getItem("sk_maxWordLength"); return s ? parseInt(s, 10) : 0; });
     const [autoRestartEnabled, setAutoRestartEnabled] = useState(() => localStorage.getItem("sk_autoRestartEnabled") === "true");
     const [useTierDifficulty, setUseTierDifficulty] = useState(() => localStorage.getItem("sk_useTierDifficulty") !== "false");
+    const [resetWordOnNewRound, setResetWordOnNewRound] = useState(() => localStorage.getItem("sk_resetWordOnNewRound") === "true");
     const [restartLikes, setRestartLikes] = useState(0);
     const TARGET_RESTART_LIKES = 200;
     const restartLikesRef = useRef(0);
@@ -274,11 +275,12 @@ export default function App() {
         localStorage.setItem("sk_activeMinigame", activeMinigame);
         localStorage.setItem("sk_allowedWordleLengths", JSON.stringify(allowedWordleLengths));
         localStorage.setItem("sk_useTierDifficulty", useTierDifficulty.toString());
+        localStorage.setItem("sk_resetWordOnNewRound", resetWordOnNewRound.toString());
     }, [
         gameMode, language, pointMode, isReversed, overlapLength, overlapMode,
         maxWordLength, autoRestartEnabled, gameDuration, targetScore, targetRounds,
         winCondition, maxPlayers, turnDuration, isMuted, showLogs, showPointGuide,
-        guideLangTab, activeMinigame, allowedWordleLengths, useTierDifficulty
+        guideLangTab, activeMinigame, allowedWordleLengths, useTierDifficulty, resetWordOnNewRound
     ]);
     const [word500Target, setWord500Target] = useState("");
     const [word500Guesses, setWord500Guesses] = useState([]);
@@ -651,6 +653,7 @@ export default function App() {
     const activeChallengeRef = useRef(activeChallenge);
     const autoRestartEnabledRef = useRef(autoRestartEnabled);
     const useTierDifficultyRef = useRef(useTierDifficulty);
+    const resetWordOnNewRoundRef = useRef(resetWordOnNewRound);
     const playerQueueRef = useRef(playerQueue);
     const lastPatternTypeRef = useRef(null);
     const playedWordsHistoryRef = useRef([]);
@@ -710,10 +713,11 @@ export default function App() {
         word500GuessesRef.current = word500Guesses;
         wsHostRef.current = wsHost;
         useTierDifficultyRef.current = useTierDifficulty;
+        resetWordOnNewRoundRef.current = resetWordOnNewRound;
     }, [
         players, currentTurnIndex, turnDuration, usedWords, syllableMap, isMuted,
         cityMetadata, challengeQueue, language, gameMode, currentWord, targetRhyme,
-        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner, activeMinigame, word500Target, word500Winner, word500Guesses, wsHost, useTierDifficulty
+        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner, activeMinigame, word500Target, word500Winner, word500Guesses, wsHost, useTierDifficulty, resetWordOnNewRound
     ]);
 
 
@@ -1449,7 +1453,7 @@ export default function App() {
                 const startIndex = Math.floor(Math.random() * dictArray.length);
                 for (let i = 0; i < dictArray.length; i++) {
                     const word = dictArray[(startIndex + i) % dictArray.length];
-                    if (gameModeRef.current !== "PHRASE_CHAIN" && word.includes(" ")) continue;
+                    if (gameModeRef.current !== "PHRASE_CHAIN" && gameModeRef.current !== "CITIES" && word.includes(" ")) continue;
                     if (usedWordsRef.current.has(word) || word === currentWordRef.current) continue;
                     if (maxWordLengthRef.current > 0 && word.length > maxWordLengthRef.current) continue;
                     if (validateConnection(currentWordRef.current, word, getLogicOptions())) {
@@ -1540,16 +1544,6 @@ export default function App() {
 
 
     useEffect(() => {
-        fetch("/dictionary.txt")
-            .then((res) => { if (!res.ok) throw new Error("Not found"); return res.text(); })
-            .then((text) => {
-                const rawWords = text.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0);
-                const cleanedWords = rawWords.filter((w) => !w.includes(" ")).map((w) => normalizeWord(w)).filter((w) => w.length > 0);
-                const newDict = new Set(cleanedWords);
-                setDictionary(newDict);
-                setDictLoadedInfo(`Loaded (${cleanedWords.length})`);
-                dictionaryCache.current.EN = { dict: newDict, syl: {}, info: `Loaded (${cleanedWords.length})`, phrases: new Set(FALLBACK_PHRASES_EN) };
-            }).catch(() => { });
         connectWebSocket();
         return () => {
             if (wsRef.current) { wsRef.current.onclose = null; wsRef.current.close(); }
@@ -1894,33 +1888,48 @@ export default function App() {
                 setTimeout(changeRhymeTarget, 800);
             }
             if (gameModeRef.current === "FILL_BLANK") {
-                // Cari pemain berikutnya untuk sesuaikan kesulitan pola berdasarkan tier
-                let nextTargetIdx = startIndex;
-                let stFound = 0;
-                let att = 0;
-                const dirRound = isReversedRef.current ? -1 : 1;
-                while (stFound < steps && att < len * 2) {
-                    nextTargetIdx = (nextTargetIdx + dirRound + len) % len;
-                    if (!currentPlayersList[nextTargetIdx].isEliminated) stFound++;
-                    att++;
-                }
-                const nextPlayerObj = currentPlayersList[nextTargetIdx];
-                const nextPlayerTierObj = nextPlayerObj.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (nextPlayerObj.botDifficulty || 3) - 1))] : getPlayerTier(nextPlayerObj.stats);
+                if (resetWordOnNewRoundRef.current) {
+                    // Cari pemain berikutnya untuk sesuaikan kesulitan pola berdasarkan tier
+                    let nextTargetIdx = startIndex;
+                    let stFound = 0;
+                    let att = 0;
+                    const dirRound = isReversedRef.current ? -1 : 1;
+                    while (stFound < steps && att < len * 2) {
+                        nextTargetIdx = (nextTargetIdx + dirRound + len) % len;
+                        if (!currentPlayersList[nextTargetIdx].isEliminated) stFound++;
+                        att++;
+                    }
+                    const nextPlayerObj = currentPlayersList[nextTargetIdx];
+                    const nextPlayerTierObj = nextPlayerObj.isBot ? TIER_LEVELS[Math.min(5, Math.max(0, (nextPlayerObj.botDifficulty || 3) - 1))] : getPlayerTier(nextPlayerObj.stats);
 
-                const baseW = getNewRandomWord();
-                const pat = generatePattern(baseW, dictionary, usedWordsRef.current, lastPatternTypeRef.current, useTierDifficultyRef.current ? nextPlayerTierObj.level : null);
-                setCurrentWord(pat.display);
-                currentWordRef.current = pat.display;
-                lastPatternTypeRef.current = pat.type;
-                addLog("System", `🔄 Pola Baru: ${pat.display.toUpperCase()}`);
-                playSound("tick");
-            }
-            if (gameModeRef.current === "INFIKS") {
+                    const baseW = getNewRandomWord();
+                    const pat = generatePattern(baseW, dictionary, usedWordsRef.current, lastPatternTypeRef.current, useTierDifficultyRef.current ? nextPlayerTierObj.level : null);
+                    setCurrentWord(pat.display);
+                    currentWordRef.current = pat.display;
+                    lastPatternTypeRef.current = pat.type;
+                    addLog("System", `🔄 Ronde Baru! Pola: ${pat.display.toUpperCase()}`);
+                    playSound("tick");
+                } else {
+                    addLog("System", `🔄 Ronde Baru! Melanjutkan Pola`);
+                }
+            } else if (gameModeRef.current === "INFIKS") {
                 const newFragment = generateInfixFragment();
                 setCurrentWord(newFragment);
                 currentWordRef.current = newFragment;
                 addLog("System", `💣 Fragment Baru: ${newFragment.toUpperCase()}`);
                 playSound("tick");
+            } else if (gameModeRef.current !== "RHYME") {
+                if (resetWordOnNewRoundRef.current) {
+                    const freshWord = getNewRandomWord();
+                    usedWordsRef.current.add(freshWord);
+                    setUsedWords(new Set(usedWordsRef.current));
+                    setCurrentWord(freshWord);
+                    currentWordRef.current = freshWord;
+                    addLog("System", `🔔 Ronde Baru! Kata Pembuka: ${freshWord.toUpperCase()}`);
+                    playSound("tick");
+                } else {
+                    addLog("System", `🔔 Ronde Baru!`);
+                }
             }
         }
 
@@ -2201,7 +2210,7 @@ export default function App() {
             const idx = playersRef.current.findIndex(p => p.uniqueId === forcedUniqueId);
             if (idx !== -1) playerIndex = idx;
         }
-        if (gameModeRef.current !== "PHRASE_CHAIN" && word.includes(" ")) {
+        if (gameModeRef.current !== "PHRASE_CHAIN" && gameModeRef.current !== "CITIES" && word.includes(" ")) {
             addLog("Game", `❌ "${word}" mengandung spasi (Hanya 1 kata).`);
             playSound("wrong"); triggerTableEffect("error"); showFeedback(`Hanya 1 kata!`, "error");
             return;
@@ -2496,6 +2505,12 @@ export default function App() {
 
         while (currentPlayers.length < maxPlayers && currentQueue.length > 0) {
             const nextPlayer = currentQueue.shift();
+            if (gameStateRef.current === "PLAYING") {
+                const activeExisting = currentPlayers.filter(p => !p.isEliminated);
+                if (activeExisting.length > 0) {
+                    nextPlayer.turnCount = Math.min(...activeExisting.map(p => p.turnCount || 0));
+                }
+            }
             currentPlayers.push(nextPlayer);
             addLog("System", `${nextPlayer.nickname} bergabung dari antrean!`);
         }
@@ -2528,9 +2543,18 @@ export default function App() {
 
         const isBot = botDifficulty > 0;
         const stats = isBot ? { wins: 0, games: 0, kills: 0 } : StatsManager.load(uniqueId);
+
+        let initialTurnCount = 0;
+        if (gameStateRef.current === "PLAYING") {
+            const activeExisting = playersRef.current.filter(p => !p.isEliminated);
+            if (activeExisting.length > 0) {
+                initialTurnCount = Math.min(...activeExisting.map(p => p.turnCount || 0));
+            }
+        }
+
         const newPlayer = {
             id: uniqueId, uniqueId, nickname, avatarUrl: profilePictureUrl || getAvatarUrl(uniqueId),
-            isEliminated: false, color: getRandomColor(), isBot, botDifficulty, stats, score: 0, turnCount: 0, sessionKills: 0
+            isEliminated: false, color: getRandomColor(), isBot, botDifficulty, stats, score: 0, turnCount: initialTurnCount, sessionKills: 0
         };
 
         if (playersRef.current.length >= maxPlayers) {
@@ -2863,108 +2887,146 @@ export default function App() {
         }
 
         if (targetLang === "ID") {
-            if (!forceReload) addLog("System", "Switching to Indonesian...");
+            if (dictionaryCache.current.ID) {
+                setDictionary(dictionaryCache.current.ID.dict);
+                setSyllableMap(dictionaryCache.current.ID.syl);
+                phraseDictionary.current = dictionaryCache.current.ID.phrases;
+                setDictLoadedInfo(dictionaryCache.current.ID.info);
+                if (!forceReload) addLog("System", "Switched to Indonesian (Cached)");
+            } else {
+                if (!forceReload) addLog("System", "Switching to Indonesian...");
 
-            Promise.all([
-                fetch("/kamus.json").then((res) => res.ok ? res.json() : {}).catch(() => ({})),
-                fetch("/kamus_tambahan.txt").then((res) => res.ok ? res.text() : "").catch(() => "")
-            ]).then(([jsonData, txtData]) => {
-                const dictSet = new Set(); const sMap = {}; const phraseSet = new Set(FALLBACK_PHRASES_ID);
+                Promise.all([
+                    fetch("/kamus.json").then((res) => res.ok ? res.json() : {}).catch(() => ({})),
+                    fetch("/kamus_tambahan.txt").then((res) => res.ok ? res.text() : "").catch(() => "")
+                ]).then(([jsonData, txtData]) => {
+                    const dictSet = new Set(); const sMap = {}; const phraseSet = new Set(FALLBACK_PHRASES_ID);
 
-                if (Object.keys(jsonData).length > 0) {
-                    Object.keys(jsonData).forEach((k) => {
-                        if (k.includes(" ")) phraseSet.add(k.toLowerCase());
-                        else {
-                            const clean = normalizeWord(k);
-                            if (clean) {
-                                dictSet.add(clean);
-                                let defText = null;
-                                if (jsonData[k].submakna) {
-                                    let sm = jsonData[k].submakna;
-                                    if (Array.isArray(sm)) sm = sm[0];
-                                    if (typeof sm === 'string' && sm.trim().length > 0) defText = sm.replace(/^[0-9]+\.?\s*/, '').trim();
+                    if (Object.keys(jsonData).length > 0) {
+                        Object.keys(jsonData).forEach((k) => {
+                            if (k.includes(" ")) phraseSet.add(k.toLowerCase());
+                            else {
+                                const clean = normalizeWord(k);
+                                if (clean) {
+                                    dictSet.add(clean);
+                                    let defText = null;
+                                    if (jsonData[k].submakna) {
+                                        let sm = jsonData[k].submakna;
+                                        if (Array.isArray(sm)) sm = sm[0];
+                                        if (typeof sm === 'string' && sm.trim().length > 0) defText = sm.replace(/^[0-9]+\.?\s*/, '').trim();
+                                    }
+                                    if (jsonData[k].nama || defText) {
+                                        sMap[clean] = { nama: jsonData[k].nama?.toLowerCase(), def: defText };
+                                    }
                                 }
-                                if (jsonData[k].nama || defText) {
-                                    sMap[clean] = { nama: jsonData[k].nama?.toLowerCase(), def: defText };
-                                }
-                            }
-                        }
-                    });
-                }
-
-                if (txtData) {
-                    const lines = txtData.split(/\r?\n/);
-                    lines.forEach((line) => {
-                        if (line.includes(" ")) phraseSet.add(line.trim().toLowerCase());
-                        else { const clean = normalizeWord(line); if (clean) dictSet.add(clean); }
-                    });
-                }
-
-                if (dictSet.size === 0) throw new Error("Empty Dictionary");
-
-                setDictionary(dictSet); setSyllableMap(sMap); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Kamus.json+TXT (${dictSet.size})`);
-                dictionaryCache.current.ID = { dict: dictSet, syl: sMap, phrases: phraseSet, info: `Kamus.json+TXT (${dictSet.size})` };
-            }).catch(() => {
-                const words = Object.keys(FALLBACK_DICTIONARY_ID_DATA); const pSet = new Set(FALLBACK_PHRASES_ID);
-                setDictionary(new Set(words)); setSyllableMap(FALLBACK_DICTIONARY_ID_DATA); phraseDictionary.current = pSet;
-                setDictLoadedInfo("Default (ID)"); dictionaryCache.current.ID = { dict: new Set(words), syl: FALLBACK_DICTIONARY_ID_DATA, phrases: pSet, info: "Default (ID)" };
-            });
-        } else if (targetLang === "MIX") {
-            if (!forceReload) addLog("System", "Switching to Mix Bahasa...");
-            const loadMix = async () => {
-                let rawEn = FALLBACK_DICTIONARY_EN; let rawId = new Set(Object.keys(FALLBACK_DICTIONARY_ID_DATA));
-                let pSet = new Set([...FALLBACK_PHRASES_EN, ...FALLBACK_PHRASES_ID]);
-                let mixSMap = {};
-                try { const resEn = await fetch("/dictionary.txt"); if (resEn.ok) { const txt = await resEn.text(); rawEn = new Set(txt.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0 && !w.includes(" ")).map(normalizeWord).filter(w => w.length > 0)); } } catch (e) { }
-                try {
-                    const resId = await fetch("/kamus.json");
-                    if (resId.ok) {
-                        const idData = await resId.json();
-                        Object.keys(idData).forEach(k => {
-                            const clean = normalizeWord(k);
-                            if (clean) {
-                                rawId.add(clean);
-                                let defText = null;
-                                if (idData[k].submakna) {
-                                    let sm = idData[k].submakna;
-                                    if (Array.isArray(sm)) sm = sm[0];
-                                    if (typeof sm === 'string') defText = sm.replace(/^[0-9]+\.?\s*/, '').trim();
-                                }
-                                if (idData[k].nama || defText) mixSMap[clean] = { nama: idData[k].nama?.toLowerCase(), def: defText };
                             }
                         });
                     }
-                } catch (e) { }
-                try {
-                    const resTxt = await fetch("/kamus_tambahan.txt");
-                    if (resTxt.ok) {
-                        const txtData = await resTxt.text();
+
+                    if (txtData) {
                         const lines = txtData.split(/\r?\n/);
                         lines.forEach((line) => {
-                            if (line.includes(" ")) pSet.add(line.trim().toLowerCase());
-                            else { const clean = normalizeWord(line); if (clean) rawId.add(clean); }
+                            if (line.includes(" ")) phraseSet.add(line.trim().toLowerCase());
+                            else { const clean = normalizeWord(line); if (clean) dictSet.add(clean); }
                         });
                     }
-                } catch (e) { }
 
-                const mixDict = new Set([...rawEn, ...rawId]);
-                setDictionary(mixDict); setSyllableMap(mixSMap); phraseDictionary.current = pSet; setDictLoadedInfo(`Mix (${mixDict.size})`);
-                dictionaryCache.current.MIX = { dict: mixDict, syl: mixSMap, phrases: pSet, info: `Mix (${mixDict.size})` };
-            };
-            loadMix();
+                    if (dictSet.size === 0) throw new Error("Empty Dictionary");
+
+                    setDictionary(dictSet); setSyllableMap(sMap); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Kamus.json+TXT (${dictSet.size})`);
+                    dictionaryCache.current.ID = { dict: dictSet, syl: sMap, phrases: phraseSet, info: `Kamus.json+TXT (${dictSet.size})` };
+                }).catch(() => {
+                    const words = Object.keys(FALLBACK_DICTIONARY_ID_DATA); const pSet = new Set(FALLBACK_PHRASES_ID);
+                    setDictionary(new Set(words)); setSyllableMap(FALLBACK_DICTIONARY_ID_DATA); phraseDictionary.current = pSet;
+                    setDictLoadedInfo("Default (ID)"); dictionaryCache.current.ID = { dict: new Set(words), syl: FALLBACK_DICTIONARY_ID_DATA, phrases: pSet, info: "Default (ID)" };
+                });
+            }
+        } else if (targetLang === "MIX") {
+            if (dictionaryCache.current.MIX) {
+                setDictionary(dictionaryCache.current.MIX.dict);
+                setSyllableMap(dictionaryCache.current.MIX.syl);
+                phraseDictionary.current = dictionaryCache.current.MIX.phrases;
+                setDictLoadedInfo(dictionaryCache.current.MIX.info);
+                if (!forceReload) addLog("System", "Switched to Mix Bahasa (Cached)");
+            } else {
+                if (!forceReload) addLog("System", "Switching to Mix Bahasa...");
+                const loadMix = async () => {
+                    let rawEn = dictionaryCache.current.EN?.dict || FALLBACK_DICTIONARY_EN;
+                    let rawId = dictionaryCache.current.ID?.dict || new Set(Object.keys(FALLBACK_DICTIONARY_ID_DATA));
+                    let pSet = new Set([...(dictionaryCache.current.EN?.phrases || FALLBACK_PHRASES_EN), ...(dictionaryCache.current.ID?.phrases || FALLBACK_PHRASES_ID)]);
+                    let mixSMap = dictionaryCache.current.ID?.syl || {};
+
+                    if (!dictionaryCache.current.EN) {
+                        try {
+                            const resEn = await fetch("/dictionary.txt");
+                            if (resEn.ok) {
+                                const txt = await resEn.text();
+                                rawEn = new Set(txt.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0 && !w.includes(" ")).map(normalizeWord).filter(w => w.length > 0));
+                                dictionaryCache.current.EN = { dict: rawEn, syl: {}, phrases: new Set(FALLBACK_PHRASES_EN), info: `Dictionary.txt (${rawEn.size})` };
+                            }
+                        } catch (e) { }
+                    }
+                    if (!dictionaryCache.current.ID) {
+                        try {
+                            const resId = await fetch("/kamus.json");
+                            if (resId.ok) {
+                                const idData = await resId.json();
+                                Object.keys(idData).forEach(k => {
+                                    const clean = normalizeWord(k);
+                                    if (clean) {
+                                        rawId.add(clean);
+                                        let defText = null;
+                                        if (idData[k].submakna) {
+                                            let sm = idData[k].submakna;
+                                            if (Array.isArray(sm)) sm = sm[0];
+                                            if (typeof sm === 'string') defText = sm.replace(/^[0-9]+\.?\s*/, '').trim();
+                                        }
+                                        if (idData[k].nama || defText) mixSMap[clean] = { nama: idData[k].nama?.toLowerCase(), def: defText };
+                                    }
+                                });
+                            }
+                        } catch (e) { }
+                        try {
+                            const resTxt = await fetch("/kamus_tambahan.txt");
+                            if (resTxt.ok) {
+                                const txtData = await resTxt.text();
+                                const lines = txtData.split(/\r?\n/);
+                                lines.forEach((line) => {
+                                    if (line.includes(" ")) pSet.add(line.trim().toLowerCase());
+                                    else { const clean = normalizeWord(line); if (clean) rawId.add(clean); }
+                                });
+                            }
+                        } catch (e) { }
+                        dictionaryCache.current.ID = { dict: rawId, syl: mixSMap, phrases: pSet, info: `Kamus.json+TXT (${rawId.size})` };
+                    }
+
+                    const mixDict = new Set([...rawEn, ...rawId]);
+                    setDictionary(mixDict); setSyllableMap(mixSMap); phraseDictionary.current = pSet; setDictLoadedInfo(`Mix (${mixDict.size})`);
+                    dictionaryCache.current.MIX = { dict: mixDict, syl: mixSMap, phrases: pSet, info: `Mix (${mixDict.size})` };
+                };
+                loadMix();
+            }
         } else {
-            if (!forceReload) addLog("System", "Switching to English...");
-            fetch("/dictionary.txt").then((res) => { if (!res.ok) throw new Error(); return res.text(); }).then((text) => {
-                const rawWords = text.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0);
-                let phraseSet = new Set(FALLBACK_PHRASES_EN);
-                const cleanedWords = rawWords.filter((w) => { if (w.includes(" ")) { phraseSet.add(w.toLowerCase()); return false; } return true; }).map(normalizeWord).filter(w => w.length > 0);
-                const newDict = new Set(cleanedWords);
-                setDictionary(newDict); setSyllableMap({}); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Dictionary.txt (${cleanedWords.length})`);
-                dictionaryCache.current.EN = { dict: newDict, syl: {}, phrases: phraseSet, info: `Dictionary.txt (${cleanedWords.length})` };
-            }).catch(() => {
-                setDictionary(FALLBACK_DICTIONARY_EN); setSyllableMap({}); phraseDictionary.current = new Set(FALLBACK_PHRASES_EN);
-                setDictLoadedInfo("Default (EN)"); dictionaryCache.current.EN = { dict: FALLBACK_DICTIONARY_EN, syl: {}, phrases: new Set(FALLBACK_PHRASES_EN), info: "Default (EN)" };
-            });
+            if (dictionaryCache.current.EN) {
+                setDictionary(dictionaryCache.current.EN.dict);
+                setSyllableMap(dictionaryCache.current.EN.syl || {});
+                phraseDictionary.current = dictionaryCache.current.EN.phrases;
+                setDictLoadedInfo(dictionaryCache.current.EN.info);
+                if (!forceReload) addLog("System", "Switched to English (Cached)");
+            } else {
+                if (!forceReload) addLog("System", "Switching to English...");
+                fetch("/dictionary.txt").then((res) => { if (!res.ok) throw new Error(); return res.text(); }).then((text) => {
+                    const rawWords = text.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0);
+                    let phraseSet = new Set(FALLBACK_PHRASES_EN);
+                    const cleanedWords = rawWords.filter((w) => { if (w.includes(" ")) { phraseSet.add(w.toLowerCase()); return false; } return true; }).map(normalizeWord).filter(w => w.length > 0);
+                    const newDict = new Set(cleanedWords);
+                    setDictionary(newDict); setSyllableMap({}); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Dictionary.txt (${cleanedWords.length})`);
+                    dictionaryCache.current.EN = { dict: newDict, syl: {}, phrases: phraseSet, info: `Dictionary.txt (${cleanedWords.length})` };
+                }).catch(() => {
+                    setDictionary(FALLBACK_DICTIONARY_EN); setSyllableMap({}); phraseDictionary.current = new Set(FALLBACK_PHRASES_EN);
+                    setDictLoadedInfo("Default (EN)"); dictionaryCache.current.EN = { dict: FALLBACK_DICTIONARY_EN, syl: {}, phrases: new Set(FALLBACK_PHRASES_EN), info: "Default (EN)" };
+                });
+            }
         }
 
         if (!forceReload) {
@@ -3043,11 +3105,12 @@ export default function App() {
         }
 
         // 3. Hanya gunakan regex setelah yakin chat perlu diproses
-        // Bypass filter tiktok: hapus spasi berlebih (M A K A N -> makan) dan kata sapaan (makan bang -> makan)
+        // Bypass filter tiktok: hapus kata sapaan (makan bang -> makan) dan bersihkan spasi ganda
         let cleanWordCheck = normalizeWord(lowerComment);
         if (cleanWordCheck.includes(" ")) {
-            cleanWordCheck = cleanWordCheck.replace(/\b(bang|bg|cuy|dong|min|admin)\b/g, "").replace(/\s+/g, "");
+            cleanWordCheck = cleanWordCheck.replace(/\b(bang|bg|cuy|dong|min|admin)\b/g, "").trim().replace(/\s+/g, " ");
         }
+        const noSpaceWord = cleanWordCheck.replace(/\s+/g, "");
         if (isScrambleActive && cleanWordCheck === scrambleWordRef.current.toLowerCase()) {
             setScrambledDisplay(scrambleWordRef.current);
             setScrambleWinner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
@@ -3129,7 +3192,7 @@ export default function App() {
                             if (isCurrentPlayerTurn) {
                                 let cleanWord = cleanWordCheck;
                                 if (gameModeRef.current !== "PHRASE_CHAIN" && gameModeRef.current !== "CITIES") {
-                                    cleanWord = cleanWord.split(" ")[0];
+                                    cleanWord = cleanWord.includes(" ") ? (noSpaceWord.length > 0 && dictionary.has(noSpaceWord) ? noSpaceWord : cleanWord.split(" ")[0]) : cleanWord;
                                 }
                                 if (cleanWord.length > 0) submitAnswer(cleanWord);
                             }
@@ -3212,7 +3275,7 @@ export default function App() {
         if (isCurrentPlayerTurn) {
             let cleanWord = cleanWordCheck;
             if (gameModeRef.current !== "PHRASE_CHAIN" && gameModeRef.current !== "CITIES") {
-                cleanWord = cleanWord.split(" ")[0];
+                cleanWord = cleanWord.includes(" ") ? (noSpaceWord.length > 0 && dictionary.has(noSpaceWord) ? noSpaceWord : cleanWord.split(" ")[0]) : cleanWord;
             }
             if (cleanWord.length > 0) submitAnswer(cleanWord);
         }
@@ -3693,6 +3756,10 @@ export default function App() {
                                         <button onClick={() => setUseTierDifficulty(!useTierDifficulty)} className={`w-full ${useTierDifficulty ? 'bg-sky-900/30 hover:bg-sky-900/50 border-sky-700/50' : 'bg-slate-800/50 hover:bg-slate-800 border-slate-700'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
                                             <div className="flex items-center gap-2"><Crown className={`w-3 h-3 ${useTierDifficulty ? 'text-sky-400 animate-pulse' : 'text-slate-500'}`} /><span className={useTierDifficulty ? "text-sky-300" : "text-slate-400"}>Kesulitan Tier</span></div>
                                             <span className={useTierDifficulty ? "text-sky-400" : "text-slate-500"}>{useTierDifficulty ? "ON" : "OFF"}</span>
+                                        </button>
+                                        <button onClick={() => setResetWordOnNewRound(!resetWordOnNewRound)} className={`w-full ${resetWordOnNewRound ? 'bg-amber-900/30 hover:bg-amber-900/50 border-amber-700/50' : 'bg-slate-800/50 hover:bg-slate-800 border-slate-700'} px-3 py-1.5 rounded text-xs font-bold transition-colors flex items-center justify-between group`}>
+                                            <div className="flex items-center gap-2"><RefreshCw className={`w-3 h-3 ${resetWordOnNewRound ? 'text-amber-400' : 'text-slate-500'}`} /><span className={resetWordOnNewRound ? "text-amber-300" : "text-slate-400"}>{t("reset_word_round")}</span></div>
+                                            <span className={resetWordOnNewRound ? "text-amber-400" : "text-slate-500"}>{resetWordOnNewRound ? "ON" : "OFF"}</span>
                                         </button>
                                     </div>
                                     <div className="w-full bg-slate-800/50 p-2 rounded border border-slate-700 flex flex-col gap-1.5 mt-0.5">

@@ -27,7 +27,8 @@ const TRANSLATIONS = {
         close: "Close", click_to_accept: "Click to Accept", chain_broken: "CHAIN BROKEN!",
         reconnecting: "Reconnecting...", rhyme_target: "RHYME TARGET", rhyme_change: "RHYME CHANGED",
         log_unjoin: "left the lobby.", log_surrender: "surrendered!", log_ban_rejoin: "Rejoin limit reached (Max 1x).",
-        log_cant_unjoin: "Cannot unjoin while playing.", starting_in: "Starting in", auto_restart: "Auto Restart"
+        log_cant_unjoin: "Cannot unjoin while playing.", starting_in: "Starting in", auto_restart: "Auto Restart",
+        reset_word_round: "Reset Word Every Round"
     },
     ID: {
         waiting: "MENUNGGU PEMAIN...", type_join: "Ketik !join", game_over: "PERMAINAN SELESAI",
@@ -54,7 +55,8 @@ const TRANSLATIONS = {
         close: "Tutup", click_to_accept: "Klik untuk Terima", chain_broken: "RANTAI PUTUS!",
         reconnecting: "Menyambung...", rhyme_target: "TARGET RIMA", rhyme_change: "RIMA BERUBAH",
         log_unjoin: "keluar dari lobby.", log_surrender: "menyerah!", log_ban_rejoin: "Batas rejoin habis (Maks 1x).",
-        log_cant_unjoin: "Sedang main tidak bisa unjoin.", starting_in: "Mulai dalam", auto_restart: "Mulai Otomatis"
+        log_cant_unjoin: "Sedang main tidak bisa unjoin.", starting_in: "Mulai dalam", auto_restart: "Mulai Otomatis",
+        reset_word_round: "Reset Kata Tiap Ronde"
     }
 };
 
@@ -137,7 +139,24 @@ const FALLBACK_PHRASES_EN = [
     "hat trick", "trick shot", "shot gun", "gun powder", "powder room", "room mate", "grand father",
     "father figure", "figure out", "out run", "run away", "water fall", "fall down", "down town", "town hall",
     "hall way", "gold fish", "fish net", "net work", "work out", "out door", "rain bow", "bow tie", "tie dye",
-    "sun flower", "flower pot", "pot luck", "luck out", "key board", "board game", "game over", "over time", "time zone"
+    "sun flower", "flower pot", "pot luck", "luck out", "key board", "board game", "game over", "over time", "time zone",
+    "coffee cup", "cup cake", "coffee shop", "shop keeper", "air port", "port side", "book store", "store front",
+    "front door", "back pack", "pack animal", "tea bag", "bag pipe", "pipe line", "line up", "up side", "side line",
+    "water bottle", "bottle neck", "neck lace", "lace up", "blood pressure", "pressure cooker", "cook book", "book mark",
+    "sea food", "food truck", "truck stop", "star fish", "fish hook", "hook up", "sun light", "light year", "year book",
+    "space ship", "ship wreck", "wreck ball", "ball park", "park bench", "snow ball", "ball room", "room service",
+    "service dog", "dog food", "fast food", "food chain", "chain reaction", "action movie", "movie star", "night club",
+    "club house", "house boat", "boat ride", "life boat", "life guard", "guard rail", "road trip", "trip wire",
+    "wire tap", "tap water", "water park", "green house", "house fly", "fly away", "iron man", "man power", "power plant",
+    "plant life", "life cycle", "cycle lane", "lane change", "super market", "market place", "place holder", "fire fly",
+    "fire wall", "wall paper", "paper clip", "clip board", "sound track", "track suit", "suit case", "case study",
+    "study group", "group chat", "chat room", "table tennis", "tennis court", "court room", "post card", "card board",
+    "board room", "police car", "car park", "shoe lace", "hair cut", "cut off", "rain coat", "coat hanger", "hanger steak",
+    "steak house", "pass word", "word play", "play ground", "honey moon", "moon walk", "walk man", "man hole",
+    "butter fly", "fly wheel", "wheel chair", "chair man", "cross road", "road map", "map marker", "land lord",
+    "lord ship", "ship yard", "yard stick", "stick figure", "news paper", "paper bag", "tea spoon", "spoon feed",
+    "feed back", "back bone", "bone yard", "tree house", "bird cage", "cage match", "match box", "box office",
+    "office chair", "air plane", "plane crash", "crash course", "brain storm", "storm cloud", "cloud nine", "nine lives"
 ];
 
 const FALLBACK_DICTIONARY_ID_DATA = {
