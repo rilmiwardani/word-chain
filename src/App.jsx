@@ -5070,7 +5070,7 @@ export default function App() {
                                             const prevGuesses = word500Guesses.slice(0, -1);
                                             const bestGuesses = [...prevGuesses]
                                                 .sort((a, b) => b.green - a.green || b.yellow - a.yellow)
-                                                .slice(0, 5);
+                                                .slice(0, 3);
                                             const displayRows = [
                                                 { guess: latestGuess, isLatest: true },
                                                 ...bestGuesses.map(g => ({ guess: g, isLatest: false }))
@@ -5090,8 +5090,10 @@ export default function App() {
                                                             : isLatest
                                                                 ? <div className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" title="Terbaru" />
                                                                 : idx === 1
-                                                                    ? <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/60" title="Terbaik" />
-                                                                    : <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
+                                                                    ? <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" title="Terbaik #1" />
+                                                                    : idx === 2
+                                                                        ? <div className="w-1.5 h-1.5 rounded-full bg-amber-500/70" title="Terbaik #2" />
+                                                                        : <div className="w-1.5 h-1.5 rounded-full bg-slate-500/60" title="Terbaik #3" />
                                                         }
                                                     </div>
                                                     <div className="flex-shrink-0">
