@@ -4627,9 +4627,33 @@ export default function App() {
                                 {isRound ? (
                                     <>
                                         <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"}`}>
-                                            {isTurn && <div className="absolute -inset-2 bg-amber-500/30 rounded-full animate-ping opacity-75"></div>}
-                                            {isKing && <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-50 animate-bounce drop-shadow-sm"><Crown className="w-5 h-5 text-amber-400 fill-amber-400" /></div>}
-                                            <div className={`w-14 h-14 rounded-full border-4 overflow-hidden bg-slate-800 z-10 relative shadow-sm ${isTurn ? (bombNextRef.current ? "border-orange-500 scale-110 animate-shake" : "border-amber-400 scale-110 shadow-lg") : isKing ? "border-amber-500/70 scale-105" : "border-slate-700"} transition-all duration-300`}>
+                                            {/* --- Indikator Panah Melayang & Cincin Glow Neon saat Giliran --- */}
+                                            {isTurn && (
+                                                <>
+                                                    <div className="absolute -top-16 sm:-top-18 left-1/2 -translate-x-1/2 z-[70] flex flex-col items-center pointer-events-none animate-bounce">
+                                                        <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-slate-950 font-black text-[9px] sm:text-[10px] px-2.5 py-0.5 rounded-full shadow-[0_0_20px_rgba(251,191,36,1)] border-2 border-yellow-100 uppercase tracking-wider whitespace-nowrap">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping"></span>
+                                                            GILIRANMU
+                                                        </div>
+                                                        <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] border-t-amber-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] -mt-0.5"></div>
+                                                    </div>
+                                                    <div className="absolute -inset-3 sm:-inset-4 bg-amber-400/40 rounded-full blur-md animate-pulse pointer-events-none"></div>
+                                                    <div className="absolute -inset-2 bg-gradient-to-r from-yellow-300 to-amber-500 rounded-full animate-ping opacity-60 pointer-events-none"></div>
+                                                    <div className="absolute -inset-1 rounded-full border-2 border-yellow-200 animate-pulse pointer-events-none shadow-[0_0_20px_rgba(250,204,21,0.9)]"></div>
+                                                </>
+                                            )}
+                                            {isKing && (
+                                                <div className={`absolute ${isTurn ? "-top-2 -left-3" : "-top-5 left-1/2 -translate-x-1/2"} z-50 animate-bounce drop-shadow-md transition-all duration-300`}>
+                                                    <Crown className="w-5 h-5 text-amber-400 fill-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
+                                                </div>
+                                            )}
+                                            <div className={`w-14 h-14 rounded-full border-4 overflow-hidden bg-slate-800 z-10 relative transition-all duration-300 ${
+                                                isTurn
+                                                    ? (bombNextRef.current
+                                                        ? "border-orange-500 ring-4 ring-orange-500/80 scale-125 animate-shake shadow-[0_0_30px_rgba(249,115,22,1)]"
+                                                        : "border-yellow-300 ring-4 ring-amber-400/90 ring-offset-2 ring-offset-slate-950 scale-125 shadow-[0_0_35px_rgba(251,191,36,1)]")
+                                                    : (isKing ? "border-amber-500/70 scale-105 shadow-sm" : "border-slate-700 shadow-sm")
+                                            }`}>
                                                 <img src={player.avatarUrl} alt={player.nickname} className={`w-full h-full object-cover transition-all ${isKing ? "brightness-105" : ""}`} />
                                             </div>
                                             {/* Badge Tier menggantikan posisi bot difficulty lama */}
@@ -4643,31 +4667,47 @@ export default function App() {
                                             {player.isEliminated && <div className="absolute inset-0 flex items-center justify-center z-20"><X className="w-8 h-8 text-slate-500 drop-shadow-md" /></div>}
                                         </div>
                                         <div className="mt-[-2px] flex flex-col items-center z-40 relative w-full">
-                                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border shadow-md transition-all duration-300 ${isTurn ? "bg-slate-800 border-amber-500/50 text-amber-400 scale-110" : "bg-slate-900/95 border-slate-700 text-slate-300"}`}>
+                                            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border shadow-md transition-all duration-300 ${
+                                                isTurn
+                                                    ? "bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 border-yellow-100 text-slate-950 font-black scale-110 shadow-[0_0_20px_rgba(251,191,36,0.9)]"
+                                                    : "bg-slate-900/95 border-slate-700 text-slate-300"
+                                            }`}>
                                                 {player.stats?.wins > 0 && (
-                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`}>
-                                                        <Trophy className={`w-3 h-3 ${isTurn ? "text-amber-500" : "text-slate-500"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-amber-400" : "text-slate-400"}`}>{player.stats.wins}</span>
+                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-slate-950/30" : "border-slate-700"}`}>
+                                                        <Trophy className={`w-3 h-3 ${isTurn ? "text-amber-900" : "text-slate-500"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-slate-950" : "text-slate-400"}`}>{player.stats.wins}</span>
                                                     </div>
                                                 )}
                                                 {pointMode !== "OFF" && (
-                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`}>
-                                                        <Star className={`w-3 h-3 ${isTurn ? "text-amber-500" : "text-emerald-500"}`} fill={isTurn ? "currentColor" : "none"} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-amber-400" : "text-emerald-400"}`}>{player.score || 0}</span>
+                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-slate-950/30" : "border-slate-700"}`}>
+                                                        <Star className={`w-3 h-3 ${isTurn ? "text-amber-900" : "text-emerald-500"}`} fill={isTurn ? "currentColor" : "none"} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-slate-950" : "text-emerald-400"}`}>{player.score || 0}</span>
                                                     </div>
                                                 )}
                                                 {player.sessionKills > 0 && (
-                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-amber-700/50" : "border-slate-700"}`} title="Combos this match">
-                                                        <Sparkles className={`w-3 h-3 ${isTurn ? "text-orange-400" : "text-sky-400"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-orange-300" : "text-sky-300"}`}>{player.sessionKills}</span>
+                                                    <div className={`flex items-center gap-0.5 border-r pr-1.5 mr-0.5 ${isTurn ? "border-slate-950/30" : "border-slate-700"}`} title="Combos this match">
+                                                        <Sparkles className={`w-3 h-3 ${isTurn ? "text-amber-900" : "text-sky-400"}`} /><span className={`text-[10px] font-bold font-mono ${isTurn ? "text-slate-950" : "text-sky-300"}`}>{player.sessionKills}</span>
                                                     </div>
                                                 )}
-                                                <span className="text-[10px] font-bold tracking-wide truncate max-w-[70px]">{player.nickname}</span>
+                                                <span className={`text-[10px] tracking-wide truncate max-w-[70px] ${isTurn ? "font-black text-slate-950" : "font-bold"}`}>{player.nickname}</span>
                                             </div>
                                         </div>
                                     </>
                                 ) : (
-                                    <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"} flex flex-col items-center justify-center transition-all duration-300 ${isTurn ? 'scale-110 brightness-110' : 'scale-100 brightness-90'}`}>
+                                    <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"} flex flex-col items-center justify-center transition-all duration-300 ${isTurn ? 'scale-125 brightness-110 z-50' : 'scale-100 brightness-90'}`}>
+                                        {isTurn && (
+                                            <>
+                                                <div className="absolute -inset-5 bg-amber-400/40 rounded-2xl blur-lg animate-pulse pointer-events-none"></div>
+                                                <div className="absolute -inset-3 bg-gradient-to-r from-yellow-300 to-amber-500 rounded-xl animate-ping opacity-50 pointer-events-none"></div>
+                                                <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-[70] flex flex-col items-center pointer-events-none animate-bounce">
+                                                    <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-slate-950 font-black text-[9px] sm:text-[10px] px-2.5 py-0.5 rounded-full shadow-[0_0_20px_rgba(251,191,36,1)] border-2 border-yellow-100 uppercase tracking-wider whitespace-nowrap">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping"></span>
+                                                        GILIRANMU
+                                                    </div>
+                                                    <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[7px] border-t-amber-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] -mt-0.5"></div>
+                                                </div>
+                                            </>
+                                        )}
                                         <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
-                                        {isTurn && <div className="absolute -inset-3 bg-amber-500/40 rounded-xl animate-ping opacity-75 blur-md"></div>}
-                                        <div className={`w-[85px] h-[120px] sm:w-[110px] sm:h-[155px] bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 p-[2px] shadow-xl relative overflow-hidden flex flex-col items-center ${isTurn ? (bombNextRef.current ? "border-orange-500 animate-shake" : "shadow-amber-500/50 shadow-2xl") : "shadow-black/50"}`} style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}>
+                                        <div className={`w-[85px] h-[120px] sm:w-[110px] sm:h-[155px] bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 p-[2px] shadow-xl relative overflow-hidden flex flex-col items-center transition-all duration-300 ${isTurn ? (bombNextRef.current ? "border-2 border-orange-500 ring-4 ring-orange-500 animate-shake" : "ring-4 ring-yellow-300 ring-offset-2 ring-offset-slate-950 shadow-[0_0_35px_rgba(251,191,36,0.95)] shadow-2xl") : "shadow-black/50"}`} style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}>
                                             <div className="absolute inset-0 bg-black/40 mix-blend-overlay pointer-events-none"></div>
                                             <div className="absolute inset-[2px] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 z-0 pointer-events-none" style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}></div>
                                             

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Clock } from 'lucide-react';
 // 2.5 TIMERS (TO PREVENT APP RE-RENDER)
 // ==========================================
 const PlayerTimer = ({ isTurn, turnDuration, onTimeout, playSound, bombNext, onBombApplied, resetKey }) => {
@@ -56,7 +57,19 @@ const PlayerTimer = ({ isTurn, turnDuration, onTimeout, playSound, bombNext, onB
     }, [time, isTurn]);
 
     if (!isTurn) return null;
-    return <div className={`absolute -top-6 left-1/2 -translate-x-1/2 font-bold text-xs px-2 py-0.5 rounded-full shadow-sm z-50 whitespace-nowrap border ${time <= 5 ? "bg-red-900/80 text-red-200 animate-pulse border-red-700" : "bg-amber-900/80 text-amber-200 border-amber-700"}`}>{`${time}s`}</div>;
+    const isCritical = time <= 5;
+    return (
+        <div
+            className={`absolute -top-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 font-black font-mono text-xs sm:text-sm px-2.5 py-0.5 rounded-full whitespace-nowrap transition-all duration-200 border-2 ${
+                isCritical
+                    ? "bg-red-600 text-white border-red-200 shadow-[0_0_16px_rgba(239,68,68,1)] animate-bounce"
+                    : "bg-slate-950/95 text-amber-300 border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.85)]"
+            }`}
+        >
+            <Clock className={`w-3.5 h-3.5 ${isCritical ? "text-white animate-spin" : "text-amber-400"}`} />
+            <span>{time}s</span>
+        </div>
+    );
 };
 
 const GlobalTimer = ({ gameDuration, isActive, onTimeout, resetKey }) => {
