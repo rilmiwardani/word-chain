@@ -4627,9 +4627,12 @@ export default function App() {
                                 {isRound ? (
                                     <>
                                         <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"}`}>
-                                            {/* --- Indikator Cincin Glow Ambient Minimalis saat Giliran --- */}
+                                            {/* --- Indikator Efek Glow Menyebar (Ping Wave) & Ring Ambient saat Giliran --- */}
                                             {isTurn && (
-                                                <div className="absolute -inset-1.5 rounded-full border border-amber-400/60 animate-pulse pointer-events-none shadow-[0_0_12px_rgba(251,191,36,0.35)]"></div>
+                                                <>
+                                                    <div className="absolute -inset-2 rounded-full bg-amber-400/35 animate-ping opacity-75 pointer-events-none"></div>
+                                                    <div className="absolute -inset-1 rounded-full border border-amber-400/60 pointer-events-none shadow-[0_0_12px_rgba(251,191,36,0.4)]"></div>
+                                                </>
                                             )}
                                             {isKing && (
                                                 <div className={`absolute ${isTurn ? "-top-3 -left-1" : "-top-5 left-1/2 -translate-x-1/2"} z-30 animate-bounce drop-shadow-sm transition-all duration-300`}>
@@ -4683,7 +4686,10 @@ export default function App() {
                                 ) : (
                                     <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"} flex flex-col items-center justify-center transition-all duration-300 ${isTurn ? 'scale-105 brightness-105 z-50' : 'scale-100 brightness-90'}`}>
                                         {isTurn && (
-                                            <div className="absolute -inset-1.5 rounded-lg border border-amber-400/40 animate-pulse pointer-events-none shadow-[0_0_12px_rgba(251,191,36,0.3)]"></div>
+                                            <>
+                                                <div className="absolute -inset-3 rounded-xl bg-amber-400/35 animate-ping opacity-75 blur-sm pointer-events-none"></div>
+                                                <div className="absolute -inset-1.5 rounded-lg border border-amber-400/50 pointer-events-none shadow-[0_0_15px_rgba(251,191,36,0.35)]"></div>
+                                            </>
                                         )}
                                         <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
                                         <div className={`w-[85px] h-[120px] sm:w-[110px] sm:h-[155px] bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 p-[2px] shadow-xl relative overflow-hidden flex flex-col items-center transition-all duration-300 ${isTurn ? (bombNextRef.current ? "border-2 border-orange-500 ring-2 ring-orange-500/60 animate-shake" : "ring-2 ring-amber-400/60 shadow-[0_0_15px_rgba(251,191,36,0.35)]") : "shadow-black/50"}`} style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}>
