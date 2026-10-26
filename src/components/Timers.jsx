@@ -60,13 +60,13 @@ const PlayerTimer = ({ isTurn, turnDuration, onTimeout, playSound, bombNext, onB
     const isCritical = time <= 5;
     return (
         <div
-            className={`absolute -top-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 font-black font-mono text-xs sm:text-sm px-2.5 py-0.5 rounded-full whitespace-nowrap transition-all duration-200 border-2 ${
+            className={`absolute -top-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1.5 font-mono text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap backdrop-blur-md transition-all duration-300 border ${
                 isCritical
-                    ? "bg-red-600 text-white border-red-200 shadow-[0_0_16px_rgba(239,68,68,1)] animate-bounce"
-                    : "bg-slate-950/95 text-amber-300 border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.85)]"
+                    ? "bg-rose-950/90 text-rose-300 border-rose-500/80 shadow-[0_0_10px_rgba(244,63,94,0.5)] animate-pulse"
+                    : "bg-slate-900/90 text-amber-300 border-amber-400/60 shadow-[0_0_10px_rgba(251,191,36,0.3)] ring-1 ring-amber-400/20"
             }`}
         >
-            <Clock className={`w-3.5 h-3.5 ${isCritical ? "text-white animate-spin" : "text-amber-400"}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${isCritical ? "bg-rose-500 animate-ping" : "bg-amber-400 animate-pulse"}`}></span>
             <span>{time}s</span>
         </div>
     );
