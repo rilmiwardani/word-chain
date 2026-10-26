@@ -1105,6 +1105,7 @@ export default function App() {
         setWord500Guesses([]);
         setWord500Winner(null);
         setWord500ErrorGuess(null);
+        setAutoWordleGuess(null);
     };
 
     const checkWord500Guess = (guess, target) => {
@@ -3132,7 +3133,7 @@ export default function App() {
             const activeDict = dictionaryCache.current[languageRef.current]?.dict || dictionaryCache.current.EN?.dict;
             const isInDict = activeDict?.has(cleanWordCheck.toLowerCase()) || false;
             const isInKamus = kamusTambahanRef.current.has(cleanWordCheck.toLowerCase());
-            const isKnownWord = isInDict || isInKamus;
+            const isKnownWord = isInDict || isInKamus || (cleanWordCheck.toLowerCase() === word500TargetRef.current.toLowerCase());
 
             if (!isKnownWord && activeMinigameRef.current !== "WORDLE") {
                 // Kata tidak dikenal — abaikan tanpa feedback agar tidak spam (kecuali mode WORDLE yang butuh pesan error)
@@ -3251,6 +3252,12 @@ export default function App() {
                         profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId)
                     };
                     setWord500Guesses(prev => [...prev, newGuess]);
+                } else if (activeMinigameRef.current === "AUTO_WORDLE") {
+                    const colors = computeWordleColors(cleanWordCheck, word500TargetRef.current);
+                    setAutoWordleGuess({
+                        word: cleanWordCheck.toUpperCase(),
+                        colors
+                    });
                 }
 
                 if (activeMinigameRef.current === "WORD500") {
@@ -3263,6 +3270,24 @@ export default function App() {
                         });
                         setTimeout(() => { setWord500FlipPhase("flipping"); }, 800);
                         setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 1400);
+                        setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
+                    } else {
+                        playSound("tick");
+                    }
+                } else if (activeMinigameRef.current === "AUTO_WORDLE") {
+                    if (green === word500TargetRef.current.length) {
+                        setAutoWordleGuess({
+                            word: word500TargetRef.current.toUpperCase(),
+                            colors: Array(word500TargetRef.current.length).fill("green")
+                        });
+                        setWord500Winner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
+                        addLog("MiniGame", `🎉 ${nickname} memenangkan Auto Wordle: ${word500TargetRef.current}!`);
+                        setAutoWordleLeaderboard(prev => {
+                            const currentScore = prev[uniqueId]?.score || 0;
+                            return { ...prev, [uniqueId]: { score: currentScore + 1, nickname, avatar: profilePictureUrl || getAvatarUrl(uniqueId) } };
+                        });
+                        setTimeout(() => { setWord500FlipPhase("flipping"); }, 1500);
+                        setTimeout(() => { setWord500FlipPhase("winner"); playSound("win"); triggerTableEffect("success"); }, 2100);
                         setTimeout(() => { setWord500FlipPhase(null); startNewWord500(); }, 6000);
                     } else {
                         playSound("tick");
