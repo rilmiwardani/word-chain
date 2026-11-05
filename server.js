@@ -25,6 +25,21 @@ const { WebSocket: WS, WebSocketServer } = require("ws");
 let WebcastPushConnection;
 try { WebcastPushConnection = require("tiktok-live-connector").WebcastPushConnection; } catch(e) { console.warn("[WARN] tiktok-live-connector not installed. TikTok features disabled."); }
 const ytSearch = require("yt-search");
+const os = require("os");
+
+function getLocalIp() {
+  try {
+    const nets = os.networkInterfaces();
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name]) {
+        if ((net.family === 'IPv4' || net.family === 4) && !net.internal) {
+          return net.address;
+        }
+      }
+    }
+  } catch (e) {}
+  return "localhost";
+}
 
 // ═══════════════════════════════════════════════════════
 //  CONFIG
@@ -103,6 +118,7 @@ function logEvent(type, data) {
 // ═══════════════════════════════════════════════════════
 const wss = new WebSocketServer({ port: WS_BRIDGE_PORT });
 const wsClients = new Set();
+let latestGameState = null;
 
 function wsBroadcast(event, data) {
   const msg = JSON.stringify({ event, data });
@@ -111,9 +127,26 @@ function wsBroadcast(event, data) {
   });
 }
 
+function getObsClientCount() {
+  let count = 0;
+  wsClients.forEach(c => { if (c.isObsClient) count++; });
+  return count;
+}
+
 wss.on("connection", (ws) => {
   wsClients.add(ws);
   console.log(`[WS Bridge] Client connected (${wsClients.size} total)`);
+
+  // Send server info with local IP and current OBS status
+  ws.send(JSON.stringify({
+    event: "server_info",
+    data: {
+      localIp: getLocalIp(),
+      port: 5173,
+      wsPort: WS_BRIDGE_PORT,
+      obsClientsCount: getObsClientCount()
+    }
+  }));
 
   // Send current state
   if (connectionState.status === "connected") {
@@ -122,9 +155,41 @@ wss.on("connection", (ws) => {
   // Send current music state
   ws.send(JSON.stringify({ event: "music_state", data: { queue: musicQueue, current: currentSong, requestsEnabled: musicRequestsEnabled } }));
 
+  // Send cached game state if available
+  if (latestGameState) {
+    ws.send(JSON.stringify({ event: "game_sync_state", data: latestGameState }));
+  }
+
   ws.on("message", async (raw) => {
     try {
       const { event, data } = JSON.parse(raw.toString());
+
+      // Relay game state synchronization (Control Panel <-> OBS Overlay)
+      if (event === "game_sync_update" && data) {
+        latestGameState = data;
+        const msg = JSON.stringify({ event: "game_sync_state", data });
+        wsClients.forEach(client => {
+          if (client !== ws && client.readyState === WS.OPEN) {
+            client.send(msg);
+          }
+        });
+      }
+
+      if (event === "game_sync_request") {
+        if (latestGameState && ws.readyState === WS.OPEN) {
+          ws.send(JSON.stringify({ event: "game_sync_state", data: latestGameState }));
+        }
+      }
+
+      if (event === "register_client") {
+        if (data?.clientType === "obs") {
+          ws.isObsClient = true;
+          const count = getObsClientCount();
+          wsBroadcast("obs_status", { count, isConnected: count > 0 });
+          console.log(`[WS Bridge] OBS Overlay registered (active: ${count})`);
+        }
+      }
+
       if (event === "host_music_request" && data?.query) {
         await handleMusicSearch(data.query, "Host", null);
       }
@@ -153,7 +218,9 @@ wss.on("connection", (ws) => {
 
   ws.on("close", () => {
     wsClients.delete(ws);
-    console.log(`[WS Bridge] Client disconnected (${wsClients.size} total)`);
+    const count = getObsClientCount();
+    wsBroadcast("obs_status", { count, isConnected: count > 0 });
+    console.log(`[WS Bridge] Client disconnected (${wsClients.size} total, ${count} OBS)`);
   });
 });
 

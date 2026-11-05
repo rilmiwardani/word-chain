@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
     AlertTriangle, BarChart2, Bot, Clock, Crown, Delete, FastForward,
     FileJson, Flag, FlipHorizontal, Gamepad2, Gift, Globe, GripHorizontal, Hash, Heart, Info,
@@ -6,7 +6,8 @@ import {
     MoveUpRight, Plus, RefreshCw, Repeat2, Send, Settings,
     Star, Target, TrendingUp as TrendingUpIcon, Trophy, Unlink,
     User, Users, Volume2, VolumeX, X, Sparkles, MessageSquare, MessageSquareOff,
-    Pause, Play, Music, Camera, CameraOff, Smartphone, Monitor
+    Pause, Play, Music, Camera, CameraOff, Smartphone, Monitor,
+    Tv, Copy, Check, ExternalLink, Radio
 } from "lucide-react";
 
 import { TRANSLATIONS, TIER_LEVELS, getPlayerTier, FALLBACK_DICTIONARY_EN, FALLBACK_PHRASES_ID, FALLBACK_PHRASES_EN, FALLBACK_DICTIONARY_ID_DATA, FALLBACK_CITIES, DYNAMIC_CHALLENGES, BOT_PROFILES, getRandomColor, getAvatarUrl, normalizeWord, generatePattern, getEnglishSyllableSuffix, StatsManager, SoundManager } from "./utils/constants";
@@ -117,6 +118,26 @@ const TopSupporterMarqueeTrack = React.memo(({ rawList, formatCount, getAvatarUr
 // ==========================================
 export default function App() {
     // === STATE ===
+    // OBS OVERLAY & MULTI-DEVICE SCREEN SHARE STATE
+    const urlParams = useMemo(() => new URLSearchParams(typeof window !== "undefined" ? window.location.search : ""), []);
+    const isObsOverlay = useMemo(() => {
+        const v = (urlParams.get('view') || urlParams.get('mode') || '').toLowerCase();
+        return v === 'obs' || v === 'overlay' || v === 'display' || urlParams.get('overlay') === 'true';
+    }, [urlParams]);
+    const isTransparentObs = useMemo(() => {
+        return isObsOverlay && (urlParams.get('transparent') === '1' || urlParams.get('transparent') === 'true');
+    }, [urlParams, isObsOverlay]);
+
+    const [serverInfo, setServerInfo] = useState({ localIp: "localhost", port: 5173, obsClientsCount: 0 });
+    const [obsConnectedCount, setObsConnectedCount] = useState(0);
+    const [showObsModal, setShowObsModal] = useState(false);
+    const [copiedUrlType, setCopiedUrlType] = useState(null);
+    const [obsTransparentOpt, setObsTransparentOpt] = useState(false);
+    const [obsVerticalOpt, setObsVerticalOpt] = useState(true);
+    const broadcastChannelRef = useRef(null);
+    const syncDebounceTimerRef = useRef(null);
+    const isObsOverlayRef = useRef(isObsOverlay);
+
     const [players, setPlayers] = useState([]);
     const [gameState, setGameState] = useState("WAITING");
     const [currentTurnIndex, setCurrentTurnIndex] = useState(0);
@@ -682,10 +703,23 @@ export default function App() {
     const unplayedWordByLenRef = useRef({});
     const lastWordleLengthRef = useRef(null);
     const allowedWordleLengthsRef = useRef(allowedWordleLengths);
+    const lastPlayRef = useRef(lastPlay);
+    const turnKeyRef = useRef(turnKey);
+    const tableScaleRef = useRef(tableScale);
+    const mainTableOffsetRef = useRef(mainTableOffset);
+    const bgColorModeRef = useRef(bgColorMode);
+    const viewModeRef = useRef(viewMode);
+    const activeEffectsRef = useRef(activeEffects);
+    const layoutStyleRef = useRef(layoutStyle);
+    const tableThemeRef = useRef(tableTheme);
+    const tableStatusRef = useRef(tableStatus);
+    const autoWordleGuessRef = useRef(autoWordleGuess);
+    const autoWordleLeaderboardRef = useRef(autoWordleLeaderboard);
 
     // === EFFECTS ===
 
     useEffect(() => {
+        isObsOverlayRef.current = isObsOverlay;
         playersRef.current = players; turnIndexRef.current = currentTurnIndex;
         turnDurationRef.current = turnDuration; usedWordsRef.current = usedWords;
         syllableMapRef.current = syllableMap; isMutedRef.current = isMuted;
@@ -714,11 +748,204 @@ export default function App() {
         wsHostRef.current = wsHost;
         useTierDifficultyRef.current = useTierDifficulty;
         resetWordOnNewRoundRef.current = resetWordOnNewRound;
+        lastPlayRef.current = lastPlay;
+        turnKeyRef.current = turnKey;
+        tableScaleRef.current = tableScale;
+        mainTableOffsetRef.current = mainTableOffset;
+        bgColorModeRef.current = bgColorMode;
+        viewModeRef.current = viewMode;
+        activeEffectsRef.current = activeEffects;
+        layoutStyleRef.current = layoutStyle;
+        tableThemeRef.current = tableTheme;
+        tableStatusRef.current = tableStatus;
+        autoWordleGuessRef.current = autoWordleGuess;
+        autoWordleLeaderboardRef.current = autoWordleLeaderboard;
     }, [
         players, currentTurnIndex, turnDuration, usedWords, syllableMap, isMuted,
         cityMetadata, challengeQueue, language, gameMode, currentWord, targetRhyme,
-        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner, activeMinigame, word500Target, word500Winner, word500Guesses, wsHost, useTierDifficulty, resetWordOnNewRound
+        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner, activeMinigame, word500Target, word500Winner, word500Guesses, wsHost, useTierDifficulty, resetWordOnNewRound,
+        lastPlay, turnKey, tableScale, mainTableOffset, bgColorMode, viewMode, activeEffects, layoutStyle, tableTheme, tableStatus, autoWordleGuess, autoWordleLeaderboard, isObsOverlay
     ]);
+
+    const playSound = useCallback((effect) => {
+        if (!isMutedRef.current) SoundManager.play(effect);
+    }, []);
+
+    const showFeedback = useCallback((text, type) => {
+        if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
+        setFeedbackMessage({ text, type });
+        feedbackTimeoutRef.current = setTimeout(() => setFeedbackMessage(null), 2000);
+    }, []);
+
+    // Broadcast state from Host to OBS Overlay
+    const broadcastGameState = useCallback(() => {
+        if (isObsOverlayRef.current) return;
+        if (syncDebounceTimerRef.current) clearTimeout(syncDebounceTimerRef.current);
+        syncDebounceTimerRef.current = setTimeout(() => {
+            const payload = {
+                players: playersRef.current,
+                currentTurnIndex: turnIndexRef.current,
+                currentWord: currentWordRef.current,
+                gameState: gameStateRef.current,
+                language: languageRef.current,
+                gameMode: gameModeRef.current,
+                layoutStyle: layoutStyleRef.current,
+                tableTheme: tableThemeRef.current,
+                tableStatus: tableStatusRef.current,
+                lastPlay: lastPlayRef.current,
+                turnKey: turnKeyRef.current,
+                turnDuration: turnDurationRef.current,
+                pointMode: pointModeRef.current,
+                isReversed: isReversedRef.current,
+                activeChallenge: activeChallengeRef.current,
+                activeMinigame: activeMinigameRef.current,
+                scrambleWord: scrambleWordRef.current,
+                scrambleWinner: scrambleWinnerRef.current,
+                word500Target: word500TargetRef.current,
+                word500Guesses: word500GuessesRef.current,
+                word500Winner: word500WinnerRef.current,
+                autoWordleGuess: autoWordleGuessRef.current,
+                autoWordleLeaderboard: autoWordleLeaderboardRef.current,
+                tableScale: tableScaleRef.current,
+                mainTableOffset: mainTableOffsetRef.current,
+                bgColorMode: bgColorModeRef.current,
+                viewMode: viewModeRef.current,
+                activeEffects: activeEffectsRef.current,
+                playerQueue: playerQueueRef.current,
+                timestamp: Date.now()
+            };
+
+            // 1. BroadcastChannel (local browser tabs on same PC)
+            if (broadcastChannelRef.current) {
+                try {
+                    broadcastChannelRef.current.postMessage({ type: "GAME_STATE_SYNC", data: payload });
+                } catch (e) {}
+            }
+
+            // 2. WebSocket (cross-device: HP Termux -> PC OBS)
+            if (backendWsRef.current && backendWsRef.current.readyState === WebSocket.OPEN) {
+                try {
+                    backendWsRef.current.send(JSON.stringify({ event: "game_sync_update", data: payload }));
+                } catch (e) {}
+            }
+        }, 40);
+    }, []);
+
+    // Apply state received by OBS Overlay from Host
+    const applySyncState = useCallback((data) => {
+        if (!data) return;
+        if (data.players !== undefined) setPlayers(data.players);
+        if (data.currentTurnIndex !== undefined) setCurrentTurnIndex(data.currentTurnIndex);
+        if (data.currentWord !== undefined) setCurrentWord(data.currentWord);
+        if (data.gameState !== undefined) setGameState(data.gameState);
+        if (data.language !== undefined) setLanguage(data.language);
+        if (data.gameMode !== undefined) setGameMode(data.gameMode);
+        if (data.layoutStyle !== undefined) setLayoutStyle(data.layoutStyle);
+        if (data.tableTheme !== undefined) setTableTheme(data.tableTheme);
+        if (data.tableStatus !== undefined) setTableStatus(data.tableStatus);
+        if (data.turnKey !== undefined) setTurnKey(data.turnKey);
+        if (data.turnDuration !== undefined) setTurnDuration(data.turnDuration);
+        if (data.pointMode !== undefined) setPointMode(data.pointMode);
+        if (data.isReversed !== undefined) setIsReversed(data.isReversed);
+        if (data.activeChallenge !== undefined) setActiveChallenge(data.activeChallenge);
+        if (data.activeMinigame !== undefined) setActiveMinigame(data.activeMinigame);
+        if (data.scrambleWord !== undefined) setScrambleWord(data.scrambleWord);
+        if (data.scrambleWinner !== undefined) setScrambleWinner(data.scrambleWinner);
+        if (data.word500Target !== undefined) setWord500Target(data.word500Target);
+        if (data.word500Guesses !== undefined) setWord500Guesses(data.word500Guesses);
+        if (data.word500Winner !== undefined) setWord500Winner(data.word500Winner);
+        if (data.autoWordleGuess !== undefined) setAutoWordleGuess(data.autoWordleGuess);
+        if (data.autoWordleLeaderboard !== undefined) setAutoWordleLeaderboard(data.autoWordleLeaderboard);
+        if (data.tableScale !== undefined) setTableScale(data.tableScale);
+        if (data.mainTableOffset !== undefined) setMainTableOffset(data.mainTableOffset);
+        if (data.bgColorMode !== undefined) setBgColorMode(data.bgColorMode);
+        if (data.viewMode !== undefined) setViewMode(data.viewMode);
+        if (data.activeEffects !== undefined) setActiveEffects(data.activeEffects);
+        if (data.playerQueue !== undefined) setPlayerQueue(data.playerQueue);
+
+        if (data.lastPlay !== undefined) {
+            setLastPlay(prev => {
+                if (data.lastPlay && (!prev || prev.id !== data.lastPlay.id)) {
+                    if (!isMutedRef.current) {
+                        SoundManager.play("correct");
+                    }
+                }
+                return data.lastPlay;
+            });
+        }
+    }, []);
+
+    // BroadcastChannel listener
+    useEffect(() => {
+        if (typeof window !== "undefined" && window.BroadcastChannel) {
+            try {
+                broadcastChannelRef.current = new BroadcastChannel("sambung_kata_obs_sync");
+                broadcastChannelRef.current.onmessage = (e) => {
+                    if (e.data?.type === "GAME_SYNC_REQUEST" && !isObsOverlayRef.current) {
+                        broadcastGameState();
+                    } else if (e.data?.type === "GAME_STATE_SYNC" && isObsOverlayRef.current) {
+                        applySyncState(e.data.data);
+                    }
+                };
+            } catch (err) {
+                console.warn("BroadcastChannel error:", err);
+            }
+        }
+        return () => {
+            if (broadcastChannelRef.current) {
+                broadcastChannelRef.current.close();
+            }
+        };
+    }, [broadcastGameState, applySyncState]);
+
+    // Host: broadcast on any state changes
+    useEffect(() => {
+        if (!isObsOverlay) {
+            broadcastGameState();
+        }
+    }, [
+        isObsOverlay, broadcastGameState,
+        players, currentTurnIndex, currentWord, gameState, language, gameMode,
+        layoutStyle, tableTheme, tableStatus, lastPlay, turnKey, turnDuration,
+        pointMode, isReversed, activeChallenge, activeMinigame, scrambleWord,
+        scrambleWinner, word500Target, word500Guesses, word500Winner,
+        autoWordleGuess, autoWordleLeaderboard, tableScale, mainTableOffset,
+        bgColorMode, viewMode, activeEffects, playerQueue
+    ]);
+
+    const getObsUrl = (type = "localhost", transparent = false, vertical = true) => {
+        const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
+        const hostPort = typeof window !== "undefined" ? window.location.port : "5173";
+        const portStr = hostPort ? `:${hostPort}` : "";
+
+        let hostname = "localhost";
+        if (type === "lan") {
+            hostname = serverInfo.localIp || (typeof window !== "undefined" && window.location.hostname !== "localhost" ? window.location.hostname : "192.168.1.X");
+        } else if (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+            hostname = window.location.hostname;
+        }
+
+        let url = `${protocol}//${hostname}${portStr}/?view=obs`;
+        if (transparent) url += "&transparent=true";
+        if (vertical) url += "&ratio=9:16";
+        return url;
+    };
+
+    const handleCopyObsUrl = (type = "localhost") => {
+        const url = getObsUrl(type, obsTransparentOpt, obsVerticalOpt);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(() => {
+                setCopiedUrlType(type);
+                setTimeout(() => setCopiedUrlType(null), 2500);
+                showFeedback("✅ URL Layar OBS disalin!", "success");
+                playSound("notification");
+            }).catch(() => {
+                prompt("Salin URL Layar OBS di bawah ini:", url);
+            });
+        } else {
+            prompt("Salin URL Layar OBS di bawah ini:", url);
+        }
+    };
 
 
     const handleWsHostChange = (e) => {
@@ -1439,7 +1666,7 @@ export default function App() {
     // Timers are now handled in PlayerTimer and GlobalTimer components to prevent re-render hell
 
     useEffect(() => {
-        if (gameState !== "PLAYING") return;
+        if (gameState !== "PLAYING" || isObsOverlay) return;
         const currentPlayer = players[currentTurnIndex];
         if (currentPlayer && currentPlayer.isBot && !currentPlayer.isEliminated) {
             const diff = currentPlayer.botDifficulty || 3;
@@ -1596,11 +1823,31 @@ export default function App() {
             const protocol = window.location.protocol === 'https:' && host !== 'localhost' && host !== '127.0.0.1' ? 'wss:' : 'ws:';
             try {
                 backendWsRef.current = new WebSocket(`${protocol}//${host}:62024`);
+                backendWsRef.current.onopen = () => {
+                    if (isObsOverlayRef.current) {
+                        backendWsRef.current.send(JSON.stringify({ event: "register_client", data: { clientType: "obs" } }));
+                        backendWsRef.current.send(JSON.stringify({ event: "game_sync_request" }));
+                    } else {
+                        backendWsRef.current.send(JSON.stringify({ event: "register_client", data: { clientType: "host" } }));
+                        broadcastGameState();
+                    }
+                };
                 backendWsRef.current.onmessage = (event) => {
                     try {
                         const { event: eventName, data } = JSON.parse(event.data);
                         if (eventName === "music_state") {
                             setMusicState(data);
+                        } else if (eventName === "game_sync_state" && isObsOverlayRef.current) {
+                            applySyncState(data);
+                        } else if (eventName === "game_sync_request" && !isObsOverlayRef.current) {
+                            broadcastGameState();
+                        } else if (eventName === "server_info") {
+                            if (data) {
+                                setServerInfo(prev => ({ ...prev, ...data }));
+                                if (data.obsClientsCount !== undefined) setObsConnectedCount(data.obsClientsCount);
+                            }
+                        } else if (eventName === "obs_status") {
+                            setObsConnectedCount(data?.count || 0);
                         }
                     } catch(err) {}
                 };
@@ -1672,10 +1919,12 @@ export default function App() {
             wsRef.current.onmessage = (event) => {
                 try {
                     const { event: eventName, data } = JSON.parse(event.data);
-                    if (eventName === "chat" && chatHandlerRef.current) chatHandlerRef.current(data);
+                    if (eventName === "chat" && chatHandlerRef.current && !isObsOverlayRef.current) {
+                        chatHandlerRef.current(data);
+                    }
 
                     if (eventName === "gift") {
-                        recordGiftEvent(data);
+                        if (!isObsOverlayRef.current) recordGiftEvent(data);
                         triggerVisualEffect("gift", data.uniqueId, {
                             nickname: data.nickname,
                             profilePictureUrl: data.profilePictureUrl,
@@ -1684,14 +1933,14 @@ export default function App() {
                         });
                     }
                     if (eventName === "like") {
-                        recordLikeEvent(data);
+                        if (!isObsOverlayRef.current) recordLikeEvent(data);
                         const count = data.likeCount || 1;
                         triggerVisualEffect("like", data.uniqueId, {
                             nickname: data.nickname,
                             profilePictureUrl: data.profilePictureUrl,
                             count: Math.min(count, 5)
                         });
-                        if (likeHandlerRef.current) likeHandlerRef.current(count);
+                        if (likeHandlerRef.current && !isObsOverlayRef.current) likeHandlerRef.current(count);
                     }
 
                     if (eventName === "tiktok_connected") {
@@ -1743,7 +1992,6 @@ export default function App() {
     useEffect(() => { chatHandlerRef.current = handleChatEvent; });
 
     const isHostJoined = players.some((p) => p.uniqueId === "host_player");
-    const playSound = (effect) => { if (!isMutedRef.current) SoundManager.play(effect); };
     const t = (key) => TRANSLATIONS[language === "MIX" ? "ID" : language]?.[key] || TRANSLATIONS["EN"][key] || key;
 
     const addLog = (user, message, uniqueId = null) => {
@@ -1755,12 +2003,6 @@ export default function App() {
         if (tableStatusTimeout.current) clearTimeout(tableStatusTimeout.current);
         setTableStatus(status);
         tableStatusTimeout.current = setTimeout(() => setTableStatus("idle"), 500);
-    };
-
-    const showFeedback = (text, type) => {
-        if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
-        setFeedbackMessage({ text, type });
-        feedbackTimeoutRef.current = setTimeout(() => setFeedbackMessage(null), 2000);
     };
 
 
@@ -3686,24 +3928,28 @@ export default function App() {
     // 4. RENDER UI
     // ==========================================
     return (
-        <div ref={containerRef} className={`group ${viewMode !== 'auto' ? 'portrait-container' : 'min-h-screen'} ${bgColorMode === 'greenscreen' ? 'bg-[#00FF00]' : bgColorMode === 'darkblue' ? 'bg-[#1a1d27]' : 'bg-slate-950'} text-slate-200 font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative`} style={viewMode !== 'auto' ? { '--portrait-ratio': viewMode } : undefined}>
-            {/* Table Zoom Controls - Self-contained hover widget (hidden when settings panel is open) */}
-            {!showSettings && (
+        <div ref={containerRef} className={`group ${viewMode !== 'auto' ? 'portrait-container' : 'min-h-screen'} ${isTransparentObs ? 'bg-transparent' : (bgColorMode === 'greenscreen' ? 'bg-[#00FF00]' : bgColorMode === 'darkblue' ? 'bg-[#1a1d27]' : 'bg-slate-950')} text-slate-200 font-sans overflow-hidden flex flex-col items-center justify-center p-2 sm:p-4 relative`} style={viewMode !== 'auto' ? { '--portrait-ratio': viewMode } : undefined}>
+            {/* Table Zoom Controls - Self-contained hover widget (hidden when settings panel is open or in OBS overlay) */}
+            {!showSettings && !isObsOverlay && (
                 <div className="fixed left-3 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-[80] opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-auto">
                     <button onClick={() => setTableScale(s => Math.min(2, s + 0.1))} className="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Perbesar Meja"><Plus className="w-5 h-5" /></button>
                     <button onClick={() => setTableScale(s => Math.max(0.3, s - 0.1))} className="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Perkecil Meja"><Minus className="w-5 h-5" /></button>
                     <button onClick={() => setTableScale(1)} className="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Reset Ukuran"><RefreshCw className="w-4 h-4 m-0.5" /></button>
                 </div>
             )}
-            {/* Background Pattern Overlay - Subtle subtle texture */}
-            <div className="absolute inset-0 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-[0.03]"></div>
+            {/* Background Pattern Overlay - Subtle texture */}
+            {!isTransparentObs && (
+                <div className="absolute inset-0 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-[0.03]"></div>
+            )}
             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 pointer-events-none">
                 <h1 className="text-xl sm:text-3xl font-black text-sky-400 drop-shadow-sm">SAMBUNG KATA</h1>
                 <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-400 mt-1">
-                    <span
-                        className={`w-2.5 h-2.5 rounded-full ${connectionStatus === "tiktok_ready" ? "bg-emerald-500 shadow-sm shadow-emerald-500/50" : connectionStatus === "ws_only" ? "bg-amber-400 animate-pulse" : "bg-red-500"}`}
-                        title={connectionStatus === "tiktok_ready" ? (connectionSource === "TIKFINITY" ? "Terhubung via TikFinity" : "Terhubung ke TikTok") : connectionStatus === "ws_only" ? "Backend OK, TikTok Belum Connect" : "Backend Offline"}
-                    ></span>
+                    {!isObsOverlay && (
+                        <span
+                            className={`w-2.5 h-2.5 rounded-full ${connectionStatus === "tiktok_ready" ? "bg-emerald-500 shadow-sm shadow-emerald-500/50" : connectionStatus === "ws_only" ? "bg-amber-400 animate-pulse" : "bg-red-500"}`}
+                            title={connectionStatus === "tiktok_ready" ? (connectionSource === "TIKFINITY" ? "Terhubung via TikFinity" : "Terhubung ke TikTok") : connectionStatus === "ws_only" ? "Backend OK, TikTok Belum Connect" : "Backend Offline"}
+                        ></span>
+                    )}
                     <div className="flex gap-2">
                         <span className="text-sky-300 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800 shadow-sm">{language}</span>
                         <span className="text-emerald-400 font-bold bg-slate-900 px-2 py-0.5 rounded border border-slate-800 shadow-sm">{getModeLabel()}</span>
@@ -3718,24 +3964,40 @@ export default function App() {
             </div>
 
 
-            {/* --- MENU SETTINGS & CONTROLS --- */}
-            <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[300] flex flex-col items-end">
-                <div className="flex gap-2">
-                    {(gameState === "PLAYING" || gameState === "PAUSED") && (
-                        <button onClick={togglePause} className={`w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border ${gameState === "PAUSED" ? "bg-amber-900/50 border-amber-700/50 animate-pulse" : "bg-slate-900 border-slate-800 hover:bg-slate-800 hover:scale-105"}`} title={gameState === "PAUSED" ? "Resume Game" : "Pause Game"}>
-                            {gameState === "PAUSED" ? <Play className="w-5 h-5 text-amber-400" /> : <Pause className="w-5 h-5 text-slate-300" />}
+            {/* --- MENU SETTINGS & CONTROLS (Host Control Panel only) --- */}
+            {!isObsOverlay && (
+                <div className="absolute top-2 right-2 sm:top-4 sm:right-4 z-[300] flex flex-col items-end">
+                    <div className="flex gap-2">
+                        {/* Tombol OBS Stream Overlay */}
+                        <button
+                            onClick={() => setShowObsModal(true)}
+                            className={`w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border relative ${
+                                obsConnectedCount > 0
+                                    ? "border-purple-500/80 bg-purple-950/80 hover:bg-purple-900 text-purple-300 ring-2 ring-purple-500/40"
+                                    : "border-slate-800 bg-slate-900 hover:bg-slate-800 text-slate-300"
+                            } hover:scale-105`}
+                            title={obsConnectedCount > 0 ? `Layar OBS Terhubung (${obsConnectedCount} Aktif)` : "Buka Pengaturan Layar OBS Studio"}
+                        >
+                            <Tv className="w-5 h-5 text-purple-400" />
+                            <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-950 ${
+                                obsConnectedCount > 0 ? "bg-emerald-400 animate-pulse" : "bg-slate-500"
+                            }`}></span>
                         </button>
-                    )}
-                    <button onClick={() => setShowStats(true)} className="w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border border-slate-800 bg-slate-900 hover:bg-slate-800 hover:scale-105" title="Hall of Fame">
-                        <BarChart2 className="w-5 h-5 text-sky-400" />
-                    </button>
-                    <button onClick={toggleFullscreen} className="w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border border-slate-800 bg-slate-900 hover:bg-slate-800 hover:scale-105" title="Toggle Fullscreen">
-                        {isFullscreen ? <Minimize className="w-5 h-5 text-slate-300" /> : <Maximize className="w-5 h-5 text-slate-300" />}
-                    </button>
-                    <button onClick={() => setShowSettings(!showSettings)} className={`w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border ${showSettings ? "bg-sky-900/50 border-sky-800 rotate-90" : "border-slate-800 bg-slate-900 hover:bg-slate-800 hover:scale-105"}`}>
-                        {showSettings ? <X className="w-5 h-5 text-sky-400" /> : <Settings className="w-5 h-5 text-slate-300" />}
-                    </button>
-                </div>
+                        {(gameState === "PLAYING" || gameState === "PAUSED") && (
+                            <button onClick={togglePause} className={`w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border ${gameState === "PAUSED" ? "bg-amber-900/50 border-amber-700/50 animate-pulse" : "bg-slate-900 border-slate-800 hover:bg-slate-800 hover:scale-105"}`} title={gameState === "PAUSED" ? "Resume Game" : "Pause Game"}>
+                                {gameState === "PAUSED" ? <Play className="w-5 h-5 text-amber-400" /> : <Pause className="w-5 h-5 text-slate-300" />}
+                            </button>
+                        )}
+                        <button onClick={() => setShowStats(true)} className="w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border border-slate-800 bg-slate-900 hover:bg-slate-800 hover:scale-105" title="Hall of Fame">
+                            <BarChart2 className="w-5 h-5 text-sky-400" />
+                        </button>
+                        <button onClick={toggleFullscreen} className="w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border border-slate-800 bg-slate-900 hover:bg-slate-800 hover:scale-105" title="Toggle Fullscreen">
+                            {isFullscreen ? <Minimize className="w-5 h-5 text-slate-300" /> : <Maximize className="w-5 h-5 text-slate-300" />}
+                        </button>
+                        <button onClick={() => setShowSettings(!showSettings)} className={`w-10 h-10 flex items-center justify-center rounded-full shadow-md transition-all duration-300 border ${showSettings ? "bg-sky-900/50 border-sky-800 rotate-90" : "border-slate-800 bg-slate-900 hover:bg-slate-800 hover:scale-105"}`}>
+                            {showSettings ? <X className="w-5 h-5 text-sky-400" /> : <Settings className="w-5 h-5 text-slate-300" />}
+                        </button>
+                    </div>
 
                 <div className={`mt-3 flex flex-col gap-2 transition-all duration-300 origin-top-right ${showSettings ? "opacity-100 scale-100 translate-y-0" : "opacity-0 scale-90 -translate-y-4 pointer-events-none absolute top-10 right-0 w-0 h-0 overflow-hidden"}`}>
                     <div className="bg-slate-900/95 backdrop-blur-md p-2.5 rounded-xl border border-slate-700 shadow-2xl shadow-black/50 flex flex-col gap-2 w-64">
@@ -4113,10 +4375,11 @@ export default function App() {
                     </div>
                 </div>
             </div>
+            )}
 
 
             {/* --- STATS MODAL --- */}
-            {showStats && (
+            {!isObsOverlay && showStats && (
                 <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-300 p-4">
                     <div className="bg-slate-900 w-full max-w-2xl max-h-[80vh] rounded-2xl border border-slate-700 shadow-2xl flex flex-col overflow-hidden">
                         <div className="p-4 border-b border-slate-800 bg-slate-800/50 flex justify-between items-center">
@@ -4680,7 +4943,7 @@ export default function App() {
                                             {isStarter && !player.isEliminated && (
                                                 <div className="absolute -top-1 -left-2 bg-sky-600 border border-slate-900 text-white p-1.5 rounded-full shadow-sm z-40 animate-pulse" title="First Player (Round Starter)"><Flag className="w-3 h-3 fill-white" /></div>
                                             )}
-                                            <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
+                                            <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={isObsOverlay ? () => {} : handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
                                             {player.isEliminated && <div className="absolute inset-0 flex items-center justify-center z-20"><X className="w-8 h-8 text-slate-500 drop-shadow-md" /></div>}
                                         </div>
                                         <div className="mt-[-2px] flex flex-col items-center z-40 relative w-full">
@@ -4716,7 +4979,7 @@ export default function App() {
                                                 <div className="absolute -inset-1.5 rounded-lg border border-amber-400/50 pointer-events-none shadow-[0_0_15px_rgba(251,191,36,0.35)]"></div>
                                             </>
                                         )}
-                                        <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
+                                        <PlayerTimer isTurn={isTurn && gameState === "PLAYING"} turnDuration={turnDuration} onTimeout={isObsOverlay ? () => {} : handleTimeout} playSound={playSound} bombNext={bombNextRef.current} onBombApplied={() => { bombNextRef.current = false; }} resetKey={turnKey} />
                                         <div className={`w-[85px] h-[120px] sm:w-[110px] sm:h-[155px] bg-gradient-to-b from-yellow-200 via-amber-400 to-amber-600 p-[2px] shadow-xl relative overflow-hidden flex flex-col items-center transition-all duration-300 ${isTurn ? (bombNextRef.current ? "border-2 border-orange-500 ring-2 ring-orange-500/60 animate-shake" : "ring-2 ring-amber-400/60 shadow-[0_0_15px_rgba(251,191,36,0.35)]") : "shadow-black/50"}`} style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}>
                                             <div className="absolute inset-0 bg-black/40 mix-blend-overlay pointer-events-none"></div>
                                             <div className="absolute inset-[2px] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 z-0 pointer-events-none" style={{ clipPath: 'polygon(5% 0, 95% 0, 100% 5%, 100% 85%, 50% 100%, 0 85%, 0 5%)' }}></div>
@@ -4794,7 +5057,7 @@ export default function App() {
             </div>
 
             {/* --- FLOATING HOST INPUT & VIRTUAL KEYBOARD OVERLAY --- */}
-            {showHostKeyboard && (
+            {!isObsOverlay && showHostKeyboard && (
                 <div
                     ref={hostKbRef}
                     className={`z-[200] pointer-events-auto flex flex-col items-center gap-2 p-3 bg-slate-900/95 border border-slate-700/80 rounded-2xl shadow-2xl backdrop-blur-md w-[92vw] sm:w-[420px] transition-colors duration-300 ${
@@ -5813,7 +6076,7 @@ export default function App() {
             <MusicPlayer musicState={musicState} wsRef={backendWsRef} isKeyboardOpen={showVirtualKeyboard} overlayStyle={musicOverlayStyle} />
 
             {/* --- ACTION CARD GUIDE MODAL --- */}
-            {showActionCardGuide && (
+            {!isObsOverlay && showActionCardGuide && (
                 <div className="fixed inset-0 z-[400] flex items-center justify-center bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 p-4" onClick={handleCloseActionCardGuide}>
                     <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl max-w-sm w-full relative" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center mb-4">
@@ -5854,10 +6117,10 @@ export default function App() {
             )}
 
             {/* --- CAMERA OVERLAY --- */}
-            <CameraOverlay isEnabled={isCamEnabled} setIsEnabled={setIsCamEnabled} />
+            <CameraOverlay isEnabled={isCamEnabled} setIsEnabled={setIsCamEnabled} isOverlay={isObsOverlay} />
 
             {/* --- GAME MODE MODAL --- */}
-            {isModeModalOpen && (
+            {!isObsOverlay && isModeModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden">
                         <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-800/50">
@@ -5902,6 +6165,166 @@ export default function App() {
                                     </button>
                                 );
                             })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- OBS OVERLAY WAITING BADGE --- */}
+            {isObsOverlay && gameState === "WAITING" && players.length === 0 && (
+                <div className="absolute top-4 right-4 z-50 bg-slate-900/85 border border-purple-500/50 text-purple-300 text-xs px-3.5 py-2 rounded-full flex items-center gap-2 shadow-xl backdrop-blur-md">
+                    <Radio className="w-4 h-4 text-purple-400 animate-pulse" />
+                    <span className="font-bold">OBS Overlay Siap • Menunggu Host</span>
+                </div>
+            )}
+
+            {/* --- MODAL PENGATURAN SHARE SCREEN OBS --- */}
+            {showObsModal && (
+                <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/75 backdrop-blur-md animate-in fade-in duration-200 p-4" onClick={() => setShowObsModal(false)}>
+                    <div className="bg-slate-900 border border-slate-700/80 rounded-3xl p-5 sm:p-6 shadow-2xl max-w-lg w-full relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="flex justify-between items-start border-b border-slate-800 pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2.5 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30">
+                                    <Tv className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-black text-slate-100 flex items-center gap-2">
+                                        Share Layar Permainan ke OBS
+                                    </h2>
+                                    <p className="text-xs text-slate-400">Tempel URL ini di Browser Source OBS Studio / TikTok Live</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowObsModal(false)} className="text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 p-1.5 rounded-full transition-colors">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Status Koneksi OBS */}
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                            <div className="flex items-center gap-2">
+                                <span className={`w-3 h-3 rounded-full ${obsConnectedCount > 0 ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] animate-pulse" : "bg-slate-500"}`}></span>
+                                <span className="text-xs font-bold text-slate-200">
+                                    Status Browser Source OBS:
+                                </span>
+                            </div>
+                            <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full border ${
+                                obsConnectedCount > 0
+                                    ? "bg-emerald-950/80 border-emerald-500/60 text-emerald-300"
+                                    : "bg-slate-800 text-slate-400 border-slate-700"
+                            }`}>
+                                {obsConnectedCount > 0 ? `🟢 ${obsConnectedCount} Layar Terhubung` : "⚪ Belum Terhubung"}
+                            </span>
+                        </div>
+
+                        {/* Opsi URL */}
+                        <div className="flex flex-col gap-3">
+                            {/* Option 1: Localhost (Satu PC) */}
+                            <div className="bg-slate-800/40 p-3.5 rounded-2xl border border-slate-700/60 flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-black text-sky-300 flex items-center gap-1.5">
+                                        <Monitor className="w-3.5 h-3.5" /> 1. Main di PC Ini (Localhost)
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">OBS & Game di PC yang sama</span>
+                                </div>
+                                <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={getObsUrl("localhost", obsTransparentOpt, obsVerticalOpt)}
+                                        className="bg-transparent text-slate-300 text-xs font-mono flex-1 px-2 outline-none select-all truncate"
+                                    />
+                                    <button
+                                        onClick={() => handleCopyObsUrl("localhost")}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 ${
+                                            copiedUrlType === "localhost"
+                                                ? "bg-emerald-600 text-white"
+                                                : "bg-sky-600 hover:bg-sky-500 text-white"
+                                        }`}
+                                    >
+                                        {copiedUrlType === "localhost" ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                        <span>{copiedUrlType === "localhost" ? "Tersalin!" : "Salin URL"}</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Option 2: Termux / HP (Jaringan LAN / Wi-Fi) */}
+                            <div className="bg-slate-800/40 p-3.5 rounded-2xl border border-slate-700/60 flex flex-col gap-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                                        <Smartphone className="w-3.5 h-3.5" /> 2. Main di HP via Termux (Wi-Fi / LAN IP)
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">Kontrol dari HP, tampil di OBS PC</span>
+                                </div>
+                                <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={getObsUrl("lan", obsTransparentOpt, obsVerticalOpt)}
+                                        className="bg-transparent text-slate-300 text-xs font-mono flex-1 px-2 outline-none select-all truncate"
+                                    />
+                                    <button
+                                        onClick={() => handleCopyObsUrl("lan")}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-black flex items-center gap-1.5 transition-all active:scale-95 ${
+                                            copiedUrlType === "lan"
+                                                ? "bg-emerald-600 text-white"
+                                                : "bg-amber-600 hover:bg-amber-500 text-white"
+                                        }`}
+                                    >
+                                        {copiedUrlType === "lan" ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                        <span>{copiedUrlType === "lan" ? "Tersalin!" : "Salin URL"}</span>
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-slate-400 italic">
+                                    *Pastikan HP dan PC terhubung ke Wi-Fi / Hotspot yang sama.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Opsi Tampilan Overlay */}
+                        <div className="flex flex-col gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                            <span className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">Kustomisasi Output OBS:</span>
+                            <div className="flex flex-wrap gap-4 text-xs text-slate-300">
+                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={obsTransparentOpt}
+                                        onChange={(e) => setObsTransparentOpt(e.target.checked)}
+                                        className="rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-0 w-4 h-4"
+                                    />
+                                    <span>Background Transparan</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={obsVerticalOpt}
+                                        onChange={(e) => setObsVerticalOpt(e.target.checked)}
+                                        className="rounded border-slate-700 bg-slate-900 text-purple-600 focus:ring-0 w-4 h-4"
+                                    />
+                                    <span>Format Vertikal 9:16 (TikTok Live)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Tombol Preview & Panduan Singkat */}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => window.open(getObsUrl("localhost", obsTransparentOpt, obsVerticalOpt), "_blank")}
+                                className="flex-1 bg-purple-700 hover:bg-purple-600 text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md active:scale-95"
+                            >
+                                <ExternalLink className="w-4 h-4" /> Buka Preview Layar OBS
+                            </button>
+                        </div>
+
+                        {/* Panduan Setting OBS */}
+                        <div className="bg-slate-950/90 p-3 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 space-y-1">
+                            <b className="text-slate-200">Cara Memasang di OBS Studio:</b>
+                            <ol className="list-decimal list-inside space-y-0.5 text-[10px]">
+                                <li>Buka OBS Studio → di panel <b>Sources</b> klik <b>+</b> → pilih <b>Browser</b>.</li>
+                                <li>Beri nama (misal: <i>Sambung Kata Screen</i>), lalu paste URL di atas.</li>
+                                <li>Atur <b>Width</b>: 1080 dan <b>Height</b>: 1920 (untuk vertikal TikTok Live).</li>
+                                <li>Centang <b>"Control audio via OBS"</b> jika ingin audio game terdengar di OBS mixer.</li>
+                            </ol>
                         </div>
                     </div>
                 </div>

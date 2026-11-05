@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Camera, CameraOff, Settings, Minimize2, Move, RotateCcw, ShieldAlert, Sliders, ToggleLeft, ToggleRight, AlertCircle, RefreshCw, Video, Palette, Sparkles, X } from 'lucide-react';
 
-const CameraOverlay = ({ isEnabled, setIsEnabled }) => {
+const CameraOverlay = ({ isEnabled, setIsEnabled, isOverlay = false }) => {
     const [stream, setStream] = useState(null);
     const [devices, setDevices] = useState([]);
     const [selectedDevice, setSelectedDevice] = useState('');
@@ -339,24 +339,26 @@ const CameraOverlay = ({ isEnabled, setIsEnabled }) => {
                 )}
 
                 {/* Floating controls on hover */}
-                <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover/cam:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-2.5 pointer-events-none z-20">
-                    <div className="flex justify-between items-center w-full pointer-events-auto no-drag">
-                        <div className="flex items-center gap-1 bg-black/70 px-2.5 py-0.5 rounded-full text-[9px] text-sky-400 font-bold border border-sky-500/30" style={{ color: glowColor, borderColor: glowColor + '30' }}>
-                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" style={{ backgroundColor: glowColor }}></span>
-                            {useSimulation ? 'TEST MODE' : 'CAM LIVE'}
+                {!isOverlay && (
+                    <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover/cam:opacity-100 transition-opacity duration-200 flex flex-col justify-between p-2.5 pointer-events-none z-20">
+                        <div className="flex justify-between items-center w-full pointer-events-auto no-drag">
+                            <div className="flex items-center gap-1 bg-black/70 px-2.5 py-0.5 rounded-full text-[9px] text-sky-400 font-bold border border-sky-500/30" style={{ color: glowColor, borderColor: glowColor + '30' }}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-ping" style={{ backgroundColor: glowColor }}></span>
+                                {useSimulation ? 'TEST MODE' : 'CAM LIVE'}
+                            </div>
+                            <button
+                                onClick={() => setShowConfig(!showConfig)}
+                                className="bg-slate-900 hover:bg-slate-800 text-slate-200 p-1.5 rounded-full border border-slate-700 shadow-lg transition-all active:scale-90"
+                            >
+                                <Settings className="w-3.5 h-3.5" />
+                            </button>
                         </div>
-                        <button
-                            onClick={() => setShowConfig(!showConfig)}
-                            className="bg-slate-900 hover:bg-slate-800 text-slate-200 p-1.5 rounded-full border border-slate-700 shadow-lg transition-all active:scale-90"
-                        >
-                            <Settings className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
 
-                    <div className="flex justify-center items-center w-full text-[10px] text-slate-300 font-semibold bg-black/60 py-1 rounded-full border border-slate-800/40">
-                        <Move className="w-3.5 h-3.5 mr-1 text-sky-400 animate-bounce" /> Geser Posisi
+                        <div className="flex justify-center items-center w-full text-[10px] text-slate-300 font-semibold bg-black/60 py-1 rounded-full border border-slate-800/40">
+                            <Move className="w-3.5 h-3.5 mr-1 text-sky-400 animate-bounce" /> Geser Posisi
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {/* Drag config panel */}
