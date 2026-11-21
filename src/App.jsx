@@ -630,6 +630,9 @@ export default function App() {
     const timerRef = useRef(null);
     const wsRef = useRef(null);
     const backendWsRef = useRef(null);
+    const connectBackendWsRef = useRef(null);
+    const reconnectTimeoutRef = useRef(null);
+    const backendReconnectTimeoutRef = useRef(null);
     const fileInputRef = useRef(null);
     const containerRef = useRef(null);
     const fallbackToLocalhostRef = useRef(false);
@@ -956,14 +959,23 @@ export default function App() {
     };
 
     const handleReconnectWebSocket = () => {
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         if (wsRef.current) {
             wsRef.current.onclose = null;
             wsRef.current.close();
         }
+        if (backendReconnectTimeoutRef.current) clearTimeout(backendReconnectTimeoutRef.current);
+        if (backendWsRef.current) {
+            backendWsRef.current.onclose = null;
+            backendWsRef.current.close();
+        }
         setConnectionStatus("disconnected");
         fallbackToLocalhostRef.current = false;
         reconnectAttemptsRef.current = 0;
-        setTimeout(connectWebSocket, 500);
+        setTimeout(() => {
+            connectWebSocket();
+            if (connectBackendWsRef.current) connectBackendWsRef.current();
+        }, 500);
     };
 
     const handleMainTableDragStart = (e) => {
@@ -1817,11 +1829,15 @@ export default function App() {
 
     // Dedicated connection to backend for music features and host controls
     useEffect(() => {
-        let reconnectTimeout;
         const connectBackendWs = () => {
+            if (backendReconnectTimeoutRef.current) clearTimeout(backendReconnectTimeoutRef.current);
             const host = wsHostRef.current?.trim() || window.location.hostname || "localhost";
             const protocol = window.location.protocol === 'https:' && host !== 'localhost' && host !== '127.0.0.1' ? 'wss:' : 'ws:';
             try {
+                if (backendWsRef.current) {
+                    backendWsRef.current.onclose = null;
+                    backendWsRef.current.close();
+                }
                 backendWsRef.current = new WebSocket(`${protocol}//${host}:62024`);
                 backendWsRef.current.onopen = () => {
                     if (isObsOverlayRef.current) {
@@ -1852,16 +1868,17 @@ export default function App() {
                     } catch(err) {}
                 };
                 backendWsRef.current.onclose = () => {
-                    reconnectTimeout = setTimeout(connectBackendWs, 3000);
+                    backendReconnectTimeoutRef.current = setTimeout(connectBackendWs, 3000);
                 };
             } catch (err) {
                 console.warn("Backend WS Error:", err);
-                reconnectTimeout = setTimeout(connectBackendWs, 3000);
+                backendReconnectTimeoutRef.current = setTimeout(connectBackendWs, 3000);
             }
         };
+        connectBackendWsRef.current = connectBackendWs;
         connectBackendWs();
         return () => {
-            clearTimeout(reconnectTimeout);
+            if (backendReconnectTimeoutRef.current) clearTimeout(backendReconnectTimeoutRef.current);
             if (backendWsRef.current) {
                 backendWsRef.current.onclose = null;
                 backendWsRef.current.close();
@@ -1870,6 +1887,7 @@ export default function App() {
     }, []);
 
     const connectWebSocket = () => {
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         const source = connectionSourceRef.current;
         let hostname;
         let port = 62024;
@@ -1890,6 +1908,10 @@ export default function App() {
         const protocol = window.location.protocol === 'https:' && hostname !== 'localhost' && hostname !== '127.0.0.1' ? 'wss:' : 'ws:';
         const url = `${protocol}//${hostname}:${port}`;
         try {
+            if (wsRef.current) {
+                wsRef.current.onclose = null;
+                wsRef.current.close();
+            }
             wsRef.current = new WebSocket(url);
             wsRef.current.onopen = () => {
                 if (source === "TIKFINITY") {
@@ -1946,14 +1968,21 @@ export default function App() {
                     if (eventName === "tiktok_connected") {
                         setConnectionStatus("tiktok_ready");
                         addLog("System", `Terkoneksi ke TikTok Live! 🟢`);
+                        showFeedback("Terkoneksi ke TikTok Live! 🟢", "success");
                         playSound("notification");
                     }
-                    if (eventName === "music_state") {
-                        setMusicState(data);
+                    if (eventName === "tiktok_error") {
+                        setConnectionStatus("ws_only");
+                        const errMsg = data?.error || "Gagal terhubung ke TikTok Live";
+                        addLog("System", `❌ Gagal connect @${data?.uniqueId || ""}: ${errMsg}`);
+                        showFeedback(`❌ TikTok Error: ${errMsg}`, "danger");
+                        playSound("wrong");
                     }
                     if (eventName === "tiktok_disconnected") {
                         setConnectionStatus(source === "TIKFINITY" ? "tiktok_ready" : "ws_only");
-                        addLog("System", `Terputus dari TikTok Live 🔴`);
+                        if (data?.reason !== "connect_failed") {
+                            addLog("System", `Terputus dari TikTok Live 🔴`);
+                        }
                     }
                 } catch (err) { console.error("WS Error", err); }
             };
@@ -1979,13 +2008,13 @@ export default function App() {
                 // Exponential backoff: 2s, 4s, 8s, capped at 15s
                 const delay = Math.min(2000 * Math.pow(2, reconnectAttemptsRef.current - 1), 15000);
                 addLog("System", `🔄 Mencoba reconnect dalam ${delay/1000}s... (percobaan ke-${reconnectAttemptsRef.current})`);
-                setTimeout(connectWebSocket, delay);
+                reconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
             };
         } catch (err) {
             console.error("[WS] Failed to create WebSocket:", err);
             reconnectAttemptsRef.current += 1;
             const delay = Math.min(2000 * Math.pow(2, reconnectAttemptsRef.current - 1), 15000);
-            setTimeout(connectWebSocket, delay);
+            reconnectTimeoutRef.current = setTimeout(connectWebSocket, delay);
         }
     };
 
@@ -4322,10 +4351,23 @@ export default function App() {
                                                     <input type="text" value={tiktokUsername} onChange={(e) => setTiktokUsername(e.target.value)} placeholder="username" className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500" />
                                                     <button onClick={() => {
                                                         if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && tiktokUsername.trim()) {
-                                                            wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim(), sessionId: tiktokSessionId.trim() || undefined } }));
+                                                            wsRef.current.send(JSON.stringify({ event: 'connect_tiktok', data: { uniqueId: tiktokUsername.trim(), sessionId: tiktokSessionId.trim() } }));
                                                             addLog("System", `Menyambung @${tiktokUsername.trim()}...`);
+                                                            showFeedback(`Menyambung @${tiktokUsername.trim()}...`, "info");
+                                                        } else if (!tiktokUsername.trim()) {
+                                                            showFeedback("Masukkan username TikTok terlebih dahulu", "warning");
+                                                        } else {
+                                                            showFeedback("Server Lokal belum terhubung!", "danger");
                                                         }
                                                     }} className="bg-emerald-900/40 hover:bg-emerald-800/60 px-2.5 py-1 rounded border border-emerald-800/50 text-emerald-400 transition-colors text-xs font-bold whitespace-nowrap">Conn</button>
+                                                    {connectionStatus === "tiktok_ready" && (
+                                                        <button onClick={() => {
+                                                            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                                                                wsRef.current.send(JSON.stringify({ event: 'disconnect_tiktok' }));
+                                                                showFeedback("Memutuskan koneksi TikTok Live...", "info");
+                                                            }
+                                                        }} className="bg-rose-900/40 hover:bg-rose-800/60 px-2 py-1 rounded border border-rose-800/50 text-rose-400 transition-colors text-xs font-bold whitespace-nowrap" title="Putuskan Koneksi TikTok"><Unlink className="w-3.5 h-3.5" /></button>
+                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-1.5 mt-1.5">
                                                     <input type="password" value={tiktokSessionId} onChange={(e) => { setTiktokSessionId(e.target.value); localStorage.setItem("tiktok_session_id", e.target.value); }} placeholder="sessionid (opsional)" className="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-amber-500" />

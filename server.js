@@ -205,8 +205,11 @@ wss.on("connection", (ws) => {
         broadcastMusicState();
       }
       if (event === "connect_tiktok" && data?.uniqueId) {
-        if (data.sessionId) tiktokSessionId = data.sessionId;
+        if (data.sessionId !== undefined) tiktokSessionId = data.sessionId || null;
         connectToTikTok(data.uniqueId);
+      }
+      if (event === "disconnect_tiktok") {
+        disconnectFromTikTok();
       }
       if (event === "set_session_id") {
         tiktokSessionId = data?.sessionId || null;
@@ -352,7 +355,9 @@ socketHttpServer.listen(SOCKET_PORT, () => {
 // ═══════════════════════════════════════════════════════
 const dashApp = express();
 dashApp.use(express.json());
-dashApp.use(express.static(__dirname)); // Serve Wordle Game on root
+// Block sensitive files & only serve built/public assets instead of raw project root
+dashApp.use(express.static(path.join(__dirname, "dist")));
+dashApp.use(express.static(path.join(__dirname, "public")));
 dashApp.use("/dashboard", express.static(path.join(__dirname, "dashboard"))); // Serve dashboard on /dashboard
 
 // API endpoints
@@ -486,7 +491,7 @@ async function connectToTikTok(uniqueId) {
       roomInfo: connectionState.roomInfo,
     });
     io.emit("statusUpdate", getStatusPayload());
-    wsBroadcast("tiktok_connected", { roomId: connectionState.roomId });
+    wsBroadcast("tiktok_connected", { roomId: connectionState.roomId, uniqueId });
 
   } catch (err) {
     console.error(`[TikTok] ❌ Connection failed:`, err.message);
@@ -494,15 +499,18 @@ async function connectToTikTok(uniqueId) {
     connectionState.error = err.message;
     io.emit("tiktokDisconnected", err.message);
     io.emit("statusUpdate", getStatusPayload());
+    wsBroadcast("tiktok_error", { uniqueId, error: err.message });
+    wsBroadcast("tiktok_disconnected", { reason: "connect_failed", error: err.message });
   }
 }
 
 function disconnectFromTikTok() {
-  if (tiktokConnection) {
+  const oldConn = tiktokConnection;
+  tiktokConnection = null;
+  if (oldConn) {
     try {
-      tiktokConnection.disconnect();
+      oldConn.disconnect();
     } catch (e) {}
-    tiktokConnection = null;
   }
   connectionState.status = "disconnected";
   connectionState.error = null;
@@ -518,6 +526,7 @@ function disconnectFromTikTok() {
 function registerTikTokEvents(connection) {
   // ─── Chat Messages ───
   connection.on("chat", async (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.comment = data.comment;
     payload.emotes = data.emotes || [];
@@ -549,6 +558,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Gift Messages ───
   connection.on("gift", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.giftId = data.giftId;
     payload.giftName = data.giftName || `Gift #${data.giftId}`;
@@ -573,6 +583,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Like Messages ───
   connection.on("like", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.likeCount = data.likeCount || 1;
     payload.totalLikeCount = data.totalLikeCount || 0;
@@ -584,6 +595,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Member Join ───
   connection.on("member", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.actionId = data.actionId;
     payload.label = data.label || "joined";
@@ -593,6 +605,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Social Events (follow, share) ───
   connection.on("social", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.displayType = data.displayType || "";
     payload.label = data.label || "";
@@ -612,6 +625,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Room Stats ───
   connection.on("roomUser", (data) => {
+    if (tiktokConnection !== connection) return;
     connectionState.viewers = data.viewerCount || 0;
     const payload = {
       viewerCount: data.viewerCount || 0,
@@ -626,6 +640,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Question / Q&A ───
   connection.on("questionNew", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.questionText = data.questionText || "";
     logEvent("questionNew", payload);
@@ -634,6 +649,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Emote Chat ───
   connection.on("emote", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.emoteImageUrl = data.emoteImageUrl || "";
     payload.emoteId = data.emoteId || "";
@@ -643,6 +659,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Envelope / Treasure Box ───
   connection.on("envelope", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.coins = data.coins || 0;
     payload.canOpen = data.canOpen || 0;
@@ -653,6 +670,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Subscribe ───
   connection.on("subscribe", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.subMonth = data.subMonth || 0;
     logEvent("subscribe", payload);
@@ -661,24 +679,28 @@ function registerTikTokEvents(connection) {
 
   // ─── Link Mic Battle ───
   connection.on("linkMicBattle", (data) => {
+    if (tiktokConnection !== connection) return;
     logEvent("linkMicBattle", data);
     io.emit("linkMicBattle", data);
   });
 
   // ─── Link Mic Armies ───
   connection.on("linkMicArmies", (data) => {
+    if (tiktokConnection !== connection) return;
     logEvent("linkMicArmies", data);
     io.emit("linkMicArmies", data);
   });
 
   // ─── Live Intro ───
   connection.on("liveIntro", (data) => {
+    if (tiktokConnection !== connection) return;
     logEvent("liveIntro", data);
     io.emit("liveIntro", data);
   });
 
   // ─── Barrage ───
   connection.on("barrage", (data) => {
+    if (tiktokConnection !== connection) return;
     const payload = formatUser(data);
     payload.caption = data.caption || "";
     logEvent("barrage", payload);
@@ -687,6 +709,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Stream End ───
   connection.on("streamEnd", (actionId) => {
+    if (tiktokConnection !== connection) return;
     console.log(`[TikTok] Stream ended (action: ${actionId})`);
     connectionState.status = "disconnected";
     connectionState.error = "Stream ended";
@@ -699,6 +722,7 @@ function registerTikTokEvents(connection) {
 
   // ─── WebSocket Connected ───
   connection.on("websocketConnected", (wsState) => {
+    if (tiktokConnection !== connection) return;
     console.log(
       `[TikTok] WebSocket upgraded! (${wsState.isWebsocketUpgrade ? "WS" : "Polling"})`
     );
@@ -706,6 +730,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Disconnected ───
   connection.on("disconnected", () => {
+    if (tiktokConnection !== connection) return;
     console.log("[TikTok] Connection lost.");
     connectionState.status = "disconnected";
     tiktokConnection = null;
@@ -716,6 +741,7 @@ function registerTikTokEvents(connection) {
 
   // ─── Error ───
   connection.on("error", (err) => {
+    if (tiktokConnection !== connection) return;
     console.error("[TikTok] Error:", err.message);
     connectionState.error = err.message;
     io.emit("statusUpdate", getStatusPayload());
