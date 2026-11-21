@@ -39,6 +39,21 @@ input, textarea {
   animation: confetti-fall linear forwards;
 }
 
+@keyframes showcase-def-scroll {
+  0%, 22% {
+    transform: translateY(0%);
+  }
+  78%, 92% {
+    transform: translateY(var(--def-scroll-y, -48%));
+  }
+  100% {
+    transform: translateY(0%);
+  }
+}
+.animate-showcase-def-scroll {
+  animation: showcase-def-scroll 9.5s ease-in-out infinite;
+}
+
 /* Portrait mode for TikTok Live streaming */
 body:has(.portrait-container) {
   background: #000;

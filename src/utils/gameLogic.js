@@ -7,8 +7,36 @@ export function getIndonesianOverlapSuffix(word) {
     return w.slice(lastVowelMatch.index);
 }
 
+function getSyllableSuffix(word, options) {
+    const { language, syllableMap, getEnglishSyllableSuffix, enDictionary, idDictionary } = options;
+    const w = word.toLowerCase();
+
+    if (language === "EN") {
+        return getEnglishSyllableSuffix(w);
+    }
+
+    // 1. Jika kata memiliki pemenggalan eksplisit di kamus.json (syllableMap), selalu gunakan itu
+    const data = syllableMap?.[w];
+    if (data && data.nama) {
+        return data.nama.split(".").pop();
+    }
+
+    // 2. Untuk mode MIX: jika kata ada di kamus Inggris tapi tidak ada di kamus Indonesia, gunakan aturan suku kata Inggris
+    if (language === "MIX") {
+        const isEn = enDictionary?.has?.(w) || false;
+        const isId = idDictionary?.has?.(w) || false;
+        if (isEn && !isId) {
+            return getEnglishSyllableSuffix(w);
+        }
+    }
+
+    // 3. Default Bahasa Indonesia
+    const overlapData = getIndonesianOverlapSuffix(w);
+    return overlapData.length > 0 ? overlapData : w.slice(-2);
+}
+
 export function getSuffixOrRule(word, options) {
-    const { gameMode, overlapLength, targetRhyme, language, syllableMap, getEnglishSyllableSuffix } = options;
+    const { gameMode, overlapLength, targetRhyme } = options;
     const overlap = overlapLength;
     if (gameMode === "CITIES" || gameMode === "LAST_LETTER" || gameMode === "DYNAMIC") return word.slice(-overlap);
     if (gameMode === "RHYME") return targetRhyme || word.slice(-2);
@@ -18,18 +46,14 @@ export function getSuffixOrRule(word, options) {
     if (gameMode === "STEP_UP") return word.slice(-overlap);
     if (gameMode === "SECOND_LETTER") return word.length >= 2 ? word[1] : "";
     if (gameMode === "LONGER_WORD") return word.slice(-overlap);
-    if ((language === "ID" || language === "MIX") && gameMode === "SYLLABLE") {
-        const data = syllableMap[word.toLowerCase()];
-        if (data && data.nama) return data.nama.split(".").pop();
-        const overlapData = getIndonesianOverlapSuffix(word);
-        return overlapData.length > 0 ? overlapData : word.slice(-2);
+    if (gameMode === "SYLLABLE") {
+        return getSyllableSuffix(word, options);
     }
-    return getEnglishSyllableSuffix(word);
+    return getSyllableSuffix(word, options);
 }
 
 export function getRecoverySuffix(word, options) {
-    const { language, getEnglishSyllableSuffix } = options;
-    return (language === "ID" || language === "MIX") ? getIndonesianOverlapSuffix(word) : getEnglishSyllableSuffix(word);
+    return getSyllableSuffix(word, options);
 }
 
 export function getRuleDisplay(word, options) {
@@ -163,18 +187,7 @@ export function validateConnection(prev, next, options) {
     }
 
     if (gameMode === "SYLLABLE") {
-        let connectionPart = "";
-        if (language === "EN") {
-            connectionPart = getEnglishSyllableSuffix(p);
-        } else {
-            const prevData = syllableMap[p];
-            if (prevData?.nama) {
-                connectionPart = prevData.nama.split(".").pop();
-            } else {
-                const overlapData = getIndonesianOverlapSuffix(p);
-                connectionPart = overlapData.length > 0 ? overlapData : p.slice(-2);
-            }
-        }
+        const connectionPart = getSyllableSuffix(p, options);
         return n.startsWith(connectionPart) && n !== connectionPart;
     }
     return false;

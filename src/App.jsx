@@ -169,6 +169,7 @@ export default function App() {
     const restartLikesRef = useRef(0);
     const [restartCountdown, setRestartCountdown] = useState(null);
     const [waitingCountdown, setWaitingCountdown] = useState(null);
+    const waitingTotalDurationRef = useRef(30);
     const [playerQueue, setPlayerQueue] = useState([]);
     const [showcaseWords, setShowcaseWords] = useState([]);
     const [lastPlay, setLastPlay] = useState(null);
@@ -646,7 +647,7 @@ export default function App() {
     const phraseDictionary = useRef(new Set(FALLBACK_PHRASES_EN));
 
     const dictionaryCache = useRef({
-        EN: { dict: FALLBACK_DICTIONARY_EN, syl: {}, info: "Default (EN)", phrases: new Set(FALLBACK_PHRASES_EN) },
+        EN: null,
         ID: null, CITIES: null, MIX: null
     });
 
@@ -1550,6 +1551,7 @@ export default function App() {
             setRestartCountdown(null);
             clearLobby();
             pickShowcaseWords();
+            waitingTotalDurationRef.current = 30;
             setWaitingCountdown(30);
             addLog("System", "Lobby dibuka 30 detik untuk pemain baru!");
         }
@@ -2108,7 +2110,9 @@ export default function App() {
             syllableMap: syllableMapRef.current ?? syllableMap,
             phraseDictionary: phraseDictionary.current ?? phraseDictionary,
             activeChallenge: activeChallengeRef.current ?? activeChallenge,
-            getEnglishSyllableSuffix: getEnglishSyllableSuffix
+            getEnglishSyllableSuffix: getEnglishSyllableSuffix,
+            enDictionary: dictionaryCache.current.EN?.dict || FALLBACK_DICTIONARY_EN,
+            idDictionary: dictionaryCache.current.ID?.dict || null
         };
     }
     function handleWin(winners) {
@@ -3134,6 +3138,7 @@ export default function App() {
         let targetLang = language;
         if (!forceReload) {
             targetLang = language === "EN" ? "ID" : language === "ID" ? "MIX" : "EN";
+            languageRef.current = targetLang;
             setLanguage(targetLang);
         }
 
@@ -3205,12 +3210,17 @@ export default function App() {
 
                     if (dictSet.size === 0) throw new Error("Empty Dictionary");
 
-                    setDictionary(dictSet); setSyllableMap(sMap); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Kamus.json+TXT (${dictSet.size})`);
                     dictionaryCache.current.ID = { dict: dictSet, syl: sMap, phrases: phraseSet, info: `Kamus.json+TXT (${dictSet.size})` };
+                    if (gameModeRef.current !== "CITIES" && languageRef.current === "ID") {
+                        setDictionary(dictSet); setSyllableMap(sMap); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Kamus.json+TXT (${dictSet.size})`);
+                    }
                 }).catch(() => {
                     const words = Object.keys(FALLBACK_DICTIONARY_ID_DATA); const pSet = new Set(FALLBACK_PHRASES_ID);
-                    setDictionary(new Set(words)); setSyllableMap(FALLBACK_DICTIONARY_ID_DATA); phraseDictionary.current = pSet;
-                    setDictLoadedInfo("Default (ID)"); dictionaryCache.current.ID = { dict: new Set(words), syl: FALLBACK_DICTIONARY_ID_DATA, phrases: pSet, info: "Default (ID)" };
+                    dictionaryCache.current.ID = { dict: new Set(words), syl: FALLBACK_DICTIONARY_ID_DATA, phrases: pSet, info: "Default (ID)" };
+                    if (gameModeRef.current !== "CITIES" && languageRef.current === "ID") {
+                        setDictionary(new Set(words)); setSyllableMap(FALLBACK_DICTIONARY_ID_DATA); phraseDictionary.current = pSet;
+                        setDictLoadedInfo("Default (ID)");
+                    }
                 });
             }
         } else if (targetLang === "MIX") {
@@ -3223,37 +3233,52 @@ export default function App() {
             } else {
                 if (!forceReload) addLog("System", "Switching to Mix Bahasa...");
                 const loadMix = async () => {
-                    let rawEn = dictionaryCache.current.EN?.dict || FALLBACK_DICTIONARY_EN;
-                    let rawId = dictionaryCache.current.ID?.dict || new Set(Object.keys(FALLBACK_DICTIONARY_ID_DATA));
-                    let pSet = new Set([...(dictionaryCache.current.EN?.phrases || FALLBACK_PHRASES_EN), ...(dictionaryCache.current.ID?.phrases || FALLBACK_PHRASES_ID)]);
-                    let mixSMap = dictionaryCache.current.ID?.syl || {};
-
                     if (!dictionaryCache.current.EN) {
                         try {
                             const resEn = await fetch("/dictionary.txt");
                             if (resEn.ok) {
                                 const txt = await resEn.text();
-                                rawEn = new Set(txt.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0 && !w.includes(" ")).map(normalizeWord).filter(w => w.length > 0));
-                                dictionaryCache.current.EN = { dict: rawEn, syl: {}, phrases: new Set(FALLBACK_PHRASES_EN), info: `Dictionary.txt (${rawEn.size})` };
+                                const rawWords = txt.split(/\r?\n/).map(w => w.trim().replace(/^"|"$/g, "")).filter(w => w.length > 0);
+                                const enPhrases = new Set(FALLBACK_PHRASES_EN);
+                                const cleanedWords = rawWords.filter(w => {
+                                    if (w.includes(" ")) {
+                                        enPhrases.add(w.toLowerCase());
+                                        return false;
+                                    }
+                                    return true;
+                                }).map(normalizeWord).filter(w => w.length > 0);
+                                const enDict = new Set(cleanedWords);
+                                dictionaryCache.current.EN = { dict: enDict, syl: {}, phrases: enPhrases, info: `Dictionary.txt (${enDict.size})` };
                             }
                         } catch (e) { }
+                        if (!dictionaryCache.current.EN) {
+                            dictionaryCache.current.EN = { dict: FALLBACK_DICTIONARY_EN, syl: {}, phrases: new Set(FALLBACK_PHRASES_EN), info: "Default (EN)" };
+                        }
                     }
+
                     if (!dictionaryCache.current.ID) {
+                        const rawId = new Set();
+                        const idPhrases = new Set(FALLBACK_PHRASES_ID);
+                        const idSMap = {};
                         try {
                             const resId = await fetch("/kamus.json");
                             if (resId.ok) {
                                 const idData = await resId.json();
                                 Object.keys(idData).forEach(k => {
-                                    const clean = normalizeWord(k);
-                                    if (clean) {
-                                        rawId.add(clean);
-                                        let defText = null;
-                                        if (idData[k].submakna) {
-                                            let sm = idData[k].submakna;
-                                            if (Array.isArray(sm)) sm = sm[0];
-                                            if (typeof sm === 'string') defText = sm.replace(/^[0-9]+\.?\s*/, '').trim();
+                                    if (k.includes(" ")) {
+                                        idPhrases.add(k.toLowerCase());
+                                    } else {
+                                        const clean = normalizeWord(k);
+                                        if (clean) {
+                                            rawId.add(clean);
+                                            let defText = null;
+                                            if (idData[k].submakna) {
+                                                let sm = idData[k].submakna;
+                                                if (Array.isArray(sm)) sm = sm[0];
+                                                if (typeof sm === 'string' && sm.trim().length > 0) defText = sm.replace(/^[0-9]+\.?\s*/, '').trim();
+                                            }
+                                            if (idData[k].nama || defText) idSMap[clean] = { nama: idData[k].nama?.toLowerCase(), def: defText };
                                         }
-                                        if (idData[k].nama || defText) mixSMap[clean] = { nama: idData[k].nama?.toLowerCase(), def: defText };
                                     }
                                 });
                             }
@@ -3264,17 +3289,33 @@ export default function App() {
                                 const txtData = await resTxt.text();
                                 const lines = txtData.split(/\r?\n/);
                                 lines.forEach((line) => {
-                                    if (line.includes(" ")) pSet.add(line.trim().toLowerCase());
+                                    if (line.includes(" ")) idPhrases.add(line.trim().toLowerCase());
                                     else { const clean = normalizeWord(line); if (clean) rawId.add(clean); }
                                 });
                             }
                         } catch (e) { }
-                        dictionaryCache.current.ID = { dict: rawId, syl: mixSMap, phrases: pSet, info: `Kamus.json+TXT (${rawId.size})` };
+
+                        if (rawId.size > 0) {
+                            dictionaryCache.current.ID = { dict: rawId, syl: idSMap, phrases: idPhrases, info: `Kamus.json+TXT (${rawId.size})` };
+                        } else {
+                            const fallbackWords = new Set(Object.keys(FALLBACK_DICTIONARY_ID_DATA));
+                            dictionaryCache.current.ID = { dict: fallbackWords, syl: FALLBACK_DICTIONARY_ID_DATA, phrases: idPhrases, info: "Default (ID)" };
+                        }
                     }
 
+                    const rawEn = dictionaryCache.current.EN.dict;
+                    const rawId = dictionaryCache.current.ID.dict;
+                    const mixSMap = dictionaryCache.current.ID.syl || {};
+                    const pSet = new Set([
+                        ...(dictionaryCache.current.EN.phrases || FALLBACK_PHRASES_EN),
+                        ...(dictionaryCache.current.ID.phrases || FALLBACK_PHRASES_ID)
+                    ]);
                     const mixDict = new Set([...rawEn, ...rawId]);
-                    setDictionary(mixDict); setSyllableMap(mixSMap); phraseDictionary.current = pSet; setDictLoadedInfo(`Mix (${mixDict.size})`);
+
                     dictionaryCache.current.MIX = { dict: mixDict, syl: mixSMap, phrases: pSet, info: `Mix (${mixDict.size})` };
+                    if (gameModeRef.current !== "CITIES" && languageRef.current === "MIX") {
+                        setDictionary(mixDict); setSyllableMap(mixSMap); phraseDictionary.current = pSet; setDictLoadedInfo(`Mix (${mixDict.size})`);
+                    }
                 };
                 loadMix();
             }
@@ -3292,11 +3333,16 @@ export default function App() {
                     let phraseSet = new Set(FALLBACK_PHRASES_EN);
                     const cleanedWords = rawWords.filter((w) => { if (w.includes(" ")) { phraseSet.add(w.toLowerCase()); return false; } return true; }).map(normalizeWord).filter(w => w.length > 0);
                     const newDict = new Set(cleanedWords);
-                    setDictionary(newDict); setSyllableMap({}); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Dictionary.txt (${cleanedWords.length})`);
                     dictionaryCache.current.EN = { dict: newDict, syl: {}, phrases: phraseSet, info: `Dictionary.txt (${cleanedWords.length})` };
+                    if (gameModeRef.current !== "CITIES" && languageRef.current === "EN") {
+                        setDictionary(newDict); setSyllableMap({}); phraseDictionary.current = phraseSet; setDictLoadedInfo(`Dictionary.txt (${cleanedWords.length})`);
+                    }
                 }).catch(() => {
-                    setDictionary(FALLBACK_DICTIONARY_EN); setSyllableMap({}); phraseDictionary.current = new Set(FALLBACK_PHRASES_EN);
-                    setDictLoadedInfo("Default (EN)"); dictionaryCache.current.EN = { dict: FALLBACK_DICTIONARY_EN, syl: {}, phrases: new Set(FALLBACK_PHRASES_EN), info: "Default (EN)" };
+                    dictionaryCache.current.EN = { dict: FALLBACK_DICTIONARY_EN, syl: {}, phrases: new Set(FALLBACK_PHRASES_EN), info: "Default (EN)" };
+                    if (gameModeRef.current !== "CITIES" && languageRef.current === "EN") {
+                        setDictionary(FALLBACK_DICTIONARY_EN); setSyllableMap({}); phraseDictionary.current = new Set(FALLBACK_PHRASES_EN);
+                        setDictLoadedInfo("Default (EN)");
+                    }
                 });
             }
         }
@@ -4401,7 +4447,7 @@ export default function App() {
                                         <button onClick={simulateJoin} className="bg-sky-900/40 hover:bg-sky-800/50 py-2.5 rounded text-sky-300 border border-sky-800 flex flex-col items-center justify-center gap-1 transition-colors"><Users className="w-4 h-4" /> <span className="text-[9px] font-bold">Join</span></button>
                                         <button onClick={simulateCorrectAnswer} className="bg-emerald-900/40 hover:bg-emerald-800/50 py-2.5 rounded text-emerald-300 border border-emerald-800 flex flex-col items-center justify-center gap-1 transition-colors"><Gamepad2 className="w-4 h-4" /> <span className="text-[9px] font-bold">Ans</span></button>
                                         <button onClick={handleTimeout} className="bg-red-900/40 hover:bg-red-800/50 py-2.5 rounded text-red-300 border border-red-800 flex flex-col items-center justify-center gap-1 transition-colors"><Clock className="w-4 h-4" /> <span className="text-[9px] font-bold">T.O.</span></button>
-                                        <button onClick={() => { setShowSettings(false); clearLobby(); pickShowcaseWords(); setWaitingCountdown(60); }} className="bg-indigo-900/40 hover:bg-indigo-800/50 py-2.5 rounded text-indigo-300 border border-indigo-800 flex flex-col items-center justify-center gap-1 transition-colors"><Info className="w-4 h-4" /> <span className="text-[9px] font-bold">Edu</span></button>
+                                        <button onClick={() => { setShowSettings(false); clearLobby(); pickShowcaseWords(); waitingTotalDurationRef.current = 60; setWaitingCountdown(60); }} className="bg-indigo-900/40 hover:bg-indigo-800/50 py-2.5 rounded text-indigo-300 border border-indigo-800 flex flex-col items-center justify-center gap-1 transition-colors"><Info className="w-4 h-4" /> <span className="text-[9px] font-bold">Edu</span></button>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 mt-2">
                                         <button onClick={() => simulateEffect('like')} className="bg-pink-900/40 hover:bg-pink-800/50 py-2 rounded text-pink-300 border border-pink-800 flex items-center justify-center gap-1 transition-colors"><Heart className="w-3 h-3" /> <span className="text-[10px] font-bold">Spam Like</span></button>
@@ -4508,6 +4554,42 @@ export default function App() {
                 className="cursor-move transform scale-[0.85] -translate-y-12 sm:translate-y-0 sm:scale-100 transition-transform duration-300 z-10"
             >
                 <div className={`relative transition-all duration-300 flex items-center justify-center ${activeMinigame !== "OFF" ? 'w-[320px] h-[320px] sm:w-[430px] sm:h-[430px]' : 'w-[350px] h-[350px] sm:w-[480px] sm:h-[480px]'}`}>
+                    {/* Directional Spotlight Beam & Rim Pointer for Active Turn (Round Layout) */}
+                    {layoutStyle === "round" && gameState === "PLAYING" && activePlayers.length > 0 && (() => {
+                        const activeCurrentIdx = activePlayers.findIndex(p => p.uniqueId === players[currentTurnIndex]?.uniqueId);
+                        if (activeCurrentIdx === -1) return null;
+                        const activeAngle = activeCurrentIdx * (360 / Math.max(activePlayers.length, 1)) + 90;
+                        const isBombTurn = bombNextRef.current;
+                        return (
+                            <>
+                                {/* Directional Spotlight Cone outside Table */}
+                                <div
+                                    className="absolute -inset-12 sm:-inset-16 rounded-full pointer-events-none transition-transform duration-500 ease-out z-0"
+                                    style={{
+                                        transform: `rotate(${activeAngle - 90}deg)`,
+                                        background: isBombTurn
+                                            ? "conic-gradient(from 0deg at 50% 50%, transparent 148deg, rgba(249, 115, 22, 0.28) 180deg, transparent 212deg)"
+                                            : "conic-gradient(from 0deg at 50% 50%, transparent 148deg, rgba(251, 191, 36, 0.24) 180deg, transparent 212deg)"
+                                    }}
+                                />
+                                {/* Rotating Rim Pointer Chevron on Table Edge */}
+                                <div
+                                    className="absolute inset-0 rounded-full pointer-events-none transition-transform duration-500 ease-out z-[25] flex items-end justify-center"
+                                    style={{ transform: `rotate(${activeAngle - 90}deg)` }}
+                                >
+                                    <div className="translate-y-3 sm:translate-y-3.5 flex flex-col items-center">
+                                        <svg
+                                            className={`w-4 h-4 sm:w-5 sm:h-5 ${isBombTurn ? "text-orange-500 drop-shadow-[0_0_8px_rgba(249,115,22,0.95)]" : "text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.9)]"}`}
+                                            viewBox="0 0 24 24"
+                                            fill="currentColor"
+                                        >
+                                            <path d="M12 18L4 8h16l-8 10z" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </>
+                        );
+                    })()}
                     <div className={`absolute inset-0 transition-all duration-500 flex items-center justify-center overflow-hidden ${layoutStyle === "round" ? `rounded-full border-[8px] ${getTableStatusClass()}` : `bg-transparent`} ${tableStatus === 'success' ? 'scale-105' : 'scale-100'}`}>
                         {gameState === "PAUSED" && (
                             <div className="absolute inset-0 z-[60] flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-300">
@@ -4649,6 +4731,7 @@ export default function App() {
                                             if (autoRestartEnabled) {
                                                 clearLobby();
                                                 pickShowcaseWords();
+                                                waitingTotalDurationRef.current = 60;
                                                 setTimeout(() => setWaitingCountdown(60), 0);
                                             } else {
                                                 processQueue();
@@ -4672,31 +4755,62 @@ export default function App() {
                                         <div className="absolute inset-0 flex flex-col items-center justify-center w-full h-full px-4">
                                             {showcaseWords.length > 0 ? (
                                                 (() => {
-                                                    let currentShowcase;
-                                                    if (waitingCountdown > 40) {
-                                                        currentShowcase = showcaseWords[0];
-                                                    } else if (waitingCountdown > 20) {
-                                                        currentShowcase = showcaseWords[1] || showcaseWords[0];
+                                                    const totalWait = Math.max(3, waitingTotalDurationRef.current || 30);
+                                                    const slotDuration = totalWait / 3;
+                                                    let showcaseIdx = 0;
+                                                    if (waitingCountdown > slotDuration * 2) {
+                                                        showcaseIdx = 0;
+                                                    } else if (waitingCountdown > slotDuration) {
+                                                        showcaseIdx = 1;
                                                     } else {
-                                                        currentShowcase = showcaseWords[2] || showcaseWords[1] || showcaseWords[0];
+                                                        showcaseIdx = 2;
                                                     }
+                                                    const currentShowcase = showcaseWords[showcaseIdx] || showcaseWords[0];
 
                                                     if (!currentShowcase) return null;
+                                                    const scLen = Math.max(1, currentShowcase.word?.length || 1);
+                                                    const scTrack = scLen > 16 ? "tracking-normal" : scLen > 11 ? "tracking-wider" : "tracking-widest";
+                                                    const scFactor = scLen > 16 ? 0.68 : scLen > 11 ? 0.76 : 0.85;
+                                                    const scWidth = isMobile ? 235 : 320;
+                                                    const scFontSize = `${Math.min(30, Math.max(10, Math.floor(scWidth / (Math.max(6, scLen) * scFactor))))}px`;
+
+                                                    const defText = currentShowcase.def || "";
+                                                    const isLongDef = defText.length > (isMobile ? 105 : 135);
+                                                    const extraLinesRatio = Math.min(72, Math.max(35, Math.round(((defText.length - 95) / defText.length) * 100)));
+
                                                     return (
                                                         <div key={currentShowcase.word} className="flex flex-col items-center text-center max-w-[85%] bg-slate-800/50 p-4 sm:p-6 rounded-3xl border border-slate-700/50 shadow-md animate-in fade-in zoom-in duration-700 w-full">
-                                                            <div className="flex items-center gap-2 mb-3 bg-slate-900 pr-4 pl-1.5 py-1.5 rounded-full border border-slate-800 shadow-sm">
-                                                                <img src={currentShowcase.avatarUrl} className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-slate-800 border-2 border-slate-700 object-cover" alt="avatar" />
-                                                                <span className="text-[10px] sm:text-xs text-slate-300 font-bold tracking-wide">Kosakata dari <span className="text-sky-400">{currentShowcase.nickname}</span></span>
+                                                            <div className="flex items-center justify-between gap-2 mb-3 w-full px-1">
+                                                                <div className="flex items-center gap-2 bg-slate-900 pr-3.5 pl-1.5 py-1 rounded-full border border-slate-800 shadow-sm">
+                                                                    <img src={currentShowcase.avatarUrl} className="w-5 h-5 sm:w-7 sm:h-7 rounded-full bg-slate-800 border-2 border-slate-700 object-cover" alt="avatar" />
+                                                                    <span className="text-[10px] sm:text-xs text-slate-300 font-bold tracking-wide truncate max-w-[130px] sm:max-w-[180px]">Kosakata <span className="text-sky-400">{currentShowcase.nickname}</span></span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1 shrink-0">
+                                                                    {[0, 1, 2].map((dotIdx) => (
+                                                                        <span
+                                                                            key={dotIdx}
+                                                                            className={`h-1.5 rounded-full transition-all duration-300 ${dotIdx === showcaseIdx ? "w-3.5 bg-sky-400" : "w-1.5 bg-slate-600"}`}
+                                                                        />
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                            <h3 className="font-black text-sky-400 tracking-widest uppercase mb-2 sm:mb-4 whitespace-nowrap w-full px-2" style={{ fontSize: `clamp(12px, 60vw / ${Math.max(6, currentShowcase.word.length)}, 32px)` }}>{currentShowcase.word}</h3>
-                                                            <div className="relative w-full px-4 py-2 sm:px-6 sm:py-3 bg-slate-900 rounded-xl border border-slate-800 shadow-sm">
-                                                                <span className="absolute -top-3 -left-2 text-3xl text-sky-500/50 font-black">"</span>
-                                                                <p className="text-[10px] sm:text-sm text-slate-300 italic line-clamp-3 sm:line-clamp-4 leading-relaxed relative z-10">
-                                                                    {currentShowcase.def}
-                                                                </p>
-                                                                <span className="absolute -bottom-5 -right-2 text-3xl text-sky-500/50 font-black">"</span>
+                                                            <h3 className={`font-black text-sky-400 ${scTrack} uppercase mb-2 sm:mb-3 whitespace-nowrap w-full px-2`} style={{ fontSize: scFontSize }}>{currentShowcase.word}</h3>
+                                                            <div className={`relative w-full px-4 py-2 sm:px-5 sm:py-2.5 bg-slate-900 rounded-xl border border-slate-800 shadow-sm overflow-hidden ${isLongDef ? "h-[68px] sm:h-[92px]" : ""}`}>
+                                                                <span className="absolute -top-2.5 -left-1.5 text-2xl sm:text-3xl text-sky-500/40 font-black pointer-events-none z-20">"</span>
+                                                                <div
+                                                                    className={isLongDef ? "animate-showcase-def-scroll" : ""}
+                                                                    style={isLongDef ? { "--def-scroll-y": `-${extraLinesRatio}%` } : undefined}
+                                                                >
+                                                                    <p className="text-[10px] sm:text-sm text-slate-200 italic leading-relaxed relative z-10">
+                                                                        {defText}
+                                                                    </p>
+                                                                </div>
+                                                                {isLongDef && (
+                                                                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-slate-900 to-transparent z-20" />
+                                                                )}
+                                                                <span className="absolute -bottom-4 -right-1.5 text-2xl sm:text-3xl text-sky-500/40 font-black pointer-events-none z-20">"</span>
                                                             </div>
-                                                            <div className="mt-4 flex flex-col items-center justify-center animate-pulse bg-indigo-950/50 border border-indigo-800 rounded-full px-5 py-1.5 shadow-sm">
+                                                            <div className="mt-3 sm:mt-4 flex flex-col items-center justify-center animate-pulse bg-indigo-950/50 border border-indigo-800 rounded-full px-5 py-1.5 shadow-sm">
                                                                 <span className="text-[9px] text-indigo-400 uppercase tracking-widest leading-none mb-0.5">{t("starting_in")}</span>
                                                                 <span className="text-xl sm:text-2xl font-black text-indigo-300 font-mono leading-none">{waitingCountdown}s</span>
                                                             </div>
@@ -4784,43 +4898,53 @@ export default function App() {
                                         {gameMode === "RHYME" ? t("rhyme_target") : gameMode === "FILL_BLANK" ? "LENGKAPI KATA BERIKUT" : gameMode === "INFIKS" ? "MENGANDUNG POLA BERIKUT" : "SAMBUNG KATA BERIKUT"}
                                     </p>
 
-                                    <h2 className="font-black flex justify-center transition-all duration-300 px-2 my-1 w-full overflow-hidden" style={{ fontSize: `clamp(10px, 55vw / ${Math.max(6, currentWord?.length || 6)}, 28px)` }}>
-                                        {(() => {
-                                            if (gameMode === "RHYME") {
-                                                return (
-                                                    <div className="flex flex-col items-center w-full">
-                                                        <span className="text-[1em] text-sky-400 drop-shadow-[0_0_10px_rgba(56,189,248,0.6)] whitespace-nowrap">...{targetRhyme.toUpperCase()}</span>
-                                                        {currentWord && <span className="text-[0.5em] text-slate-500 mt-[0.5em] font-normal opacity-80 whitespace-nowrap">Kata Sebelumnya: {currentWord.toUpperCase()}</span>}
-                                                    </div>
-                                                );
-                                            }
-                                            if (gameMode === "FILL_BLANK") {
-                                                const parts = currentWord.toUpperCase().split(/(\.\.\.)/g);
-                                                return (
-                                                    <div className="flex flex-col items-center w-full">
+                                    {(() => {
+                                        const wordLen = Math.max(1, currentWord?.length || 1);
+                                        const wordTracking = wordLen > 16 ? "tracking-normal" : wordLen > 11 ? "tracking-wider" : "tracking-widest";
+                                        const charFactor = wordLen > 16 ? 0.68 : wordLen > 11 ? 0.76 : 0.85;
+                                        const safeTableWidth = activeMinigame !== "OFF" ? (isMobile ? 250 : 345) : (isMobile ? 275 : 385);
+                                        const computedFontSize = `${Math.min(28, Math.max(10, Math.floor(safeTableWidth / (Math.max(6, wordLen) * charFactor))))}px`;
+
+                                        return (
+                                            <h2 className="font-black flex justify-center transition-all duration-300 px-2 my-1 w-full overflow-hidden" style={{ fontSize: computedFontSize }}>
+                                                {(() => {
+                                                    if (gameMode === "RHYME") {
+                                                        return (
+                                                            <div className="flex flex-col items-center w-full">
+                                                                <span className="text-[1em] text-sky-400 drop-shadow-[0_0_10px_rgba(56,189,248,0.6)] whitespace-nowrap">...{targetRhyme.toUpperCase()}</span>
+                                                                {currentWord && <span className="text-[0.5em] text-slate-500 mt-[0.5em] font-normal opacity-80 whitespace-nowrap">Kata Sebelumnya: {currentWord.toUpperCase()}</span>}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    if (gameMode === "FILL_BLANK") {
+                                                        const parts = currentWord.toUpperCase().split(/(\.\.\.)/g);
+                                                        return (
+                                                            <div className="flex flex-col items-center w-full">
+                                                                <div className="flex items-center justify-center whitespace-nowrap drop-shadow-md">
+                                                                    {parts.map((part, i) =>
+                                                                        part === "..."
+                                                                            ? <span key={i} className={`text-emerald-400 mx-[0.25em] ${wordTracking} animate-pulse`}>. . .</span>
+                                                                            : <span key={i} className={`text-slate-200 ${wordTracking}`}>{part}</span>
+                                                                    )}
+                                                                </div>
+                                                                {lastInputWord && <span className="text-[0.5em] text-slate-500 mt-[0.5em] font-normal opacity-80 whitespace-nowrap">Kata Sebelumnya: {lastInputWord.toUpperCase()}</span>}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    const { pre, high, post } = getDisplayParts(currentWord, getLogicOptions());
+                                                    return (
                                                         <div className="flex items-center justify-center whitespace-nowrap drop-shadow-md">
-                                                            {parts.map((part, i) =>
-                                                                part === "..."
-                                                                    ? <span key={i} className="text-emerald-400 mx-[0.3em] tracking-widest animate-pulse">. . .</span>
-                                                                    : <span key={i} className="text-slate-200 tracking-widest">{part}</span>
-                                                            )}
+                                                            {pre && <span className={`text-slate-200 ${wordTracking}`}>{pre.toUpperCase()}</span>}
+                                                            <span className={`text-sky-400 ${wordTracking} mx-[0.08em] drop-shadow-[0_0_10px_rgba(56,189,248,0.6)] animate-pulse`}>
+                                                                {high.toUpperCase()}
+                                                            </span>
+                                                            {post && <span className={`text-slate-200 ${wordTracking}`}>{post.toUpperCase()}</span>}
                                                         </div>
-                                                        {lastInputWord && <span className="text-[0.5em] text-slate-500 mt-[0.5em] font-normal opacity-80 whitespace-nowrap">Kata Sebelumnya: {lastInputWord.toUpperCase()}</span>}
-                                                    </div>
-                                                );
-                                            }
-                                            const { pre, high, post } = getDisplayParts(currentWord, getLogicOptions());
-                                            return (
-                                                <div className="flex items-center justify-center whitespace-nowrap drop-shadow-md">
-                                                    {pre && <span className="text-slate-200 tracking-widest">{pre.toUpperCase()}</span>}
-                                                    <span className="text-sky-400 tracking-widest mx-[0.1em] drop-shadow-[0_0_10px_rgba(56,189,248,0.6)] animate-pulse">
-                                                        {high.toUpperCase()}
-                                                    </span>
-                                                    {post && <span className="text-slate-200 tracking-widest">{post.toUpperCase()}</span>}
-                                                </div>
-                                            );
-                                        })()}
-                                    </h2>
+                                                    );
+                                                })()}
+                                            </h2>
+                                        );
+                                    })()}
 
                                     <div className="flex flex-col items-center w-full">
                                         <div className="mt-2 flex flex-col items-center justify-center w-full">
@@ -4868,21 +4992,22 @@ export default function App() {
                         
                         const activeCurrentIndex = arr.findIndex(p => p.uniqueId === players[currentTurnIndex]?.uniqueId);
                         const safeCurrentIndex = activeCurrentIndex !== -1 ? activeCurrentIndex : 0;
-                        
-                        // Posisi Meja Bundar
+
+                        // Posisi Meja Bundar & FUT Card
                         const angleDeg = index * (360 / Math.max(arr.length, 1)) + 90;
-                        const roundTransform = `rotate(${angleDeg}deg) translate(${dynamicRadius}px) rotate(-${angleDeg}deg) scale(${dynamicScale})`;
-                        
-                        // Posisi FUT Card (Cover Flow Perspective, Satu Baris)
                         const total = Math.max(arr.length, 1);
                         let diff = index - (gameState === "PLAYING" ? safeCurrentIndex : 0);
                         if (diff > total / 2) diff -= total;
                         else if (diff < -total / 2) diff += total;
 
                         const absDiff = Math.abs(diff);
-                        
+
                         // Active card is at front and center
                         const isTurn = gameState === "PLAYING" && diff === 0 && !player.isEliminated;
+                        const roundScale = gameState === "PLAYING"
+                            ? (isTurn ? dynamicScale * 1.22 : dynamicScale * 0.94)
+                            : dynamicScale;
+                        const roundTransform = `rotate(${angleDeg}deg) translate(${dynamicRadius}px) rotate(-${angleDeg}deg) scale(${roundScale})`;
                         const futZIndex = 200 - absDiff;
                         
                         // Scale down as they go further away
@@ -4955,13 +5080,13 @@ export default function App() {
                                 </div>
 
                                 {isRound ? (
-                                    <>
-                                        <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"}`}>
+                                    <div className={`flex flex-col items-center transition-all duration-500 ${player.isEliminated ? "opacity-45 grayscale" : (gameState === "PLAYING" && !isTurn ? "opacity-55 brightness-75" : "opacity-100")}`}>
+                                        <div className="relative group">
                                             {/* --- Indikator Efek Glow Menyebar (Ping Wave) & Ring Ambient saat Giliran --- */}
                                             {isTurn && (
                                                 <>
-                                                    <div className="absolute -inset-2 rounded-full bg-amber-400/35 animate-ping opacity-75 pointer-events-none"></div>
-                                                    <div className="absolute -inset-1 rounded-full border border-amber-400/60 pointer-events-none shadow-[0_0_12px_rgba(251,191,36,0.4)]"></div>
+                                                    <div className="absolute -inset-2.5 rounded-full bg-amber-400/40 animate-ping opacity-80 pointer-events-none"></div>
+                                                    <div className="absolute -inset-1 rounded-full border border-amber-400/75 pointer-events-none shadow-[0_0_16px_rgba(251,191,36,0.55)]"></div>
                                                 </>
                                             )}
                                             {isKing && (
@@ -4972,9 +5097,9 @@ export default function App() {
                                             <div className={`w-14 h-14 rounded-full border-2 overflow-hidden bg-slate-800 z-10 relative transition-all duration-300 ${
                                                 isTurn
                                                     ? (bombNextRef.current
-                                                        ? "border-orange-500 ring-2 ring-orange-500/60 scale-105 animate-shake shadow-[0_0_15px_rgba(249,115,22,0.6)]"
-                                                        : "border-amber-400 ring-2 ring-amber-400/50 ring-offset-1 ring-offset-slate-900 scale-105 shadow-[0_0_15px_rgba(251,191,36,0.4)]")
-                                                    : (isKing ? "border-amber-500/70 scale-100 shadow-sm" : "border-slate-700 shadow-sm")
+                                                        ? "border-orange-500 ring-2 ring-orange-500/70 animate-shake shadow-[0_0_18px_rgba(249,115,22,0.75)]"
+                                                        : "border-amber-400 ring-2 ring-amber-400/60 ring-offset-1 ring-offset-slate-900 shadow-[0_0_18px_rgba(251,191,36,0.6)]")
+                                                    : (isKing ? "border-amber-500/70 shadow-sm" : "border-slate-700 shadow-sm")
                                             }`}>
                                                 <img src={player.avatarUrl} alt={player.nickname} className={`w-full h-full object-cover transition-all ${isKing ? "brightness-105" : ""}`} />
                                             </div>
@@ -4991,7 +5116,7 @@ export default function App() {
                                         <div className="mt-[-2px] flex flex-col items-center z-40 relative w-full">
                                             <div className={`flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border shadow-sm transition-all duration-300 ${
                                                 isTurn
-                                                    ? "bg-slate-900/95 border-amber-400/70 text-amber-300 shadow-[0_0_10px_rgba(251,191,36,0.25)] ring-1 ring-amber-400/20"
+                                                    ? "bg-slate-900/95 border-amber-400/80 text-amber-200 shadow-[0_0_12px_rgba(251,191,36,0.3)] ring-1 ring-amber-400/25"
                                                     : "bg-slate-900/90 border-slate-700/80 text-slate-300"
                                             }`}>
                                                 {player.stats?.wins > 0 && (
@@ -5012,9 +5137,9 @@ export default function App() {
                                                 <span className={`text-[10px] tracking-wide truncate max-w-[75px] ${isTurn ? "font-bold text-amber-200" : "font-medium text-slate-300"}`}>{player.nickname}</span>
                                             </div>
                                         </div>
-                                    </>
+                                    </div>
                                 ) : (
-                                    <div className={`relative group ${player.isEliminated ? "opacity-50 grayscale" : "opacity-100"} flex flex-col items-center justify-center transition-all duration-300 ${isTurn ? 'scale-105 brightness-105 z-50' : 'scale-100 brightness-90'}`}>
+                                    <div className={`relative group ${player.isEliminated ? "opacity-45 grayscale" : (gameState === "PLAYING" && !isTurn ? "opacity-65 brightness-75" : "opacity-100")} flex flex-col items-center justify-center transition-all duration-300 ${isTurn ? 'scale-110 brightness-105 z-50' : 'scale-100'}`}>
                                         {isTurn && (
                                             <>
                                                 <div className="absolute -inset-3 rounded-xl bg-amber-400/35 animate-ping opacity-75 blur-sm pointer-events-none"></div>
@@ -5071,22 +5196,29 @@ export default function App() {
                     })}
 
                     {/* EFEK KATA MELAYANG (JUICY UI) */}
-                    {lastPlay && (
-                        <div key={lastPlay.id} className="absolute top-[10%] sm:top-[15%] left-1/2 -translate-x-1/2 pointer-events-none z-[250] flex flex-col items-center animate-float-up w-full">
-                            <div className="flex items-center gap-1.5 mb-1 bg-slate-900 px-3 py-1 rounded-full border border-emerald-500/30 shadow-sm">
-                                <img src={lastPlay.avatarUrl} className="w-5 h-5 rounded-full border border-emerald-900" alt="avatar" />
-                                <span className="text-[10px] sm:text-xs text-emerald-400 font-bold truncate max-w-[100px]">{lastPlay.nickname}</span>
-                            </div>
-                            <div className={`font-black text-emerald-400 drop-shadow-sm uppercase tracking-widest leading-none px-4 text-center whitespace-nowrap`} style={{ fontSize: `clamp(12px, 60vw / ${Math.max(6, lastPlay.word.length)}, 32px)` }}>
-                                {lastPlay.word}
-                            </div>
-                            {pointMode !== "OFF" && (
-                                <div className="text-lg sm:text-xl font-black text-amber-400 drop-shadow-sm mt-1">
-                                    +{lastPlay.points} Pts
+                    {lastPlay && (() => {
+                        const lpLen = Math.max(1, lastPlay.word?.length || 1);
+                        const lpTrack = lpLen > 16 ? "tracking-normal" : lpLen > 11 ? "tracking-wider" : "tracking-widest";
+                        const lpFactor = lpLen > 16 ? 0.68 : lpLen > 11 ? 0.76 : 0.85;
+                        const lpWidth = isMobile ? 275 : 385;
+                        const lpFontSize = `${Math.min(32, Math.max(11, Math.floor(lpWidth / (Math.max(6, lpLen) * lpFactor))))}px`;
+                        return (
+                            <div key={lastPlay.id} className="absolute top-[10%] sm:top-[15%] left-1/2 -translate-x-1/2 pointer-events-none z-[250] flex flex-col items-center animate-float-up w-full">
+                                <div className="flex items-center gap-1.5 mb-1 bg-slate-900 px-3 py-1 rounded-full border border-emerald-500/30 shadow-sm">
+                                    <img src={lastPlay.avatarUrl} className="w-5 h-5 rounded-full border border-emerald-900" alt="avatar" />
+                                    <span className="text-[10px] sm:text-xs text-emerald-400 font-bold truncate max-w-[100px]">{lastPlay.nickname}</span>
                                 </div>
-                            )}
-                        </div>
-                    )}
+                                <div className={`font-black text-emerald-400 drop-shadow-sm uppercase ${lpTrack} leading-none px-4 text-center whitespace-nowrap`} style={{ fontSize: lpFontSize }}>
+                                    {lastPlay.word}
+                                </div>
+                                {pointMode !== "OFF" && (
+                                    <div className="text-lg sm:text-xl font-black text-amber-400 drop-shadow-sm mt-1">
+                                        +{lastPlay.points} Pts
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
 
                     {/* COMMAND FOOTER - Posisi di bawah meja/avatar */}
                     <div className="absolute -bottom-24 sm:-bottom-32 left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none z-[60]">
