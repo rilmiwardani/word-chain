@@ -4233,6 +4233,9 @@ export default function App() {
                         theme={bgAnimTheme}
                         lastPlay={lastPlay}
                         currentWord={currentWord}
+                        tableRef={mainTableRef}
+                        tableOffset={mainTableOffset}
+                        tableScale={tableScale}
                         disabled={bgColorMode === "greenscreen"}
                     />
                 </>
@@ -5245,8 +5248,11 @@ export default function App() {
                         const activeCurrentIndex = arr.findIndex(p => p.uniqueId === players[currentTurnIndex]?.uniqueId);
                         const safeCurrentIndex = activeCurrentIndex !== -1 ? activeCurrentIndex : 0;
 
-                        // Posisi Meja Bundar & FUT Card
+                        // Posisi Meja Bundar (Koordinat Kartesius langsung tanpa rotate ganda untuk cegah artefak garis hitam 9-slice di Firefox) & FUT Card
                         const angleDeg = index * (360 / Math.max(arr.length, 1)) + 90;
+                        const angleRad = (angleDeg * Math.PI) / 180;
+                        const roundX = Math.round(Math.cos(angleRad) * dynamicRadius * 10) / 10;
+                        const roundY = Math.round(Math.sin(angleRad) * dynamicRadius * 10) / 10;
                         const total = Math.max(arr.length, 1);
                         let diff = index - (gameState === "PLAYING" ? safeCurrentIndex : 0);
                         if (diff > total / 2) diff -= total;
@@ -5259,7 +5265,7 @@ export default function App() {
                         const roundScale = gameState === "PLAYING"
                             ? (isTurn ? dynamicScale * 1.22 : dynamicScale * 0.94)
                             : dynamicScale;
-                        const roundTransform = `rotate(${angleDeg}deg) translate(${dynamicRadius}px) rotate(-${angleDeg}deg) scale(${roundScale})`;
+                        const roundTransform = `translate3d(${roundX}px, ${roundY}px, 0) scale(${roundScale})`;
                         const futZIndex = 200 - absDiff;
                         
                         // Scale down as they go further away
@@ -5332,7 +5338,7 @@ export default function App() {
                                 </div>
 
                                 {isRound ? (
-                                    <div className={`flex flex-col items-center transition-all duration-500 ${player.isEliminated ? "opacity-45 grayscale" : (gameState === "PLAYING" && !isTurn ? "opacity-55 brightness-75" : "opacity-100")}`}>
+                                    <div className={`flex flex-col items-center transition-opacity duration-500 ${player.isEliminated ? "opacity-40 grayscale" : (gameState === "PLAYING" && !isTurn ? "opacity-50" : "opacity-100")}`}>
                                         <div className="relative group">
                                             {/* --- Indikator Efek Glow Menyebar (Ping Wave) & Ring Ambient saat Giliran --- */}
                                             {isTurn && (
@@ -5354,10 +5360,10 @@ export default function App() {
                                                         : "border-amber-400 ring-2 ring-amber-400/60 ring-offset-1 ring-offset-slate-900 shadow-[0_0_18px_rgba(251,191,36,0.6)]")
                                                     : (isKing ? "border-amber-500/70 shadow-sm" : "border-slate-700 shadow-sm")
                                             }`}>
-                                                <img src={player.avatarUrl} alt={player.nickname} className={`w-full h-full object-cover transition-all ${isKing ? "brightness-105" : ""}`} />
+                                                <img src={player.avatarUrl} alt={player.nickname} className="w-full h-full object-cover transition-all" />
                                             </div>
                                             {/* Badge Tier menggantikan posisi bot difficulty lama */}
-                                            <div className={`absolute -top-2 -right-3 sm:-right-5 text-[6px] sm:text-[7px] px-1.5 py-0.5 rounded-full font-bold border border-slate-900 z-30 flex items-center shadow-sm uppercase tracking-widest transition-colors whitespace-nowrap ${tier.class}`}>
+                                            <div className={`absolute -top-2 -right-3 sm:-right-5 text-[6px] sm:text-[7px] px-1.5 py-0.5 rounded-full font-bold border border-slate-900 z-30 flex items-center uppercase tracking-widest transition-colors whitespace-nowrap ${tier.class}`} style={{ boxShadow: "none" }}>
                                                 {tier.name}
                                             </div>
                                             {isStarter && !player.isEliminated && (

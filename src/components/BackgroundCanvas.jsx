@@ -40,11 +40,28 @@ const CONSTELLATION_NODES = Array.from({ length: 16 }).map((_, i) => ({
     phase: i * 1.1
 }));
 
-const BackgroundCanvas = React.memo(({ theme = "CHAIN", lastPlay = null, currentWord = "", disabled = false }) => {
+const BackgroundCanvas = React.memo(({ theme = "CHAIN", lastPlay = null, currentWord = "", tableRef = null, tableOffset = null, tableScale = 1, disabled = false }) => {
     const canvasRef = useRef(null);
-    const pulseRef = useRef({ radius: -1, alpha: 0 });
+    const pulseRef = useRef({ radius: -1, alpha: 0, x: null, y: null });
     const prevPlayIdRef = useRef(lastPlay?.id);
     const chainHistoryRef = useRef([...DEFAULT_CHAIN_WORDS]);
+
+    const getTableCenterOnCanvas = () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return null;
+        const cRect = canvas.getBoundingClientRect();
+        if (tableRef?.current) {
+            const tRect = tableRef.current.getBoundingClientRect();
+            return {
+                x: (tRect.left + tRect.width / 2) - cRect.left,
+                y: (tRect.top + tRect.height / 2) - cRect.top
+            };
+        }
+        return {
+            x: cRect.width / 2 + (tableOffset?.x || 0),
+            y: cRect.height / 2 + (tableOffset?.y || 0)
+        };
+    };
 
     // When currentWord initializes at game start, push it if not already at end
     useEffect(() => {
@@ -63,7 +80,13 @@ const BackgroundCanvas = React.memo(({ theme = "CHAIN", lastPlay = null, current
     useEffect(() => {
         if (lastPlay?.id && lastPlay.id !== prevPlayIdRef.current) {
             prevPlayIdRef.current = lastPlay.id;
-            pulseRef.current = { radius: 95, alpha: 0.55 };
+            const center = getTableCenterOnCanvas();
+            pulseRef.current = {
+                radius: 95 * (tableScale || 1),
+                alpha: 0.55,
+                x: center?.x ?? null,
+                y: center?.y ?? null
+            };
             if (lastPlay.word) {
                 const clean = lastPlay.word.trim().toUpperCase();
                 const list = chainHistoryRef.current;
@@ -72,7 +95,7 @@ const BackgroundCanvas = React.memo(({ theme = "CHAIN", lastPlay = null, current
                 }
             }
         }
-    }, [lastPlay]);
+    }, [lastPlay, tableScale]);
 
     useEffect(() => {
         if (disabled || theme === "OFF") return;
@@ -120,8 +143,9 @@ const BackgroundCanvas = React.memo(({ theme = "CHAIN", lastPlay = null, current
             const dpr = Math.min(window.devicePixelRatio || 1, 2);
             const w = canvas.width / dpr;
             const h = canvas.height / dpr;
-            const cx = w / 2;
-            const cy = h / 2;
+            const liveCenter = getTableCenterOnCanvas();
+            const cx = liveCenter ? liveCenter.x : w / 2;
+            const cy = liveCenter ? liveCenter.y : h / 2;
             t += 0.0045;
 
             ctx.clearRect(0, 0, w, h);
@@ -412,13 +436,15 @@ const BackgroundCanvas = React.memo(({ theme = "CHAIN", lastPlay = null, current
                 }
             }
 
-            // Soft shockwave pulse when a word is answered correctly
+            // Soft shockwave pulse when a word is answered correctly (centered at current table position)
             if (pulseRef.current.radius > 0) {
+                const px = pulseRef.current.x ?? cx;
+                const py = pulseRef.current.y ?? cy;
                 ctx.save();
                 ctx.strokeStyle = `rgba(52, 211, 153, ${pulseRef.current.alpha})`;
                 ctx.lineWidth = 2.5;
                 ctx.beginPath();
-                ctx.arc(cx, cy, pulseRef.current.radius, 0, Math.PI * 2);
+                ctx.arc(px, py, pulseRef.current.radius, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.restore();
 
