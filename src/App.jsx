@@ -16,6 +16,7 @@ import { PlayerTimer, GlobalTimer } from "./components/Timers";
 import { getIndonesianOverlapSuffix, getSuffixOrRule, getRecoverySuffix, getRuleDisplay, getDisplayParts, validateConnection } from "./utils/gameLogic";
 import MusicPlayer from "./components/MusicPlayer";
 import CameraOverlay from "./components/CameraOverlay";
+import BackgroundCanvas from "./components/BackgroundCanvas";
 
 const TABLE_THEMES = {
     midnight: "border-slate-700/40 bg-slate-900/70 backdrop-blur-2xl shadow-[0_0_40px_rgba(15,23,42,0.7)] ring-1 ring-white/5",
@@ -215,6 +216,7 @@ export default function App() {
         if (saved) return saved;
         return localStorage.getItem("sk_greenscreen") === "true" ? "greenscreen" : "default";
     });
+    const [bgAnimTheme, setBgAnimTheme] = useState(() => localStorage.getItem("sk_bgAnimTheme") || "CHAIN"); // "OFF" | "CHAIN" | "CONSTELLATION" | "ORBIT" | "SCRABBLE" | "RADAR" | "GRID"
     const [viewMode, setViewMode] = useState(() => localStorage.getItem("sk_viewMode") || "landscape");
 
     useEffect(() => {
@@ -228,6 +230,10 @@ export default function App() {
     useEffect(() => {
         localStorage.setItem("sk_bgColorMode", bgColorMode);
     }, [bgColorMode]);
+
+    useEffect(() => {
+        localStorage.setItem("sk_bgAnimTheme", bgAnimTheme);
+    }, [bgAnimTheme]);
 
     useEffect(() => {
         localStorage.setItem("sk_viewMode", viewMode);
@@ -253,6 +259,8 @@ export default function App() {
 
     const [scrambleWord, setScrambleWord] = useState("");
     const [scrambledDisplay, setScrambledDisplay] = useState("");
+    const [scrambleTiles, setScrambleTiles] = useState([]);
+    const [scrambleLockedIndices, setScrambleLockedIndices] = useState([]);
     const [scrambleWinner, setScrambleWinner] = useState(null);
 
     const [activeMinigame, setActiveMinigame] = useState(() => localStorage.getItem("sk_activeMinigame") || "ANAGRAM"); // "OFF", "ANAGRAM", "WORD500", "AUTO_WORDLE"
@@ -684,7 +692,12 @@ export default function App() {
     const playedWordsHistoryRef = useRef([]);
 
     const scrambleWordRef = useRef(scrambleWord);
+    const scrambleTilesRef = useRef(scrambleTiles);
+    const scrambleLockedIndicesRef = useRef(scrambleLockedIndices);
     const scrambleWinnerRef = useRef(scrambleWinner);
+    const anagramFlipPhaseRef = useRef(anagramFlipPhase);
+    const anagramTilesRowRef = useRef(null);
+    const anagramPrevRectsRef = useRef({});
     const activeMinigameRef = useRef(activeMinigame);
     const word500TargetRef = useRef(word500Target);
     const word500WinnerRef = useRef(word500Winner);
@@ -712,6 +725,7 @@ export default function App() {
     const tableScaleRef = useRef(tableScale);
     const mainTableOffsetRef = useRef(mainTableOffset);
     const bgColorModeRef = useRef(bgColorMode);
+    const bgAnimThemeRef = useRef(bgAnimTheme);
     const viewModeRef = useRef(viewMode);
     const activeEffectsRef = useRef(activeEffects);
     const layoutStyleRef = useRef(layoutStyle);
@@ -743,7 +757,10 @@ export default function App() {
         restartLikesRef.current = restartLikes;
         playerQueueRef.current = playerQueue;
         scrambleWordRef.current = scrambleWord;
+        scrambleTilesRef.current = scrambleTiles;
+        scrambleLockedIndicesRef.current = scrambleLockedIndices;
         scrambleWinnerRef.current = scrambleWinner;
+        anagramFlipPhaseRef.current = anagramFlipPhase;
         activeMinigameRef.current = activeMinigame;
         allowedWordleLengthsRef.current = allowedWordleLengths;
         word500TargetRef.current = word500Target;
@@ -757,6 +774,7 @@ export default function App() {
         tableScaleRef.current = tableScale;
         mainTableOffsetRef.current = mainTableOffset;
         bgColorModeRef.current = bgColorMode;
+        bgAnimThemeRef.current = bgAnimTheme;
         viewModeRef.current = viewMode;
         activeEffectsRef.current = activeEffects;
         layoutStyleRef.current = layoutStyle;
@@ -767,8 +785,8 @@ export default function App() {
     }, [
         players, currentTurnIndex, turnDuration, usedWords, syllableMap, isMuted,
         cityMetadata, challengeQueue, language, gameMode, currentWord, targetRhyme,
-        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleWinner, activeMinigame, word500Target, word500Winner, word500Guesses, wsHost, useTierDifficulty, resetWordOnNewRound,
-        lastPlay, turnKey, tableScale, mainTableOffset, bgColorMode, viewMode, activeEffects, layoutStyle, tableTheme, tableStatus, autoWordleGuess, autoWordleLeaderboard, isObsOverlay
+        gameState, winCondition, targetRounds, targetScore, actionCardsEnabled, pointMode, isReversed, overlapLength, overlapMode, maxWordLength, activeChallenge, autoRestartEnabled, playerQueue, scrambleWord, scrambleTiles, scrambleLockedIndices, scrambleWinner, anagramFlipPhase, activeMinigame, word500Target, word500Winner, word500Guesses, wsHost, useTierDifficulty, resetWordOnNewRound,
+        lastPlay, turnKey, tableScale, mainTableOffset, bgColorMode, bgAnimTheme, viewMode, activeEffects, layoutStyle, tableTheme, tableStatus, autoWordleGuess, autoWordleLeaderboard, isObsOverlay
     ]);
 
     const playSound = useCallback((effect) => {
@@ -804,7 +822,10 @@ export default function App() {
                 activeChallenge: activeChallengeRef.current,
                 activeMinigame: activeMinigameRef.current,
                 scrambleWord: scrambleWordRef.current,
+                scrambleTiles: scrambleTilesRef.current,
+                scrambleLockedIndices: scrambleLockedIndicesRef.current,
                 scrambleWinner: scrambleWinnerRef.current,
+                anagramFlipPhase: anagramFlipPhaseRef.current,
                 word500Target: word500TargetRef.current,
                 word500Guesses: word500GuessesRef.current,
                 word500Winner: word500WinnerRef.current,
@@ -813,6 +834,7 @@ export default function App() {
                 tableScale: tableScaleRef.current,
                 mainTableOffset: mainTableOffsetRef.current,
                 bgColorMode: bgColorModeRef.current,
+                bgAnimTheme: bgAnimThemeRef.current,
                 viewMode: viewModeRef.current,
                 activeEffects: activeEffectsRef.current,
                 playerQueue: playerQueueRef.current,
@@ -854,7 +876,13 @@ export default function App() {
         if (data.activeChallenge !== undefined) setActiveChallenge(data.activeChallenge);
         if (data.activeMinigame !== undefined) setActiveMinigame(data.activeMinigame);
         if (data.scrambleWord !== undefined) setScrambleWord(data.scrambleWord);
+        if (data.scrambleTiles !== undefined) {
+            captureAnagramTileRects();
+            setScrambleTiles(data.scrambleTiles);
+        }
+        if (data.scrambleLockedIndices !== undefined) setScrambleLockedIndices(data.scrambleLockedIndices);
         if (data.scrambleWinner !== undefined) setScrambleWinner(data.scrambleWinner);
+        if (data.anagramFlipPhase !== undefined) setAnagramFlipPhase(data.anagramFlipPhase);
         if (data.word500Target !== undefined) setWord500Target(data.word500Target);
         if (data.word500Guesses !== undefined) setWord500Guesses(data.word500Guesses);
         if (data.word500Winner !== undefined) setWord500Winner(data.word500Winner);
@@ -863,6 +891,7 @@ export default function App() {
         if (data.tableScale !== undefined) setTableScale(data.tableScale);
         if (data.mainTableOffset !== undefined) setMainTableOffset(data.mainTableOffset);
         if (data.bgColorMode !== undefined) setBgColorMode(data.bgColorMode);
+        if (data.bgAnimTheme !== undefined) setBgAnimTheme(data.bgAnimTheme);
         if (data.viewMode !== undefined) setViewMode(data.viewMode);
         if (data.activeEffects !== undefined) setActiveEffects(data.activeEffects);
         if (data.playerQueue !== undefined) setPlayerQueue(data.playerQueue);
@@ -912,9 +941,9 @@ export default function App() {
         players, currentTurnIndex, currentWord, gameState, language, gameMode,
         layoutStyle, tableTheme, tableStatus, lastPlay, turnKey, turnDuration,
         pointMode, isReversed, activeChallenge, activeMinigame, scrambleWord,
-        scrambleWinner, word500Target, word500Guesses, word500Winner,
+        scrambleTiles, scrambleLockedIndices, scrambleWinner, anagramFlipPhase, word500Target, word500Guesses, word500Winner,
         autoWordleGuess, autoWordleLeaderboard, tableScale, mainTableOffset,
-        bgColorMode, viewMode, activeEffects, playerQueue
+        bgColorMode, bgAnimTheme, viewMode, activeEffects, playerQueue
     ]);
 
     const getObsUrl = (type = "localhost", transparent = false, vertical = true) => {
@@ -992,6 +1021,7 @@ export default function App() {
     };
 
     const handleMiniGameDragStart = (e) => {
+        if (e.target.closest('button') || e.target.closest('input')) return;
         miniGameDragRef.current.isDragging = true;
         miniGameDragRef.current.startX = e.clientX || (e.touches && e.touches[0].clientX);
         miniGameDragRef.current.startY = e.clientY || (e.touches && e.touches[0].clientY);
@@ -1113,21 +1143,213 @@ export default function App() {
         };
     }, []);
 
+    const captureAnagramTileRects = () => {
+        if (!anagramTilesRowRef.current) return;
+        const rects = {};
+        Array.from(anagramTilesRowRef.current.children).forEach((el) => {
+            const id = el.getAttribute("data-tile-id");
+            if (id) rects[id] = el.getBoundingClientRect();
+        });
+        anagramPrevRectsRef.current = rects;
+    };
+
+    useEffect(() => {
+        if (!anagramTilesRowRef.current) return;
+        const prevRects = anagramPrevRectsRef.current;
+        if (!prevRects || Object.keys(prevRects).length === 0) return;
+
+        Array.from(anagramTilesRowRef.current.children).forEach((el) => {
+            const id = el.getAttribute("data-tile-id");
+            const first = id ? prevRects[id] : null;
+            if (!first) return;
+            const last = el.getBoundingClientRect();
+            const dx = first.left - last.left;
+            const dy = first.top - last.top;
+            if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+                el.style.transition = "none";
+                el.style.transform = `translate(${dx}px, ${dy}px) scale(1.12)`;
+                el.style.zIndex = "30";
+                requestAnimationFrame(() => {
+                    el.style.transition = "transform 0.52s cubic-bezier(0.34, 1.56, 0.64, 1)";
+                    el.style.transform = "";
+                    setTimeout(() => {
+                        if (el) {
+                            el.style.transition = "";
+                            el.style.zIndex = "";
+                        }
+                    }, 540);
+                });
+            }
+        });
+        anagramPrevRectsRef.current = {};
+    }, [scrambleTiles]);
+
+    const solveAnagramTiles = (winnerObj, isSpill = false) => {
+        const word = scrambleWordRef.current;
+        if (!word) return;
+        captureAnagramTileRects();
+        const currentTiles = scrambleTilesRef.current;
+        let solvedTiles;
+        if (currentTiles && currentTiles.length === word.length) {
+            solvedTiles = [...currentTiles].sort((a, b) => a.origIdx - b.origIdx);
+        } else {
+            solvedTiles = word.split("").map((ch, idx) => ({ id: `tile-${idx}-${ch}`, char: ch, origIdx: idx }));
+        }
+        const allIndices = word.split("").map((_, idx) => idx);
+        setScrambleTiles(solvedTiles);
+        scrambleTilesRef.current = solvedTiles;
+        setScrambleLockedIndices(allIndices);
+        scrambleLockedIndicesRef.current = allIndices;
+        setScrambledDisplay(word);
+        setScrambleWinner(winnerObj);
+
+        if (isSpill) {
+            playSound("wrong");
+        } else {
+            playSound("notification");
+            triggerTableEffect("info");
+        }
+
+        setTimeout(() => { setAnagramFlipPhase("flipping"); }, 1050);
+        setTimeout(() => { setAnagramFlipPhase("winner"); }, 1650);
+        setTimeout(() => {
+            setAnagramFlipPhase(null);
+            startNewScramble();
+        }, 5000);
+    };
+
     const handleRevealAnagram = (e) => {
         if (e) {
             e.stopPropagation();
             e.preventDefault();
         }
         if (!scrambleWordRef.current || scrambleWinnerRef.current) return;
-
-        setScrambledDisplay(scrambleWordRef.current);
-        playSound("wrong");
-        setScrambleWinner({ nickname: "Sistem (Spill)", profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=System" });
-        
-        setTimeout(() => { setAnagramFlipPhase("flipping"); }, 1000);
-        setTimeout(() => { setAnagramFlipPhase("winner"); }, 1600);
-        setTimeout(() => { setAnagramFlipPhase(null); startNewScramble(); }, 5000);
+        solveAnagramTiles({ nickname: "Waktu Habis", profilePictureUrl: "https://api.dicebear.com/9.x/bottts/svg?seed=System" }, true);
     };
+
+    // Hitung penalti huruf kembar yang bersebelahan (makin kecil makin tersebar rapi)
+    const countAdjacentDuplicateChars = (tileArr) => {
+        let penalty = 0;
+        for (let i = 1; i < tileArr.length; i++) {
+            if (tileArr[i].char === tileArr[i - 1].char) penalty += 1;
+        }
+        return penalty;
+    };
+
+    const shuffleUnlockedAnagramTiles = () => {
+        if (!scrambleWordRef.current || scrambleWinnerRef.current) return;
+        const currentTiles = [...scrambleTilesRef.current];
+        const lockedSet = new Set(scrambleLockedIndicesRef.current || []);
+        if (currentTiles.length <= 1) return;
+
+        const unlockedPositions = [];
+        const unlockedTiles = [];
+        currentTiles.forEach((t, idx) => {
+            if (lockedSet.has(idx) && t.origIdx === idx) {
+                // Keep locked hint tile anchored
+            } else {
+                unlockedPositions.push(idx);
+                unlockedTiles.push(t);
+            }
+        });
+
+        if (unlockedTiles.length <= 1) return;
+
+        const beforeOrder = unlockedTiles.map(t => t.id).join(",");
+        let bestCandidate = [...currentTiles];
+        let bestScore = Infinity;
+
+        for (let attempt = 0; attempt < 30; attempt++) {
+            const candidateUnlocked = [...unlockedTiles];
+            for (let i = candidateUnlocked.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [candidateUnlocked[i], candidateUnlocked[j]] = [candidateUnlocked[j], candidateUnlocked[i]];
+            }
+            if (candidateUnlocked.map(t => t.id).join(",") === beforeOrder && attempt < 25) continue;
+
+            const candidateFull = [...currentTiles];
+            unlockedPositions.forEach((posIdx, i) => {
+                candidateFull[posIdx] = candidateUnlocked[i];
+            });
+
+            // Hindari membentuk kata jawaban secara tidak sengaja saat shuffle
+            if (candidateFull.map(t => t.char).join("") === scrambleWordRef.current) continue;
+
+            const adjPenalty = countAdjacentDuplicateChars(candidateFull);
+            if (adjPenalty < bestScore) {
+                bestScore = adjPenalty;
+                bestCandidate = candidateFull;
+                if (adjPenalty === 0) break;
+            }
+        }
+
+        captureAnagramTileRects();
+        setScrambleTiles(bestCandidate);
+        scrambleTilesRef.current = bestCandidate;
+        setScrambledDisplay(bestCandidate.map(t => t.char).join(""));
+    };
+
+    const lockNextAnagramHint = () => {
+        const word = scrambleWordRef.current;
+        if (!word || scrambleWinnerRef.current) return;
+        const currentTiles = [...scrambleTilesRef.current];
+        const lockedSet = new Set(scrambleLockedIndicesRef.current || []);
+
+        const availablePositions = [];
+        for (let i = 0; i < word.length; i++) {
+            if (!lockedSet.has(i)) availablePositions.push(i);
+        }
+
+        // Jika sisa <= 2 huruf belum terkunci dan waktu auto-hint habis lagi, auto-spill & lanjut kata baru
+        if (availablePositions.length <= 2) {
+            handleRevealAnagram();
+            return;
+        }
+
+        // Prioritaskan huruf pertama (index 0), lalu posisi acak berikutnya
+        const targetPos = !lockedSet.has(0)
+            ? 0
+            : availablePositions[Math.floor(Math.random() * availablePositions.length)];
+
+        const tileIdx = currentTiles.findIndex(t => t.origIdx === targetPos);
+        if (tileIdx !== -1 && tileIdx !== targetPos) {
+            const temp = currentTiles[targetPos];
+            currentTiles[targetPos] = currentTiles[tileIdx];
+            currentTiles[tileIdx] = temp;
+        }
+
+        lockedSet.add(targetPos);
+        const nextLocked = Array.from(lockedSet);
+
+        captureAnagramTileRects();
+        setScrambleLockedIndices(nextLocked);
+        scrambleLockedIndicesRef.current = nextLocked;
+        setScrambleTiles(currentTiles);
+        scrambleTilesRef.current = currentTiles;
+        setScrambledDisplay(currentTiles.map(t => t.char).join(""));
+    };
+
+    // Periodic Physical Shuffle (every 12s) & Auto-Hint Lock (every 50s)
+    useEffect(() => {
+        if (isObsOverlay || activeMinigame !== "ANAGRAM" || !scrambleWord || scrambleWinner) return;
+
+        const shuffleTimer = setInterval(() => {
+            if (!scrambleWinnerRef.current && activeMinigameRef.current === "ANAGRAM") {
+                shuffleUnlockedAnagramTiles();
+            }
+        }, 12000);
+
+        const hintTimer = setInterval(() => {
+            if (!scrambleWinnerRef.current && activeMinigameRef.current === "ANAGRAM") {
+                lockNextAnagramHint();
+            }
+        }, 50000);
+
+        return () => {
+            clearInterval(shuffleTimer);
+            clearInterval(hintTimer);
+        };
+    }, [isObsOverlay, activeMinigame, scrambleWord, scrambleWinner]);
 
     const startNewScramble = () => {
         if (unplayedMiniGameWordsRef.current.length === 0) {
@@ -1139,48 +1361,59 @@ export default function App() {
 
         unplayedMiniGameWordsRef.current.splice(randomIndex, 1);
 
-        let scrambled = word;
-        let attempts = 0;
-        
-        const isDerangement = (orig, shuff) => {
-            for (let i = 0; i < orig.length; i++) {
-                if (orig[i] === shuff[i]) return false;
+        const baseTiles = word.split("").map((ch, idx) => ({
+            id: `tile-${Date.now()}-${idx}-${ch}`,
+            char: ch,
+            origIdx: idx
+        }));
+
+        let bestTiles = [...baseTiles];
+        let bestPenalty = Infinity;
+
+        const countFixedPoints = (origWord, tileArr) => {
+            let fixed = 0;
+            for (let i = 0; i < origWord.length; i++) {
+                if (origWord[i] === tileArr[i].char) fixed++;
             }
-            return true;
+            return fixed;
         };
 
-        while (attempts < 50) {
-            let arr = word.split('');
-            for (let i = arr.length - 1; i > 0; i--) {
+        for (let attempt = 0; attempt < 60; attempt++) {
+            const candidate = [...baseTiles];
+            for (let i = candidate.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [arr[i], arr[j]] = [arr[j], arr[i]];
+                [candidate[i], candidate[j]] = [candidate[j], candidate[i]];
             }
-            scrambled = arr.join('');
-            
-            if (isDerangement(word, scrambled)) break;
-            attempts++;
-        }
+            if (candidate.map(t => t.char).join("") === word) continue;
 
-        // Fallback jika derangement gagal (misal terlalu banyak huruf kembar)
-        if (attempts >= 50) {
-            let fallbackAttempts = 0;
-            while (scrambled === word && fallbackAttempts < 10) {
-                let arr = word.split('');
-                for (let i = arr.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [arr[i], arr[j]] = [arr[j], arr[i]];
-                }
-                scrambled = arr.join('');
-                fallbackAttempts++;
-            }
-            if (scrambled === word) {
-                const reversed = word.split('').reverse().join('');
-                scrambled = reversed !== word ? reversed : word.slice(1) + word[0];
+            const fixedPts = countFixedPoints(word, candidate);
+            const adjDupes = countAdjacentDuplicateChars(candidate);
+            // Bobot penalti: prioritaskan huruf kembar tidak berdempetan + huruf tidak di posisi asli
+            const totalPenalty = adjDupes * 3 + fixedPts * 2;
+
+            if (totalPenalty < bestPenalty) {
+                bestPenalty = totalPenalty;
+                bestTiles = candidate;
+                if (totalPenalty === 0) break;
             }
         }
 
+        let shuffledTiles = bestTiles;
+        if (shuffledTiles.map(t => t.char).join("") === word) {
+            shuffledTiles.reverse();
+            if (shuffledTiles.map(t => t.char).join("") === word && shuffledTiles.length > 1) {
+                shuffledTiles = [...shuffledTiles.slice(1), shuffledTiles[0]];
+            }
+        }
+
+        anagramPrevRectsRef.current = {};
         setScrambleWord(word);
-        setScrambledDisplay(scrambled);
+        scrambleWordRef.current = word;
+        setScrambleTiles(shuffledTiles);
+        scrambleTilesRef.current = shuffledTiles;
+        setScrambleLockedIndices([]);
+        scrambleLockedIndicesRef.current = [];
+        setScrambledDisplay(shuffledTiles.map(t => t.char).join(""));
         setScrambleWinner(null);
         setAnagramFlipPhase(null);
     };
@@ -3430,18 +3663,8 @@ export default function App() {
         }
         const noSpaceWord = cleanWordCheck.replace(/\s+/g, "");
         if (isScrambleActive && cleanWordCheck === scrambleWordRef.current.toLowerCase()) {
-            setScrambledDisplay(scrambleWordRef.current);
-            setScrambleWinner({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) });
-            playSound("notification");
-            triggerTableEffect("info");
             addLog("MiniGame", `🎉 ${nickname} menebak anagram: ${scrambleWordRef.current}!`);
-            
-            setTimeout(() => { setAnagramFlipPhase("flipping"); }, 1000);
-            setTimeout(() => { setAnagramFlipPhase("winner"); }, 1600);
-            setTimeout(() => {
-                setAnagramFlipPhase(null);
-                startNewScramble();
-            }, 5000);
+            solveAnagramTiles({ nickname, profilePictureUrl: profilePictureUrl || getAvatarUrl(uniqueId) }, false);
             return;
         }
 
@@ -3653,18 +3876,8 @@ export default function App() {
         const cleanWordCheck = normalizeWord(lower);
 
         if (activeMinigameRef.current === "ANAGRAM" && scrambleWordRef.current && cleanWordCheck === scrambleWordRef.current.toLowerCase() && !scrambleWinnerRef.current) {
-            setScrambledDisplay(scrambleWordRef.current);
-            setScrambleWinner({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` });
-            playSound("notification");
-            triggerTableEffect("info");
             addLog("MiniGame", `🎉 HOST menebak anagram: ${scrambleWordRef.current}!`);
-            
-            setTimeout(() => { setAnagramFlipPhase("flipping"); }, 1000);
-            setTimeout(() => { setAnagramFlipPhase("winner"); }, 1600);
-            setTimeout(() => {
-                setAnagramFlipPhase(null);
-                startNewScramble();
-            }, 5000);
+            solveAnagramTiles({ nickname: "HOST (You)", profilePictureUrl: `https://api.dicebear.com/9.x/fun-emoji/svg?seed=HOST` }, false);
             setManualInput("");
             return;
         }
@@ -4012,9 +4225,17 @@ export default function App() {
                     <button onClick={() => setTableScale(1)} className="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full shadow-lg border border-slate-600/50 backdrop-blur-sm transition-colors active:scale-95" title="Reset Ukuran"><RefreshCw className="w-4 h-4 m-0.5" /></button>
                 </div>
             )}
-            {/* Background Pattern Overlay - Subtle texture */}
+            {/* Background Pattern Overlay & Calm Animated Canvas (Anti-Static Stream) */}
             {!isTransparentObs && (
-                <div className="absolute inset-0 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-[0.03]"></div>
+                <>
+                    <div className="absolute inset-0 pointer-events-none bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPC9zdmc+')] opacity-[0.03]"></div>
+                    <BackgroundCanvas
+                        theme={bgAnimTheme}
+                        lastPlay={lastPlay}
+                        currentWord={currentWord}
+                        disabled={bgColorMode === "greenscreen"}
+                    />
+                </>
             )}
             <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 pointer-events-none">
                 <h1 className="text-xl sm:text-3xl font-black text-sky-400 drop-shadow-sm">SAMBUNG KATA</h1>
@@ -4244,6 +4465,35 @@ export default function App() {
                                                 <button onClick={() => setBgColorMode("default")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${bgColorMode === "default" ? "bg-slate-700 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Default</button>
                                                 <button onClick={() => setBgColorMode("darkblue")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${bgColorMode === "darkblue" ? "bg-[#1a1d27] text-white shadow-sm border border-slate-600" : "text-slate-400 hover:text-white"}`}>Dark Blue</button>
                                                 <button onClick={() => setBgColorMode("greenscreen")} className={`px-1.5 py-0.5 rounded text-[9px] transition-colors ${bgColorMode === "greenscreen" ? "bg-emerald-600 text-white shadow-sm" : "text-slate-400 hover:text-white"}`}>Green</button>
+                                            </div>
+                                        </div>
+                                        <div className="px-2.5 py-1.5 text-xs font-bold transition-colors flex flex-col gap-1.5 group hover:bg-slate-800/50">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-1.5"><Radio className="w-3.5 h-3.5 text-sky-400" /><span className="text-slate-300">Animasi Latar</span></div>
+                                                <span className="text-[9px] text-slate-400 font-mono">{bgAnimTheme === "OFF" ? "Mati" : bgAnimTheme}</span>
+                                            </div>
+                                            <div className="grid grid-cols-4 gap-1 bg-slate-900/50 rounded border border-slate-700/50 p-1">
+                                                {[
+                                                    { id: "OFF", label: "Off" },
+                                                    { id: "CHAIN", label: "Rantai Kata" },
+                                                    { id: "CONSTELLATION", label: "Konstelasi" },
+                                                    { id: "ORBIT", label: "Orbit" },
+                                                    { id: "SCRABBLE", label: "Scrabble" },
+                                                    { id: "RADAR", label: "Radar" },
+                                                    { id: "GRID", label: "Grid" }
+                                                ].map((opt) => (
+                                                    <button
+                                                        key={opt.id}
+                                                        onClick={() => setBgAnimTheme(opt.id)}
+                                                        className={`py-1 px-1 rounded text-[9px] font-bold transition-colors text-center truncate ${
+                                                            bgAnimTheme === opt.id
+                                                                ? (opt.id === "OFF" ? "bg-slate-700 text-white shadow-sm" : "bg-sky-600 text-white shadow-sm")
+                                                                : "text-slate-400 hover:bg-slate-800/60 hover:text-white"
+                                                        }`}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
                                         <div className="px-2.5 py-1.5 text-xs font-bold transition-colors flex flex-col gap-1.5 group hover:bg-slate-800/50">
@@ -4562,14 +4812,16 @@ export default function App() {
                         const isBombTurn = bombNextRef.current;
                         return (
                             <>
-                                {/* Directional Spotlight Cone outside Table */}
+                                {/* Directional Spotlight Cone outside Table (Soft Radial Fade) */}
                                 <div
-                                    className="absolute -inset-12 sm:-inset-16 rounded-full pointer-events-none transition-transform duration-500 ease-out z-0"
+                                    className="absolute -inset-24 sm:-inset-32 rounded-full pointer-events-none transition-transform duration-500 ease-out z-0"
                                     style={{
                                         transform: `rotate(${activeAngle - 90}deg)`,
                                         background: isBombTurn
-                                            ? "conic-gradient(from 0deg at 50% 50%, transparent 148deg, rgba(249, 115, 22, 0.28) 180deg, transparent 212deg)"
-                                            : "conic-gradient(from 0deg at 50% 50%, transparent 148deg, rgba(251, 191, 36, 0.24) 180deg, transparent 212deg)"
+                                            ? "conic-gradient(from 0deg at 50% 50%, transparent 142deg, rgba(249, 115, 22, 0.28) 180deg, transparent 218deg)"
+                                            : "conic-gradient(from 0deg at 50% 50%, transparent 142deg, rgba(251, 191, 36, 0.24) 180deg, transparent 218deg)",
+                                        WebkitMaskImage: "radial-gradient(circle, rgba(0,0,0,1) 36%, rgba(0,0,0,0.6) 54%, rgba(0,0,0,0) 70%)",
+                                        maskImage: "radial-gradient(circle, rgba(0,0,0,1) 36%, rgba(0,0,0,0.6) 54%, rgba(0,0,0,0) 70%)"
                                     }}
                                 />
                                 {/* Rotating Rim Pointer Chevron on Table Edge */}
@@ -5085,8 +5337,9 @@ export default function App() {
                                             {/* --- Indikator Efek Glow Menyebar (Ping Wave) & Ring Ambient saat Giliran --- */}
                                             {isTurn && (
                                                 <>
-                                                    <div className="absolute -inset-2.5 rounded-full bg-amber-400/40 animate-ping opacity-80 pointer-events-none"></div>
-                                                    <div className="absolute -inset-1 rounded-full border border-amber-400/75 pointer-events-none shadow-[0_0_16px_rgba(251,191,36,0.55)]"></div>
+                                                    <div className="absolute -inset-5 rounded-full bg-[radial-gradient(circle,_rgba(251,191,36,0.35)_0%,_rgba(251,191,36,0.12)_50%,_transparent_75%)] animate-pulse pointer-events-none"></div>
+                                                    <div className="absolute -inset-1.5 rounded-full bg-amber-400/30 animate-ping opacity-75 pointer-events-none"></div>
+                                                    <div className="absolute -inset-1 rounded-full border border-amber-400/80 pointer-events-none shadow-[0_0_16px_rgba(251,191,36,0.55)]"></div>
                                                 </>
                                             )}
                                             {isKing && (
@@ -5360,27 +5613,19 @@ export default function App() {
                         SUSUN KATA
                     </div>
                     <div
-                        className={`backdrop-blur-md rounded-full border pointer-events-auto flex items-center p-1.5 gap-2 w-max ${getOverlayBgClass()}`}
+                        onMouseDown={handleMiniGameDragStart}
+                        onTouchStart={handleMiniGameDragStart}
+                        title="Tahan dan geser"
+                        className={`backdrop-blur-md rounded-full border pointer-events-auto cursor-move touch-none flex items-center py-1.5 pl-3 pr-2 gap-2 w-max ${getOverlayBgClass()}`}
                         style={{
                             transform: `scale(${miniGameScale})`,
                             transformOrigin: miniGamePos.x !== null ? 'top left' : 'bottom right',
                             transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)'
                         }}
                     >
-                        {/* Drag Handle (Grip) */}
-                        <div
-                            className="cursor-move touch-none p-1 sm:p-1.5 text-slate-500 hover:text-slate-300 transition-colors bg-slate-800/50 rounded-full"
-                            onMouseDown={handleMiniGameDragStart}
-                            onTouchStart={handleMiniGameDragStart}
-                            title="Tahan dan geser"
-                        >
-                            <GripHorizontal className="w-4 h-4 sm:w-5 sm:h-5" />
-                        </div>
-
-                        {/* Content Mini Game */}
                         {/* Content Mini Game */}
                         <div 
-                            className="relative flex items-center pr-1"
+                            className="relative flex items-center"
                             style={{
                                 perspective: '1000px',
                                 transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -5389,23 +5634,36 @@ export default function App() {
                                 minHeight: '34px'
                             }}
                         >
-                            {/* Front: Button + Letters */}
-                            <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }} className="flex items-center gap-1.5 sm:gap-2">
-                                <button
-                                    onClick={handleRevealAnagram}
-                                    onTouchEnd={handleRevealAnagram}
-                                    className="hover:scale-110 active:scale-90 transition-transform cursor-pointer outline-none bg-transparent border-none p-0 flex items-center justify-center ml-0.5 mr-0.5"
-                                    title="Nyerah / Spill Jawaban"
-                                    disabled={scrambledDisplay === scrambleWord}
-                                >
-                                    <Sparkles className={`w-4 h-4 sm:w-5 sm:h-5 ${scrambledDisplay === scrambleWord ? 'text-slate-500' : 'text-amber-400 animate-pulse hover:text-amber-300'} drop-shadow-md`} />
-                                </button>
-                                <div className="flex gap-0.5 sm:gap-1 flex-nowrap">
-                                    {scrambledDisplay.split('').map((char, i) => (
-                                        <div key={i} className={`w-5 h-6 sm:w-6 sm:h-7 shrink-0 bg-slate-800 border rounded flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm transition-colors duration-300 ${scrambleWinner ? 'border-emerald-500/50 text-emerald-400 bg-emerald-950/30' : (scrambledDisplay === scrambleWord ? 'border-amber-500/50 text-amber-400 bg-amber-950/30' : 'border-slate-700 text-sky-400')}`}>
-                                            {char}
-                                        </div>
-                                    ))}
+                            {/* Front: Animated Tiles (without manual Solve button) */}
+                            <div style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }} className="flex items-center px-0.5">
+                                <div ref={anagramTilesRowRef} className="relative flex gap-1 sm:gap-1.5 flex-nowrap items-center">
+                                    {(scrambleTiles.length > 0
+                                        ? scrambleTiles
+                                        : scrambledDisplay.split('').map((ch, idx) => ({ id: `fallback-${idx}`, char: ch, origIdx: idx }))
+                                    ).map((tile, i) => {
+                                        const isLocked = scrambleLockedIndices.includes(i) && tile.origIdx === i;
+                                        const isSolved = !!scrambleWinner;
+                                        let tileColorClass = "border-slate-700 text-sky-400 bg-slate-800/95";
+                                        if (isSolved) {
+                                            tileColorClass = "border-emerald-400 text-emerald-300 bg-emerald-950/70 shadow-[0_0_10px_rgba(16,185,129,0.45)]";
+                                        } else if (isLocked) {
+                                            tileColorClass = "border-amber-400/90 text-amber-300 bg-amber-950/60 shadow-[0_0_8px_rgba(251,191,36,0.3)]";
+                                        }
+                                        const shouldAnimateWave = !isSolved && !isLocked;
+                                        return (
+                                            <div
+                                                key={tile.id}
+                                                data-tile-id={tile.id}
+                                                className={`relative w-5 h-6 sm:w-6 sm:h-7 shrink-0 border rounded flex items-center justify-center font-black text-xs sm:text-sm shadow-sm transition-colors duration-300 ${tileColorClass} ${shouldAnimateWave ? "animate-anagram-tile" : ""}`}
+                                                style={shouldAnimateWave ? { animationDelay: `${i * 140}ms` } : undefined}
+                                            >
+                                                <span>{tile.char}</span>
+                                                {isLocked && !isSolved && (
+                                                    <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-amber-400 shadow" />
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
 

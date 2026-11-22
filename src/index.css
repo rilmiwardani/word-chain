@@ -54,6 +54,30 @@ input, textarea {
   animation: showcase-def-scroll 9.5s ease-in-out infinite;
 }
 
+@keyframes anagram-tile-wave {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(-1.5deg);
+  }
+}
+
+@keyframes anagram-tile-shimmer {
+  0%, 72%, 100% {
+    border-color: rgba(51, 65, 85, 0.9);
+    box-shadow: none;
+  }
+  86% {
+    border-color: rgba(56, 189, 248, 0.85);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+  }
+}
+
+.animate-anagram-tile {
+  animation: anagram-tile-wave 2.4s ease-in-out infinite, anagram-tile-shimmer 4.8s ease-in-out infinite;
+}
+
 /* Portrait mode for TikTok Live streaming */
 body:has(.portrait-container) {
   background: #000;
